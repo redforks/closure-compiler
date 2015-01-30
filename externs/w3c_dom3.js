@@ -69,50 +69,50 @@ DOMStringList.prototype.contains = function(str) {};
  */
 DOMStringList.prototype.item = function(index) {};
 
-/**
- * @constructor
- * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList
- */
-function NameList() {}
+// /**
+//  * @constructor
+//  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList
+//  */
+// function NameList() {}
 
-/**
- * @type {number}
- * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-length
- */
-NameList.prototype.length;
+// /**
+//  * @type {number}
+//  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-length
+//  */
+// NameList.prototype.length;
 
-/**
- * @param {string} str
- * @return {boolean}
- * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-contains
- * @nosideeffects
- */
-NameList.prototype.contains = function(str) {};
+// /**
+//  * @param {string} str
+//  * @return {boolean}
+//  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-contains
+//  * @nosideeffects
+//  */
+// NameList.prototype.contains = function(str) {};
 
-/**
- * @param {string} namespaceURI
- * @param {string} name
- * @return {boolean}
- * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-containsNS
- * @nosideeffects
- */
-NameList.prototype.containsNS = function(namespaceURI, name) {};
+// /**
+//  * @param {string} namespaceURI
+//  * @param {string} name
+//  * @return {boolean}
+//  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-containsNS
+//  * @nosideeffects
+//  */
+// NameList.prototype.containsNS = function(namespaceURI, name) {};
 
-/**
- * @param {number} index
- * @return {string}
- * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-getName
- * @nosideeffects
- */
-NameList.prototype.getName = function(index) {};
+// /**
+//  * @param {number} index
+//  * @return {string}
+//  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-getName
+//  * @nosideeffects
+//  */
+// NameList.prototype.getName = function(index) {};
 
-/**
- * @param {number} index
- * @return {string}
- * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-getNamespaceURI
- * @nosideeffects
- */
-NameList.prototype.getNamespaceURI = function(index) {};
+// /**
+//  * @param {number} index
+//  * @return {string}
+//  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#NameList-getNamespaceURI
+//  * @nosideeffects
+//  */
+// NameList.prototype.getNamespaceURI = function(index) {};
 
 /**
  * @constructor
