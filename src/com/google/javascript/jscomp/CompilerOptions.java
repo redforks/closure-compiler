@@ -1634,9 +1634,22 @@ public class CompilerOptions implements Serializable, Cloneable {
     return languageOut;
   }
 
-  boolean needsConversion() {
+  /**
+   * @return whether we are currently transpiling from ES6 to a lower version.
+   */
+  boolean lowerFromEs6() {
     return languageOut != LanguageMode.NO_TRANSPILE
-        && languageIn != languageOut;
+        && languageIn.isEs6OrHigher()
+        && !languageOut.isEs6OrHigher();
+  }
+
+  /**
+   * @return whether we are currently transpiling to ES6_TYPED
+   */
+  boolean raiseToEs6Typed() {
+    return languageOut != LanguageMode.NO_TRANSPILE
+        && !languageIn.isEs6OrHigher()
+        && languageOut == LanguageMode.ECMASCRIPT6_TYPED;
   }
 
   @Override
