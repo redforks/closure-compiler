@@ -78,7 +78,7 @@ md.$dialog.ConfirmConfig_;
 /**
  * @param {md.$dialog.options|md.$dialog.ConfirmConfig_|
  *     md.$dialog.AlertConfig_} options
- * @return {angular.$q.Promise}
+ * @return {!angular.$q.Promise}
  */
 md.$dialog.prototype.show = function(options) {};
 
@@ -174,37 +174,71 @@ md.$sidenav;
  * $mdThemingProvider Service
  *****************************************************************************/
 
-
 /**
  * @typedef {{
- *   setDefaultTheme: function(string),
  *   alwaysWatchTheme: function(boolean),
- *   theme: function(string)
+ *   definePalette:
+ *       function(string, !Object<string,string>) : md.$mdThemingProvider,
+ *   extendPalette:
+ *       function(string, !Object<string,string>) : !Object<string,string>,
+ *   setDefaultTheme: function(string),
+ *   theme: function(string,string=) : md.$mdThemingProvider.Theme
  * }}
  */
 md.$mdThemingProvider;
 
-/**
- * @param {string} theme
- */
-md.$mdThemingProvider.setDefaultTheme = function(theme) {};
+/*****************************************************************************/
 
 /**
- * @param {boolean} alwaysWatch
+ * @param {string} name
+ * @constructor
  */
-md.$mdThemingProvider.alwaysWatchTheme = function(alwaysWatch) {};
+md.$mdThemingProvider.Theme = function(name) {};
 
-/**
- * @param {string} theme
- */
-md.$mdThemingProvider.theme = function(theme) {};
+/** @type {string} */
+md.$mdThemingProvider.Theme.prototype.name;
+
+/** @type {!Object<string,string>} */
+md.$mdThemingProvider.Theme.prototype.colors;
 
 /**
  * @param {string} primaryPalette
+ * @param {Object<string,string>=} opt_colors
+ * @return {md.$mdThemingProvider.Theme}
  */
-md.$mdThemingProvider.primaryPalette = function(primaryPalette) {};
+md.$mdThemingProvider.Theme.prototype.primaryPalette =
+    function(primaryPalette, opt_colors) {};
 
 /**
  * @param {string} accentPalette
+ * @param {Object<string,string>=} opt_colors
+ * @return {md.$mdThemingProvider.Theme}
  */
-md.$mdThemingProvider.accentPalette = function(accentPalette) {};
+md.$mdThemingProvider.Theme.prototype.accentPalette =
+    function(accentPalette, opt_colors) {};
+
+/**
+ * @param {string} backgroundPalette
+ * @param {Object<string,string>=} opt_colors
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.Theme.prototype.backgroundPalette =
+    function(backgroundPalette, opt_colors) {};
+
+/**
+ * @param {string} warnPalette
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.Theme.prototype.warnPalette = function(warnPalette) {};
+
+/*****************************************************************************/
+
+
+/**
+ * @param {string} themeName
+ * @param {string=} opt_inheritFrom
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.prototype.theme = function(themeName, opt_inheritFrom) {};
+
+
