@@ -321,13 +321,6 @@ public class IntegrationTest extends IntegrationTestCase {
     });
   }
 
-  public void testCheckRequiresOn() {
-    CompilerOptions options = createCompilerOptions();
-    options.setCheckRequires(CheckLevel.ERROR);
-    test(options, new String[] {"/** @constructor */ function Foo() {}", "new Foo();"},
-        CheckRequiresForConstructors.MISSING_REQUIRE_WARNING);
-  }
-
   public void testCheckProvidesOn() {
     CompilerOptions options = createCompilerOptions();
     options.setCheckProvides(CheckLevel.ERROR);
@@ -819,7 +812,6 @@ public class IntegrationTest extends IntegrationTestCase {
   public void testAllChecksOn() {
     CompilerOptions options = createCompilerOptions();
     options.setCheckSuspiciousCode(true);
-    options.setCheckRequires(CheckLevel.ERROR);
     options.setCheckProvides(CheckLevel.ERROR);
     options.setGenerateExports(true);
     options.exportTestFunctions = true;
@@ -2847,15 +2839,6 @@ public class IntegrationTest extends IntegrationTestCase {
         "/** @const */\n" +
         "var x = 1; foo(); x = 2;\n";
     test(options, code, ConstCheck.CONST_REASSIGNED_VALUE_ERROR);
-  }
-
-  public void testBiasedLabelRenaming() {
-    CompilerOptions options = createCompilerOptions();
-    options.setAggressiveRenaming(true);
-    options.setLabelRenaming(true);
-    String code = "function a() {lbl: while(1) {while(1) {break lbl}}}";
-    String result = "function a() {f: for(;1;) for(;1;)break f}";
-    test(options, code, result);
   }
 
   public void testIssue937() {
