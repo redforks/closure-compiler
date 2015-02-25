@@ -46,7 +46,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -189,13 +188,6 @@ public class DefaultPassConfig extends PassConfig {
     return preprocessorSymbolTable;
   }
 
-  private NameGenerator getNameGenerator() {
-    if (nameGenerator == null) {
-      nameGenerator = new NameGenerator(new HashSet<String>(0), "", null);
-    }
-    return nameGenerator;
-  }
-
   void maybeInitializePreprocessorSymbolTable(AbstractCompiler compiler) {
     if (options.ideMode) {
       Node root = compiler.getRoot();
@@ -220,10 +212,22 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(checkVariableReferences);
     }
 
+    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
+        && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
+      checks.add(convertDeclaredTypesToJSDoc);
+    }
+
     if (options.lowerFromEs6()) {
       checks.add(es6RenameVariablesInParamLists);
       checks.add(es6SplitVariableDeclarations);
       checks.add(es6ConvertSuper);
+    }
+    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
+        && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
+      // Needs ctor already created by es6ConvertSuper pass.
+      checks.add(convertEs6TypedToEs6);
+    }
+    if (options.lowerFromEs6()) {
       checks.add(convertEs6ToEs3);
       checks.add(rewriteLetConst);
       checks.add(rewriteGenerators);
@@ -844,7 +848,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Checks for code that is probably wrong (such as stray expressions).
    */
-  final HotSwapPassFactory checkSideEffects =
+  private final HotSwapPassFactory checkSideEffects =
       new HotSwapPassFactory("checkSideEffects", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -857,7 +861,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Removes the "protector" functions that were added by CheckSideEffects.
    */
-  final PassFactory stripSideEffectProtection =
+  private final PassFactory stripSideEffectProtection =
       new PassFactory("stripSideEffectProtection", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -868,7 +872,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Checks for code that is probably wrong (such as stray expressions).
    */
-  final HotSwapPassFactory suspiciousCode =
+  private final HotSwapPassFactory suspiciousCode =
       new HotSwapPassFactory("suspiciousCode", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -905,7 +909,7 @@ public class DefaultPassConfig extends PassConfig {
   }
 
   /** Checks that all constructed classes are goog.require()d. */
-  final HotSwapPassFactory checkRequires =
+  private final HotSwapPassFactory checkRequires =
       new HotSwapPassFactory("checkRequires", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -914,7 +918,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Makes sure @constructor is paired with goog.provides(). */
-  final HotSwapPassFactory checkProvides =
+  private final HotSwapPassFactory checkProvides =
       new HotSwapPassFactory("checkProvides", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -929,7 +933,7 @@ public class DefaultPassConfig extends PassConfig {
           "functions are set.");
 
   /** Generates exports for @export annotations. */
-  final PassFactory generateExports = new PassFactory("generateExports", true) {
+  private final PassFactory generateExports = new PassFactory("generateExports", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       if (options.removeUnusedPrototypePropertiesInExterns
@@ -952,7 +956,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Generates exports for functions associated with JsUnit. */
-  final PassFactory exportTestFunctions =
+  private final PassFactory exportTestFunctions =
       new PassFactory("exportTestFunctions", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -968,7 +972,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Raw exports processing pass. */
-  final PassFactory gatherRawExports =
+  private final PassFactory gatherRawExports =
       new PassFactory("gatherRawExports", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -989,7 +993,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Closure pre-processing pass. */
-  final HotSwapPassFactory closurePrimitives =
+  private final HotSwapPassFactory closurePrimitives =
       new HotSwapPassFactory("closurePrimitives", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1015,7 +1019,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Expand jQuery Primitives and Aliases pass. */
-  final PassFactory jqueryAliases = new PassFactory("jqueryAliases", true) {
+  private final PassFactory jqueryAliases = new PassFactory("jqueryAliases", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new ExpandJqueryAliases(compiler);
@@ -1023,7 +1027,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Process AngularJS-specific annotations. */
-  final HotSwapPassFactory angularPass =
+  private final HotSwapPassFactory angularPass =
       new HotSwapPassFactory("angularPass", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1036,7 +1040,7 @@ public class DefaultPassConfig extends PassConfig {
    * A lot of the options are not configurable, because ReplaceMessages
    * has a lot of legacy logic.
    */
-  final PassFactory replaceMessages = new PassFactory("replaceMessages", true) {
+  private final PassFactory replaceMessages = new PassFactory("replaceMessages", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       return new ReplaceMessages(compiler,
@@ -1050,7 +1054,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory replaceMessagesForChrome =
+  private final PassFactory replaceMessagesForChrome =
       new PassFactory("replaceMessages", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1064,7 +1068,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Applies aliases and inlines goog.scope. */
-  final HotSwapPassFactory closureGoogScopeAliases =
+  private final HotSwapPassFactory closureGoogScopeAliases =
       new HotSwapPassFactory("closureGoogScopeAliases", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1076,7 +1080,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory es6RuntimeLibrary =
+  private final PassFactory es6RuntimeLibrary =
       new PassFactory("Es6RuntimeLibrary", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1084,7 +1088,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final HotSwapPassFactory es6RenameVariablesInParamLists =
+  private final HotSwapPassFactory es6RenameVariablesInParamLists =
       new HotSwapPassFactory("Es6RenameVariablesInParamLists", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1092,7 +1096,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final HotSwapPassFactory es6SplitVariableDeclarations =
+  private final HotSwapPassFactory es6SplitVariableDeclarations =
       new HotSwapPassFactory("Es6SplitVariableDeclarations", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1100,7 +1104,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final HotSwapPassFactory es6ConvertSuper =
+  private final HotSwapPassFactory es6ConvertSuper =
       new HotSwapPassFactory("es6ConvertSuper", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1113,7 +1117,7 @@ public class DefaultPassConfig extends PassConfig {
    * There are a few other passes which run before or after this one,
    * to convert constructs which are not converted by this pass.
    */
-  final HotSwapPassFactory convertEs6ToEs3 =
+  private final HotSwapPassFactory convertEs6ToEs3 =
       new HotSwapPassFactory("convertEs6", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1121,7 +1125,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final HotSwapPassFactory rewriteLetConst =
+  private final HotSwapPassFactory rewriteLetConst =
       new HotSwapPassFactory("Es6RewriteLetConst", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1129,7 +1133,18 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final HotSwapPassFactory rewriteGenerators =
+  /**
+   * Desugars ES6_TYPED features into ES6 code.
+   */
+  final HotSwapPassFactory convertEs6TypedToEs6 =
+      new HotSwapPassFactory("convertEs6Typed", true) {
+    @Override
+    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+      return new Es6TypedToEs6Converter(compiler);
+    }
+  };
+
+  private final HotSwapPassFactory rewriteGenerators =
       new HotSwapPassFactory("rewriteGenerators", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1137,7 +1152,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory convertStaticInheritance =
+  private final PassFactory convertStaticInheritance =
       new PassFactory("Es6StaticInheritance", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1145,7 +1160,15 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory convertToTypedES6 =
+  private final PassFactory convertDeclaredTypesToJSDoc =
+      new PassFactory("convertDeclaredTypesToJSDoc", true) {
+    @Override
+    CompilerPass create(AbstractCompiler compiler) {
+      return new ConvertDeclaredTypesToJSDoc(compiler);
+    }
+  };
+
+  private final PassFactory convertToTypedES6 =
       new PassFactory("ConvertToTypedES6", true) {
     @Override
     CompilerPass create(AbstractCompiler compiler) {
@@ -1153,7 +1176,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory markTranspilationDone = new PassFactory("setLanguageMode", true) {
+  private final PassFactory markTranspilationDone = new PassFactory("setLanguageMode", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       return new CompilerPass() {
@@ -1166,7 +1189,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Applies aliases and inlines goog.scope. */
-  final PassFactory declaredGlobalExternsOnWindow =
+  private final PassFactory declaredGlobalExternsOnWindow =
       new PassFactory("declaredGlobalExternsOnWindow", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1175,7 +1198,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Rewrites goog.defineClass */
-  final HotSwapPassFactory closureRewriteClass =
+  private final HotSwapPassFactory closureRewriteClass =
       new HotSwapPassFactory("closureRewriteClass", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1184,7 +1207,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Rewrites goog.module */
-  final HotSwapPassFactory closureRewriteModule =
+  private final HotSwapPassFactory closureRewriteModule =
       new HotSwapPassFactory("closureRewriteModule", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1193,7 +1216,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that CSS class names are wrapped in goog.getCssName */
-  final PassFactory closureCheckGetCssName =
+  private final PassFactory closureCheckGetCssName =
       new PassFactory("closureCheckGetCssName", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1208,7 +1231,7 @@ public class DefaultPassConfig extends PassConfig {
    * replacement values for the classnames.  If null, the raw class names are
    * inlined.
    */
-  final PassFactory closureReplaceGetCssName =
+  private final PassFactory closureReplaceGetCssName =
       new PassFactory("closureReplaceGetCssName", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1234,7 +1257,7 @@ public class DefaultPassConfig extends PassConfig {
    * Creates synthetic blocks to prevent FoldConstants from moving code
    * past markers in the source.
    */
-  final PassFactory createSyntheticBlocks =
+  private final PassFactory createSyntheticBlocks =
       new PassFactory("createSyntheticBlocks", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1244,7 +1267,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory earlyPeepholeOptimizations =
+  private final PassFactory earlyPeepholeOptimizations =
       new PassFactory("earlyPeepholeOptimizations", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1253,7 +1276,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory earlyInlineVariables =
+  private final PassFactory earlyInlineVariables =
       new PassFactory("earlyInlineVariables", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1270,7 +1293,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Various peephole optimizations. */
-  final PassFactory peepholeOptimizations =
+  private final PassFactory peepholeOptimizations =
       new PassFactory("peepholeOptimizations", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1286,7 +1309,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Same as peepholeOptimizations but aggressively merges code together */
-  final PassFactory latePeepholeOptimizations =
+  private final PassFactory latePeepholeOptimizations =
       new PassFactory("latePeepholeOptimizations", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1303,7 +1326,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that all variables are defined. */
-  final HotSwapPassFactory checkVars =
+  private final HotSwapPassFactory checkVars =
       new HotSwapPassFactory("checkVars", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1312,7 +1335,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Infers constants. */
-  final PassFactory inferConsts = new PassFactory("inferConsts", true) {
+  private final PassFactory inferConsts = new PassFactory("inferConsts", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new InferConsts(compiler);
@@ -1320,7 +1343,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks for RegExp references. */
-  final PassFactory checkRegExp =
+  private final PassFactory checkRegExp =
       new PassFactory("checkRegExp", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1338,7 +1361,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that references to variables look reasonable. */
-  final HotSwapPassFactory checkVariableReferences =
+  private final HotSwapPassFactory checkVariableReferences =
       new HotSwapPassFactory("checkVariableReferences", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1348,7 +1371,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Pre-process goog.testing.ObjectPropertyString. */
-  final PassFactory objectPropertyStringPreprocess =
+  private final PassFactory objectPropertyStringPreprocess =
       new PassFactory("ObjectPropertyStringPreprocess", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1366,7 +1389,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Clears the typed scope when we're done. */
-  final PassFactory clearTypedScopePass =
+  private final PassFactory clearTypedScopePass =
       new PassFactory("clearTypedScopePass", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1395,7 +1418,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory symbolTableForNewTypeInference =
+  private final PassFactory symbolTableForNewTypeInference =
       new PassFactory("GlobalTypeInfo", true) {
         @Override
         protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1403,7 +1426,7 @@ public class DefaultPassConfig extends PassConfig {
         }
       };
 
-  final PassFactory newTypeInference =
+  private final PassFactory newTypeInference =
       new PassFactory("NewTypeInference", true) {
         @Override
         protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1411,7 +1434,7 @@ public class DefaultPassConfig extends PassConfig {
         }
       };
 
-  final HotSwapPassFactory inferJsDocInfo =
+  private final HotSwapPassFactory inferJsDocInfo =
       new HotSwapPassFactory("inferJsDocInfo", true) {
   @Override
   protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1432,7 +1455,7 @@ public class DefaultPassConfig extends PassConfig {
 };
 
   /** Checks type usage */
-  final HotSwapPassFactory checkTypes =
+  private final HotSwapPassFactory checkTypes =
       new HotSwapPassFactory("checkTypes", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
@@ -1458,7 +1481,7 @@ public class DefaultPassConfig extends PassConfig {
    * Checks possible execution paths of the program for problems: missing return
    * statements and dead code.
    */
-  final HotSwapPassFactory checkControlFlow =
+  private final HotSwapPassFactory checkControlFlow =
       new HotSwapPassFactory("checkControlFlow", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1475,7 +1498,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks access controls. Depends on type-inference. */
-  final HotSwapPassFactory checkAccessControls =
+  private final HotSwapPassFactory checkAccessControls =
       new HotSwapPassFactory("checkAccessControls", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1484,7 +1507,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final HotSwapPassFactory lintChecks =
+  private final HotSwapPassFactory lintChecks =
       new HotSwapPassFactory("lintChecks", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
@@ -1492,7 +1515,8 @@ public class DefaultPassConfig extends PassConfig {
           new CheckEnums(compiler),
           new CheckInterfaces(compiler),
           new CheckNullableReturn(compiler),
-          new CheckPrototypeProperties(compiler)));
+          new CheckPrototypeProperties(compiler),
+          new ImplicitNullabilityCheck(compiler)));
     }
   };
 
@@ -1534,7 +1558,7 @@ public class DefaultPassConfig extends PassConfig {
   }
 
   /** Checks global name usage. */
-  final PassFactory checkGlobalNames =
+  private final PassFactory checkGlobalNames =
       new PassFactory("checkGlobalNames", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1553,7 +1577,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that the code is ES5 strict compliant. */
-  final PassFactory checkStrictMode =
+  private final PassFactory checkStrictMode =
       new PassFactory("checkStrictMode", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1563,7 +1587,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Process goog.tweak.getTweak() calls. */
-  final PassFactory processTweaks = new PassFactory("processTweaks", true) {
+  private final PassFactory processTweaks = new PassFactory("processTweaks", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       return new CompilerPass() {
@@ -1578,7 +1602,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Override @define-annotated constants. */
-  final PassFactory processDefines = new PassFactory("processDefines", true) {
+  private final PassFactory processDefines = new PassFactory("processDefines", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       return new CompilerPass() {
@@ -1617,7 +1641,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that all constants are not modified */
-  final PassFactory checkConsts = new PassFactory("checkConsts", true) {
+  private final PassFactory checkConsts = new PassFactory("checkConsts", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new ConstCheck(compiler);
@@ -1625,7 +1649,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that the arguments are constants */
-  final PassFactory checkConstParams =
+  private final PassFactory checkConstParams =
       new PassFactory("checkConstParams", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1634,7 +1658,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Check memory bloat patterns */
-  final PassFactory checkEventfulObjectDisposal =
+  private final PassFactory checkEventfulObjectDisposal =
       new PassFactory("checkEventfulObjectDisposal", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1644,7 +1668,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Computes the names of functions for later analysis. */
-  final PassFactory computeFunctionNames =
+  private final PassFactory computeFunctionNames =
       new PassFactory("computeFunctionNames", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1653,7 +1677,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Inserts run-time type assertions for debugging. */
-  final PassFactory runtimeTypeCheck =
+  private final PassFactory runtimeTypeCheck =
       new PassFactory("runtimeTypeCheck", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1663,7 +1687,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Generates unique ids. */
-  final PassFactory replaceIdGenerators =
+  private final PassFactory replaceIdGenerators =
       new PassFactory("replaceIdGenerators", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1681,7 +1705,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Replace strings. */
-  final PassFactory replaceStrings = new PassFactory("replaceStrings", true) {
+  private final PassFactory replaceStrings = new PassFactory("replaceStrings", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       return new CompilerPass() {
@@ -1700,7 +1724,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Optimizes the "arguments" array. */
-  final PassFactory optimizeArgumentsArray =
+  private final PassFactory optimizeArgumentsArray =
       new PassFactory("optimizeArgumentsArray", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1709,7 +1733,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Remove variables set to goog.abstractMethod. */
-  final PassFactory closureCodeRemoval =
+  private final PassFactory closureCodeRemoval =
       new PassFactory("closureCodeRemoval", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1719,7 +1743,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Special case optimizations for closure functions. */
-  final PassFactory closureOptimizePrimitives =
+  private final PassFactory closureOptimizePrimitives =
       new PassFactory("closureOptimizePrimitives", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -1728,7 +1752,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Puts global symbols into a single object. */
-  final PassFactory rescopeGlobalSymbols =
+  private final PassFactory rescopeGlobalSymbols =
       new PassFactory("rescopeGlobalSymbols", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1740,7 +1764,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Collapses names in the global scope. */
-  final PassFactory collapseProperties =
+  private final PassFactory collapseProperties =
       new PassFactory("collapseProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1749,7 +1773,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Rewrite properties as variables. */
-  final PassFactory collapseObjectLiterals =
+  private final PassFactory collapseObjectLiterals =
       new PassFactory("collapseObjectLiterals", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1759,7 +1783,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Disambiguate property names based on the coding convention. */
-  final PassFactory disambiguatePrivateProperties =
+  private final PassFactory disambiguatePrivateProperties =
       new PassFactory("disambiguatePrivateProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1768,7 +1792,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Disambiguate property names based on type information. */
-  final PassFactory disambiguateProperties =
+  private final PassFactory disambiguateProperties =
       new PassFactory("disambiguateProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1780,7 +1804,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Chain calls to functions that return this.
    */
-  final PassFactory chainCalls = new PassFactory("chainCalls", true) {
+  private final PassFactory chainCalls = new PassFactory("chainCalls", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new ChainCalls(compiler);
@@ -1791,7 +1815,7 @@ public class DefaultPassConfig extends PassConfig {
    * Rewrite instance methods as static methods, to make them easier
    * to inline.
    */
-  final PassFactory devirtualizePrototypeMethods =
+  private final PassFactory devirtualizePrototypeMethods =
       new PassFactory("devirtualizePrototypeMethods", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1803,7 +1827,7 @@ public class DefaultPassConfig extends PassConfig {
    * Optimizes unused function arguments, unused return values, and inlines
    * constant parameters. Also runs RemoveUnusedVars.
    */
-  final PassFactory optimizeCallsAndRemoveUnusedVars =
+  private final PassFactory optimizeCallsAndRemoveUnusedVars =
       new PassFactory("optimizeCalls_and_removeUnusedVars", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1836,7 +1860,7 @@ public class DefaultPassConfig extends PassConfig {
    * Look for function calls that are pure, and annotate them
    * that way.
    */
-  final PassFactory markPureFunctions =
+  private final PassFactory markPureFunctions =
       new PassFactory("markPureFunctions", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1849,7 +1873,7 @@ public class DefaultPassConfig extends PassConfig {
    * Look for function calls that have no side effects, and annotate them
    * that way.
    */
-  final PassFactory markNoSideEffectCalls =
+  private final PassFactory markNoSideEffectCalls =
       new PassFactory("markNoSideEffectCalls", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1858,7 +1882,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Inlines variables heuristically. */
-  final PassFactory inlineVariables =
+  private final PassFactory inlineVariables =
       new PassFactory("inlineVariables", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1883,7 +1907,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Inlines variables that are marked as constants. */
-  final PassFactory inlineConstants =
+  private final PassFactory inlineConstants =
       new PassFactory("inlineConstants", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1895,7 +1919,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Perform local control flow optimizations.
    */
-  final PassFactory minimizeExitPoints =
+  private final PassFactory minimizeExitPoints =
       new PassFactory("minimizeExitPoints", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1906,7 +1930,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Use data flow analysis to remove dead branches.
    */
-  final PassFactory removeUnreachableCode =
+  private final PassFactory removeUnreachableCode =
       new PassFactory("removeUnreachableCode", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1917,7 +1941,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Remove prototype properties that do not appear to be used.
    */
-  final PassFactory removeUnusedPrototypeProperties =
+  private final PassFactory removeUnusedPrototypeProperties =
       new PassFactory("removeUnusedPrototypeProperties", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1930,7 +1954,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Remove prototype properties that do not appear to be used.
    */
-  final PassFactory removeUnusedClassProperties =
+  private final PassFactory removeUnusedClassProperties =
       new PassFactory("removeUnusedClassProperties", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -1943,7 +1967,7 @@ public class DefaultPassConfig extends PassConfig {
    * Process smart name processing - removes unused classes and does referencing
    * starting with minimum set of names.
    */
-  final PassFactory smartNamePass = new PassFactory("smartNamePass", true) {
+  private final PassFactory smartNamePass = new PassFactory("smartNamePass", true) {
     private boolean hasWrittenFile = false;
 
     @Override
@@ -1982,7 +2006,7 @@ public class DefaultPassConfig extends PassConfig {
    * Process smart name processing - removes unused classes and does referencing
    * starting with minimum set of names.
    */
-  final PassFactory smartNamePass2 = new PassFactory("smartNamePass", true) {
+  private final PassFactory smartNamePass2 = new PassFactory("smartNamePass", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       return new CompilerPass() {
@@ -1997,7 +2021,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Inlines simple methods, like getters */
-  final PassFactory inlineSimpleMethods =
+  private final PassFactory inlineSimpleMethods =
       new PassFactory("inlineSimpleMethods", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2006,7 +2030,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Kills dead assignments. */
-  final PassFactory deadAssignmentsElimination =
+  private final PassFactory deadAssignmentsElimination =
       new PassFactory("deadAssignmentsElimination", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2015,7 +2039,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Inlines function calls. */
-  final PassFactory inlineFunctions =
+  private final PassFactory inlineFunctions =
       new PassFactory("inlineFunctions", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2034,7 +2058,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Inlines constant properties. */
-  final PassFactory inlineProperties =
+  private final PassFactory inlineProperties =
       new PassFactory("inlineProperties", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2043,7 +2067,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Removes variables that are never used. */
-  final PassFactory removeUnusedVars =
+  private final PassFactory removeUnusedVars =
       new PassFactory("removeUnusedVars", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2062,7 +2086,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Move global symbols to a deeper common module
    */
-  final PassFactory crossModuleCodeMotion =
+  private final PassFactory crossModuleCodeMotion =
       new PassFactory(Compiler.CROSS_MODULE_CODE_MOTION_NAME, false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2076,7 +2100,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Move methods to a deeper common module
    */
-  final PassFactory crossModuleMethodMotion =
+  private final PassFactory crossModuleMethodMotion =
       new PassFactory(Compiler.CROSS_MODULE_METHOD_MOTION_NAME, false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2084,12 +2108,13 @@ public class DefaultPassConfig extends PassConfig {
           compiler, crossModuleIdGenerator,
           // Only move properties in externs if we're not treating
           // them as exports.
-          options.removeUnusedPrototypePropertiesInExterns);
+          options.removeUnusedPrototypePropertiesInExterns,
+          options.crossModuleCodeMotionNoStubMethods);
     }
   };
 
   /** A data-flow based variable inliner. */
-  final PassFactory flowSensitiveInlineVariables =
+  private final PassFactory flowSensitiveInlineVariables =
       new PassFactory("flowSensitiveInlineVariables", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2098,7 +2123,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Uses register-allocation algorithms to use fewer variables. */
-  final PassFactory coalesceVariableNames =
+  private final PassFactory coalesceVariableNames =
       new PassFactory("coalesceVariableNames", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2110,7 +2135,7 @@ public class DefaultPassConfig extends PassConfig {
    * Some simple, local collapses (e.g., {@code var x; var y;} becomes
    * {@code var x,y;}.
    */
-  final PassFactory exploitAssign = new PassFactory("exploitAssign", true) {
+  private final PassFactory exploitAssign = new PassFactory("exploitAssign", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new PeepholeOptimizationsPass(compiler,
@@ -2122,7 +2147,7 @@ public class DefaultPassConfig extends PassConfig {
    * Some simple, local collapses (e.g., {@code var x; var y;} becomes
    * {@code var x,y;}.
    */
-  final PassFactory collapseVariableDeclarations =
+  private final PassFactory collapseVariableDeclarations =
       new PassFactory("collapseVariableDeclarations", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2133,7 +2158,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Simple global collapses of variable declarations.
    */
-  final PassFactory groupVariableDeclarations =
+  private final PassFactory groupVariableDeclarations =
       new PassFactory("groupVariableDeclarations", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2144,7 +2169,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Extracts common sub-expressions.
    */
-  final PassFactory extractPrototypeMemberDeclarations =
+  private final PassFactory extractPrototypeMemberDeclarations =
       new PassFactory("extractPrototypeMemberDeclarations", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2166,7 +2191,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Rewrites common function definitions to be more compact. */
-  final PassFactory rewriteFunctionExpressions =
+  private final PassFactory rewriteFunctionExpressions =
       new PassFactory("rewriteFunctionExpressions", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2175,7 +2200,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Collapses functions to not use the VAR keyword. */
-  final PassFactory collapseAnonymousFunctions =
+  private final PassFactory collapseAnonymousFunctions =
       new PassFactory("collapseAnonymousFunctions", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2184,7 +2209,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Moves function declarations to the top, to simulate actual hoisting. */
-  final PassFactory moveFunctionDeclarations =
+  private final PassFactory moveFunctionDeclarations =
       new PassFactory("moveFunctionDeclarations", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2192,7 +2217,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory nameUnmappedAnonymousFunctions =
+  private final PassFactory nameUnmappedAnonymousFunctions =
       new PassFactory("nameAnonymousFunctions", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2200,7 +2225,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory nameMappedAnonymousFunctions =
+  private final PassFactory nameMappedAnonymousFunctions =
       new PassFactory("nameAnonymousFunctions", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -2217,7 +2242,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Alias external symbols. */
-  final PassFactory aliasExternals = new PassFactory("aliasExternals", true) {
+  private final PassFactory aliasExternals = new PassFactory("aliasExternals", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new AliasExternals(compiler, compiler.getModuleGraph(),
@@ -2229,7 +2254,7 @@ public class DefaultPassConfig extends PassConfig {
    * Alias string literals with global variables, to avoid creating lots of
    * transient objects.
    */
-  final PassFactory aliasStrings = new PassFactory("aliasStrings", true) {
+  private final PassFactory aliasStrings = new PassFactory("aliasStrings", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new AliasStrings(
@@ -2242,7 +2267,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Handling for the ObjectPropertyString primitive. */
-  final PassFactory objectPropertyStringPostprocess =
+  private final PassFactory objectPropertyStringPostprocess =
       new PassFactory("ObjectPropertyStringPostprocess", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2254,7 +2279,7 @@ public class DefaultPassConfig extends PassConfig {
    * Renames properties so that the two properties that never appear on
    * the same object get the same name.
    */
-  final PassFactory ambiguateProperties =
+  private final PassFactory ambiguateProperties =
       new PassFactory("ambiguateProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2266,7 +2291,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Mark the point at which the normalized AST assumptions no longer hold.
    */
-  final PassFactory markUnnormalized =
+  private final PassFactory markUnnormalized =
       new PassFactory("markUnnormalized", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -2279,7 +2304,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Denormalize the AST for code generation. */
-  final PassFactory denormalize = new PassFactory("denormalize", true) {
+  private final PassFactory denormalize = new PassFactory("denormalize", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new Denormalize(compiler);
@@ -2287,7 +2312,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Inverting name normalization. */
-  final PassFactory invertContextualRenaming =
+  private final PassFactory invertContextualRenaming =
       new PassFactory("invertContextualRenaming", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2298,7 +2323,7 @@ public class DefaultPassConfig extends PassConfig {
   /**
    * Renames properties.
    */
-  final PassFactory renameProperties =
+  private final PassFactory renameProperties =
       new PassFactory("renameProperties", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -2344,7 +2369,7 @@ public class DefaultPassConfig extends PassConfig {
   }
 
   /** Renames variables. */
-  final PassFactory renameVars = new PassFactory("renameVars", true) {
+  private final PassFactory renameVars = new PassFactory("renameVars", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       final VariableMap prevVariableMap = options.inputVariableMap;
@@ -2389,7 +2414,7 @@ public class DefaultPassConfig extends PassConfig {
   }
 
   /** Renames labels */
-  final PassFactory renameLabels = new PassFactory("renameLabels", true) {
+  private final PassFactory renameLabels = new PassFactory("renameLabels", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new RenameLabels(compiler);
@@ -2397,7 +2422,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Convert bracket access to dot access */
-  final PassFactory convertToDottedProperties =
+  private final PassFactory convertToDottedProperties =
       new PassFactory("convertToDottedProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
@@ -2406,7 +2431,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that all variables are defined. */
-  final PassFactory sanityCheckAst = new PassFactory("sanityCheckAst", true) {
+  private final PassFactory sanityCheckAst = new PassFactory("sanityCheckAst", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new AstValidator(compiler);
@@ -2414,7 +2439,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Checks that all variables are defined. */
-  final PassFactory sanityCheckVars = new PassFactory("sanityCheckVars", true) {
+  private final PassFactory sanityCheckVars = new PassFactory("sanityCheckVars", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new VarCheck(compiler, true);
@@ -2422,7 +2447,7 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Adds instrumentations according to an instrumentation template. */
-  final PassFactory instrumentFunctions =
+  private final PassFactory instrumentFunctions =
       new PassFactory("instrumentFunctions", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -2446,7 +2471,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory instrumentForCodeCoverage =
+  private final PassFactory instrumentForCodeCoverage =
       new PassFactory("instrumentForCodeCoverage", true) {
         @Override
         protected CompilerPass create(final AbstractCompiler compiler) {
@@ -2457,7 +2482,7 @@ public class DefaultPassConfig extends PassConfig {
       };
 
   /** Extern property names gathering pass. */
-  final PassFactory gatherExternProperties =
+  private final PassFactory gatherExternProperties =
       new PassFactory("gatherExternProperties", true) {
         @Override
         protected CompilerPass create(AbstractCompiler compiler) {
@@ -2534,7 +2559,7 @@ public class DefaultPassConfig extends PassConfig {
     return additionalReplacements;
   }
 
-  final PassFactory printNameReferenceGraph =
+  private final PassFactory printNameReferenceGraph =
     new PassFactory("printNameReferenceGraph", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
@@ -2559,7 +2584,7 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  final PassFactory printNameReferenceReport =
+  private final PassFactory printNameReferenceReport =
       new PassFactory("printNameReferenceReport", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {

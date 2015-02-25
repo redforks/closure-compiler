@@ -58,7 +58,9 @@ md.$dialog.options;
  * @typedef {{
  *   title: (function(string): md.$dialog.AlertConfig_),
  *   content: (function(string): md.$dialog.AlertConfig_),
- *   ok: (function(string): md.$dialog.AlertConfig_)
+ *   ariaLabel: (function(string): md.$dialog.AlertConfig_),
+ *   ok: (function(string): md.$dialog.AlertConfig_),
+ *   theme: (function(string): md.$dialog.AlertConfig_)
  * }}
  */
 md.$dialog.AlertConfig_;
@@ -68,8 +70,10 @@ md.$dialog.AlertConfig_;
  * @typedef {{
  *   title: (function(string): md.$dialog.ConfirmConfig_),
  *   content: (function(string): md.$dialog.ConfirmConfig_),
+ *   ariaLabel: (function(string): md.$dialog.ConfirmConfig_),
  *   ok: (function(string): md.$dialog.ConfirmConfig_),
- *   cancel: (function(string): md.$dialog.ConfirmConfig_)
+ *   cancel: (function(string): md.$dialog.ConfirmConfig_),
+ *   theme: (function(string): md.$dialog.ConfirmConfig_)
  * }}
  */
 md.$dialog.ConfirmConfig_;
@@ -259,3 +263,38 @@ md.$mdThemingProvider.Theme.prototype.warnPalette = function(warnPalette) {};
 md.$mdThemingProvider.prototype.theme = function(themeName, opt_inheritFrom) {};
 
 
+/******************************************************************************
+ * $mdIconProvider Service
+ *****************************************************************************/
+
+/** @constructor */
+md.$mdIconProvider = function() {};
+
+/**
+ * @param {string} id
+ * @param {string} url
+ * @param {number=} iconSize
+ * @return {md.$mdIconProvider}
+ */
+md.$mdIconProvider.prototype.icon = function(id, url, iconSize) {};
+
+/**
+ * @param {string} id
+ * @param {string} url
+ * @param {number=} iconSize
+ * @return {md.$mdIconProvider}
+ */
+md.$mdIconProvider.prototype.iconSet = function(id, url, iconSize) {};
+
+/**
+ * @param {string} url
+ * @param {number=} iconSize
+ * @return {md.$mdIconProvider}
+ */
+md.$mdIconProvider.prototype.defaultIconSet = function(url, iconSize) {};
+
+/**
+ * @param {number} iconSize
+ * @return {md.$mdIconProvider}
+ */
+md.$mdIconProvider.prototype.defaultIconSize = function(iconSize) {};

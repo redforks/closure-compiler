@@ -119,15 +119,16 @@ public class Node implements Cloneable, Serializable {
                                   // var obj = { get [prop]() {...} };
       COMPUTED_PROP_SETTER = 74,  // A computed property in a setter, e.g.
                                   // var obj = { set [prop](val) {...} };
-      ANALYZED_DURING_GTI  = 75,  // In GlobalTypeInfo, we mark some AST nodes
+      COMPUTED_PROP_VARIABLE = 75, // A computed property that's a variable, e.g. [prop]: string;
+      ANALYZED_DURING_GTI  = 76,  // In GlobalTypeInfo, we mark some AST nodes
                                   // to avoid analyzing them during
                                   // NewTypeInference. We remove this attribute
                                   // in the fwd direction of NewTypeInference.
-      CONSTANT_PROPERTY_DEF = 76, // Used to communicate information between
+      CONSTANT_PROPERTY_DEF = 77, // Used to communicate information between
                                   // GlobalTypeInfo and NewTypeInference.
                                   // We use this to tag getprop nodes that
                                   // declare properties.
-      DECLARED_TYPE_EXPR = 77;    // Used to attach TypeDeclarationNode ASTs to
+      DECLARED_TYPE_EXPR = 78;    // Used to attach TypeDeclarationNode ASTs to
                                   // Nodes which represent a typed NAME or
                                   // FUNCTION.
 
@@ -177,6 +178,7 @@ public class Node implements Cloneable, Serializable {
         case COMPUTED_PROP_METHOD: return "computed_prop_method";
         case COMPUTED_PROP_GETTER: return "computed_prop_getter";
         case COMPUTED_PROP_SETTER: return "computed_prop_setter";
+        case COMPUTED_PROP_VARIABLE: return "computed_prop_variable";
         case ANALYZED_DURING_GTI:  return "analyzed_during_gti";
         case CONSTANT_PROPERTY_DEF: return "constant_property_def";
         case DECLARED_TYPE_EXPR: return "declared_type_expr";
@@ -1331,11 +1333,11 @@ public class Node implements Cloneable, Serializable {
   }
 
   /**
-   * <p>Return an iterable object that iterates over this node's siblings.
-   * The iterator does not support the optional operation
-   * {@link Iterator#remove()}.</p>
+   * <p>Return an iterable object that iterates over this node's siblings,
+   * <b>including this Node</b>. The iterator does not support the optional
+   * operation {@link Iterator#remove()}.</p>
    *
-   * <p>To iterate over a node's siblings, one can write</p>
+   * <p>To iterate over a node's siblings including itself, one can write</p>
    * <pre>Node n = ...;
    * for (Node sibling : n.siblings()) { ...</pre>
    */
@@ -1586,11 +1588,8 @@ public class Node implements Cloneable, Serializable {
     NodeMismatch res = null;
     Node n, n2;
     for (n = first, n2 = node2.first;
-         res == null && n != null;
+         n != null;
          n = n.next, n2 = n2.next) {
-      if (node2 == null) {
-        throw new IllegalStateException();
-      }
       res = n.checkTreeEqualsImpl(n2, jsDoc);
       if (res != null) {
         return res;
@@ -2214,7 +2213,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Sets whether this node is a static member node. This
    * method is meaningful only on {@link Token#GETTER_DEF},
-   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_DEF} nodes contained
+   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_FUNCTION_DEF} nodes contained
    * within {@link Token#CLASS}.
    */
   public void setStaticMember(boolean isStatic) {
@@ -2224,7 +2223,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Returns whether this node is a static member node. This
    * method is meaningful only on {@link Token#GETTER_DEF},
-   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_DEF} nodes contained
+   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_FUNCTION_DEF} nodes contained
    * within {@link Token#CLASS}.
    */
   public boolean isStaticMember() {
@@ -2234,7 +2233,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Sets whether this node is a generator node. This
    * method is meaningful only on {@link Token#FUNCTION} or
-   * {@link Token#MEMBER_DEF} nodes.
+   * {@link Token#MEMBER_FUNCTION_DEF} nodes.
    */
   public void setIsGeneratorFunction(boolean isGenerator) {
     putBooleanProp(GENERATOR_FN, isGenerator);
@@ -2295,7 +2294,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Sets whether this node is a generator node. This
    * method is meaningful only on {@link Token#FUNCTION} or
-   * {@link Token#MEMBER_DEF} nodes.
+   * {@link Token#MEMBER_FUNCTION_DEF} nodes.
    */
   public void setYieldFor(boolean isGenerator) {
     putBooleanProp(YIELD_FOR, isGenerator);
@@ -2304,7 +2303,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Returns whether this node is a generator node. This
    * method is meaningful only on {@link Token#FUNCTION} or
-   * {@link Token#MEMBER_DEF} nodes.
+   * {@link Token#MEMBER_FUNCTION_DEF} nodes.
    */
   public boolean isYieldFor() {
     return getBooleanProp(YIELD_FOR);
@@ -2708,8 +2707,12 @@ public class Node implements Cloneable, Serializable {
     return this.getType() == Token.LET;
   }
 
-  public boolean isMemberDef() {
-    return this.getType() == Token.MEMBER_DEF;
+  public boolean isMemberFunctionDef() {
+    return this.getType() == Token.MEMBER_FUNCTION_DEF;
+  }
+
+  public boolean isMemberVariableDef() {
+    return this.getType() == Token.MEMBER_VARIABLE_DEF;
   }
 
   public boolean isName() {

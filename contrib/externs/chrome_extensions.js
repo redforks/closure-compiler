@@ -1166,6 +1166,373 @@ chrome.bluetoothSocket.onReceiveError;
 
 
 /**
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy
+ * @const
+ */
+chrome.bluetoothLowEnergy = {};
+
+
+/**
+ * @constructor
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#type-Service
+ */
+chrome.bluetoothLowEnergy.Service = function() {};
+
+
+/** @type {string} */
+chrome.bluetoothLowEnergy.Service.prototype.uuid;
+
+
+/** @type {boolean} */
+chrome.bluetoothLowEnergy.Service.prototype.isPrimary;
+
+
+/** @type {string|undefined} */
+chrome.bluetoothLowEnergy.Service.prototype.instanceId;
+
+
+/** @type {string|undefined} */
+chrome.bluetoothLowEnergy.Service.prototype.deviceAddress;
+
+
+/**
+ * @constructor
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#type-Characteristic
+ */
+chrome.bluetoothLowEnergy.Characteristic = function() {};
+
+
+/** @type {string} */
+chrome.bluetoothLowEnergy.Characteristic.prototype.uuid;
+
+
+/** @type {!chrome.bluetoothLowEnergy.Service} */
+chrome.bluetoothLowEnergy.Characteristic.prototype.service;
+
+
+/** @type {!Array.<string>} */
+chrome.bluetoothLowEnergy.Characteristic.prototype.properties;
+
+
+/** @type {string|undefined} */
+chrome.bluetoothLowEnergy.Characteristic.prototype.instanceId;
+
+
+/** @type {!ArrayBuffer|undefined} */
+chrome.bluetoothLowEnergy.Characteristic.prototype.value;
+
+
+/**
+ * @constructor
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#type-Descriptor
+ */
+chrome.bluetoothLowEnergy.Descriptor = function() {};
+
+/** @type {string} */
+chrome.bluetoothLowEnergy.Descriptor.prototype.uuid;
+
+
+/** @type {!chrome.bluetoothLowEnergy.Characteristic} */
+chrome.bluetoothLowEnergy.Descriptor.prototype.characteristic;
+
+
+/** @type {string|undefined} */
+chrome.bluetoothLowEnergy.Descriptor.prototype.instanceId;
+
+
+/** @type {!ArrayBuffer|undefined} */
+chrome.bluetoothLowEnergy.Descriptor.prototype.value;
+
+
+/**
+ * @typedef {?{
+ *   persistent: boolean
+ * }}
+ */
+chrome.bluetoothLowEnergy.ConnectionProperties;
+
+
+/**
+ * @param {string} deviceAddress
+ * @param {!chrome.bluetoothLowEnergy.ConnectionProperties|function()}
+ *     propertiesOrCallback
+ * @param {function()=} opt_callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-connect
+ */
+chrome.bluetoothLowEnergy.connect =
+  function(deviceAddress, propertiesOrCallback, opt_callback) {};
+
+/**
+ * @param {string} deviceAddress
+ * @param {function()=} opt_callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-disconnect
+ */
+chrome.bluetoothLowEnergy.disconnect = function(deviceAddress, opt_callback) {};
+
+
+/**
+ * @param {string} serviceId
+ * @param {function(!chrome.bluetoothLowEnergy.Service)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-getService
+ */
+chrome.bluetoothLowEnergy.getService = function(serviceId, callback) {};
+
+
+/**
+ * @param {string} deviceAddress
+ * @param {function(!Array.<!chrome.bluetoothLowEnergy.Service>)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-getServices
+ */
+chrome.bluetoothLowEnergy.getServices = function(deviceAddress, callback) {};
+
+
+/**
+ * @param {string} characteristicId
+ * @param {function(!chrome.bluetoothLowEnergy.Characteristic)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-getCharacteristic
+ */
+chrome.bluetoothLowEnergy.getCharacteristic =
+    function(characteristicId, callback) {};
+
+
+/**
+ * @param {string} serviceId
+ * @param {function(!Array.<!chrome.bluetoothLowEnergy.Characteristic>)}
+ * callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-getCharacteristics
+ */
+chrome.bluetoothLowEnergy.getCharacteristics =
+    function(serviceId, callback) {};
+
+
+/**
+ * @param {string} serviceId
+ * @param {function(!Array.<!chrome.bluetoothLowEnergy.Service>)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-getIncludedServices
+ */
+chrome.bluetoothLowEnergy.getIncludedServices =
+  function(serviceId, callback) {};
+
+
+/**
+ * @param {string} descriptorId
+ * @param {function(!chrome.bluetoothLowEnergy.Descriptor)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-getDescriptor
+ */
+chrome.bluetoothLowEnergy.getDescriptor = function(descriptorId, callback) {};
+
+
+/**
+ * @param {string} characteristicId
+ * @param {function(!Array.<!chrome.bluetoothLowEnergy.Descriptor>)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-getDescriptors
+ */
+chrome.bluetoothLowEnergy.getDescriptors =
+  function(characteristicId, callback) {};
+
+
+/**
+ * @param {string} characteristicId
+ * @param {function(!chrome.bluetoothLowEnergy.Characteristic)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-readCharacteristicValue
+ */
+chrome.bluetoothLowEnergy.readCharacteristicValue =
+  function(characteristicId, callback) {};
+
+
+/**
+ * @param {string} characteristicId
+ * @param {!ArrayBuffer} value
+ * @param {function()} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-writeCharacteristicValue
+ */
+chrome.bluetoothLowEnergy.writeCharacteristicValue =
+  function(characteristicId, value, callback) {};
+
+
+/**
+ * @typedef {?{
+ *   persistent: boolean
+ * }}
+ */
+chrome.bluetoothLowEnergy.NotificationSessionProperties;
+
+/**
+  * @param {string} characteristicId
+  * @param {!chrome.bluetoothLowEnergy.NotificationSessionProperties|function()}
+  *     propertiesOrCallback
+  * @param {function()=} opt_callback
+  * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-startCharacteristicNotifications
+  */
+chrome.bluetoothLowEnergy.startCharacteristicNotifications =
+  function(characteristicId, propertiesOrCallback, opt_callback) {};
+
+
+/**
+  * @param {string} characteristicId
+  * @param {function()=} opt_callback
+  * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-stopCharacteristicNotifications
+  */
+chrome.bluetoothLowEnergy.stopCharacteristicNotifications =
+  function(characteristicId, opt_callback) {};
+
+
+/**
+ * @param {string} descriptorId
+ * @param {function(!chrome.bluetoothLowEnergy.Descriptor)} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-readDescriptorValue
+ */
+chrome.bluetoothLowEnergy.readDescriptorValue =
+  function(descriptorId, callback) {};
+
+
+/**
+ * @param {string} descriptorId
+ * @param {!ArrayBuffer} value
+ * @param {function()} callback
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#method-writeDescriptorValue
+ */
+chrome.bluetoothLowEnergy.writeDescriptorValue =
+  function(descriptorId, value, callback) {};
+
+
+/**
+ * Event whose listeners take a Service parameter.
+ * @constructor
+ */
+chrome.bluetoothLowEnergy.ServiceEvent = function() {};
+
+
+/** @param {function(!chrome.bluetoothLowEnergy.Service): void} callback */
+chrome.bluetoothLowEnergy.ServiceEvent.prototype.addListener =
+    function(callback) {};
+
+
+/** @param {function(!chrome.bluetoothLowEnergy.Service): void} callback */
+chrome.bluetoothLowEnergy.ServiceEvent.prototype.removeListener =
+    function(callback) {};
+
+/**
+ * @param {function(!chrome.bluetoothLowEnergy.Service): void} callback
+ * @return {boolean}
+ */
+chrome.bluetoothLowEnergy.ServiceEvent.prototype.hasListener =
+    function(callback) {};
+
+
+/** @return {boolean} */
+chrome.bluetoothLowEnergy.ServiceEvent.prototype.hasListeners =
+    function() {};
+
+/**
+  * @type {!chrome.bluetoothLowEnergy.ServiceEvent}
+  * @see https://developer.chrome.com/apps/bluetoothLowEnergy#event-onServiceAdded
+  */
+chrome.bluetoothLowEnergy.onServiceAdded;
+
+
+/**
+ * @type {!chrome.bluetoothLowEnergy.ServiceEvent}
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#event-onServiceChanged
+ */
+chrome.bluetoothLowEnergy.onServiceChanged;
+
+
+/**
+  * @type {!chrome.bluetoothLowEnergy.ServiceEvent}
+  * @see https://developer.chrome.com/apps/bluetoothLowEnergy#event-onServiceRemoved
+  */
+chrome.bluetoothLowEnergy.onServiceRemoved;
+
+
+/**
+ * Event whose listeners take a Characteristic parameter.
+ * @constructor
+ */
+chrome.bluetoothLowEnergy.CharacteristicEvent = function() {};
+
+
+/**
+ * @param {function(!chrome.bluetoothLowEnergy.Characteristic): void}
+ *     callback
+ */
+chrome.bluetoothLowEnergy.CharacteristicEvent.prototype.addListener =
+    function(callback) {};
+
+
+/**
+ * @param {function(!chrome.bluetoothLowEnergy.Characteristic): void}
+ *     callback
+ */
+chrome.bluetoothLowEnergy.CharacteristicEvent.prototype.removeListener =
+    function(callback) {};
+
+
+/**
+ * @param {function(!chrome.bluetoothLowEnergy.Characteristic): void}
+ *     callback
+ * @return {boolean}
+ */
+chrome.bluetoothLowEnergy.CharacteristicEvent.prototype.hasListener =
+    function(callback) {};
+
+
+/** @return {boolean} */
+chrome.bluetoothLowEnergy.CharacteristicEvent.prototype.hasListeners =
+    function() {};
+
+
+/**
+ * @type {!chrome.bluetoothLowEnergy.CharacteristicEvent}
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#event-onCharacteristicValueChanged
+ */
+chrome.bluetoothLowEnergy.onCharacteristicValueChanged;
+
+
+/**
+ * Event whose listeners take a Characteristic parameter.
+ * @constructor
+ */
+chrome.bluetoothLowEnergy.DescriptorEvent = function() {};
+
+
+/**
+ * @param {function(!chrome.bluetoothLowEnergy.Descriptor): void}
+ *     callback
+ */
+chrome.bluetoothLowEnergy.DescriptorEvent.prototype.addListener =
+    function(callback) {};
+
+
+/**
+ * @param {function(!chrome.bluetoothLowEnergy.Descriptor): void}
+ *     callback
+ */
+chrome.bluetoothLowEnergy.DescriptorEvent.prototype.removeListener =
+    function(callback) {};
+
+
+/**
+ * @param {function(!chrome.bluetoothLowEnergy.Descriptor): void} callback
+ * @return {boolean}
+ */
+chrome.bluetoothLowEnergy.DescriptorEvent.prototype.hasListener =
+    function(callback) {};
+
+
+/** @return {boolean} */
+chrome.bluetoothLowEnergy.DescriptorEvent.prototype.hasListeners =
+    function() {};
+
+
+/**
+ * @type {!chrome.bluetoothLowEnergy.DescriptorEvent}
+ * @see https://developer.chrome.com/apps/bluetoothLowEnergy#event-onDescriptorValueChanged
+ */
+chrome.bluetoothLowEnergy.onDescriptorValueChanged;
+
+
+/**
  * @see http://developer.chrome.com/extensions/commands.html
  * @const
  */
@@ -2121,6 +2488,38 @@ chrome.tabs.onReplaced;
  * @deprecated Please use tabs.onActivated.
  */
 chrome.tabs.onSelectionChanged;
+
+
+/**
+ * @see https://developer.chrome.com/extensions/topSites
+ * @const
+ */
+chrome.topSites = {};
+
+
+
+/**
+ * @constructor
+ * @see https://developer.chrome.com/extensions/topSites#type-MostVisitedURL
+ */
+chrome.topSites.MostVisitedURL = function() {};
+
+
+/** @type {string} */
+chrome.topSites.MostVisitedURL.prototype.url;
+
+
+/** @type {string} */
+chrome.topSites.MostVisitedURL.prototype.title;
+
+
+/**
+ * Gets a list of top sites.
+ * @param {function(!Array<!chrome.topSites.MostVisitedURL>)} callback Invoked
+ *     with a list of most visited URLs.
+ * @see https://developer.chrome.com/extensions/topSites#method-get
+ */
+chrome.topSites.get = function(callback) {};
 
 
 /**
@@ -4745,6 +5144,19 @@ chrome.system = {};
 
 /**
  * @const
+ * @see https://developer.chrome.com/extensions/system_cpu.html
+ */
+chrome.system.cpu = {};
+
+
+/**
+ * @param {function(!Object)} callback
+ */
+chrome.system.cpu.getInfo = function(callback) {};
+
+
+/**
+ * @const
  * @see http://developer.chrome.com/apps/system_display.html
  */
 chrome.system.display = {};
@@ -6658,16 +7070,20 @@ chrome.alarms.getAll = function(callback) {};
 /**
  * Clears the alarm with the given name.
  * @param {string=} opt_name
+ * @param {function(boolean)=} opt_callback A callback that will be called with
+ *     a boolean for whether the alarm was cleared.
  * @see http://developer.chrome.com/extensions/alarms.html#method-clear
  */
-chrome.alarms.clear = function(opt_name) {};
+chrome.alarms.clear = function(opt_name, opt_callback) {};
 
 
 /**
  * Clears all alarms.
+ * @param {function(boolean)=} opt_callback A callback that will be called with
+ *     a boolean for whether the alarms were cleared.
  * @see http://developer.chrome.com/extensions/alarms.html#method-clearAll
  */
-chrome.alarms.clearAll = function() {};
+chrome.alarms.clearAll = function(opt_callback) {};
 
 
 /**
@@ -7440,6 +7856,198 @@ chrome.usb.isochronousTransfer = function(handle, transferInfo, callback) {};
  *     boolean indicating whether the reset completed successfully.
  */
 chrome.usb.resetDevice = function(handle, callback) {};
+
+
+/**
+ * @see https://developer.chrome.com/apps/serial
+ * @const
+ */
+chrome.serial = {};
+
+
+
+/**
+ * @typedef {?{
+ *   persistent: (boolean|undefined),
+ *   name: (string|undefined),
+ *   bufferSize: (number|undefined),
+ *   bitRate: (number|undefined),
+ *   dataBits: (string|undefined),
+ *   parityBits: (string|undefined),
+ *   stopBits: (string|undefined),
+ *   ctsFlowControl: (boolean|undefined),
+ *   receiveTimeout: (number|undefined),
+ *   sendTimeout: (number|undefined)
+ * }}
+ * @see https://developer.chrome.com/apps/serial#type-ConnectionOptions
+ */
+chrome.serial.ConnectionOptions;
+
+
+/**
+ * @typedef {?{
+ *   connectionId: number,
+ *   paused: boolean,
+ *   persistent: boolean,
+ *   name: string,
+ *   bufferSize: number,
+ *   receiveTimeout: number,
+ *   sendTimeout: number,
+ *   bitRate: (number|undefined),
+ *   dataBits: (string|undefined),
+ *   parityBits: (string|undefined),
+ *   stopBits: (string|undefined),
+ *   ctsFlowControl: (boolean|undefined)
+ * }}
+ * @see https://developer.chrome.com/apps/serial#type-ConnectionInfo
+ */
+chrome.serial.ConnectionInfo;
+
+
+/**
+ * Returns information about available serial devices on the system. The
+ * list is regenerated each time this method is called.
+ * @param {function(!Array<!Object>)} callback Invoked with a
+ *     list of ports on complete.
+ * @see https://developer.chrome.com/apps/serial#method-getDevices
+ */
+chrome.serial.getDevices = function(callback) {};
+
+
+/**
+ * Connects to a given serial port.
+ * @param {string} path The system path of the serial port to open.
+ * @param {!chrome.serial.ConnectionOptions|
+ *         function(!chrome.serial.ConnectionInfo)} optionsOrCallback
+ *     Port configuration options, or the callback invoked with the created
+ *     ConnectionInfo on complete.
+ * @param {function(!chrome.serial.ConnectionInfo)=} opt_callback Invoked with
+ *     the created ConnectionInfo on complete.
+ * @see https://developer.chrome.com/apps/serial#method-connect
+ */
+chrome.serial.connect = function(path, optionsOrCallback, opt_callback) {};
+
+
+/**
+ * Update the option settings on an open serial port connection.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {!chrome.serial.ConnectionOptions} options Port configuration
+ *     options.
+ * @param {function(boolean)} callback Called when the configuration has
+ *     completed.
+ * @see https://developer.chrome.com/apps/serial#method-update
+ */
+chrome.serial.update = function(connectionId, options, callback) {};
+
+
+/**
+ * Disconnects from a serial port.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {function(boolean)} callback Called when the connection
+ *     has been closed.
+ * @see https://developer.chrome.com/apps/serial#method-disconnect
+ */
+chrome.serial.disconnect = function(connectionId, callback) {};
+
+
+/**
+ * Pauses or unpauses an open connection.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {boolean} paused Flag to indicate whether to pause or unpause.
+ * @param {function()} callback Called when the configuration has completed.
+ * @see https://developer.chrome.com/apps/serial#method-setPaused
+ */
+chrome.serial.setPaused = function(connectionId, paused, callback) {};
+
+
+/**
+ * Retrieves the state of a given connection.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {function(!chrome.serial.ConnectionInfo)} callback
+ *     Called with connection state information when available.
+ * @see https://developer.chrome.com/apps/serial#method-getInfo
+ */
+chrome.serial.getInfo = function(connectionId, callback) {};
+
+
+/**
+ * Retrieves the list of currently opened serial port connections owned by
+ * the application.
+ * @param {function(!Array.<!chrome.serial.ConnectionInfo>)} callback
+ *     Called with the list of |ConnectionInfo|s when available.
+ * @see https://developer.chrome.com/apps/serial#method-getConnections
+ */
+chrome.serial.getConnections = function(callback) {};
+
+
+/**
+ * Writes data to the given connection.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {!ArrayBuffer} data The data to send.
+ * @param {function(!Object)} callback Called when the operation has
+ *     completed.
+ * @see https://developer.chrome.com/apps/serial#method-send
+ */
+chrome.serial.send = function(connectionId, data, callback) {};
+
+
+/**
+ * Flushes all bytes in the given connection's input and output buffers.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {function(boolean)} callback
+ * @see https://developer.chrome.com/apps/serial#method-flush
+ */
+chrome.serial.flush = function(connectionId, callback) {};
+
+
+
+
+/**
+ * Retrieves the state of control signals on a given connection.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {function(!Object)} callback
+ * @see https://developer.chrome.com/apps/serial#method-getControlSignals
+ */
+chrome.serial.getControlSignals = function(connectionId, callback) {};
+
+
+/**
+ * @typedef {?{
+ *   dtr: (boolean|undefined),
+ *   rts: (boolean|undefined)
+ * }}
+ */
+chrome.serial.ControlSignals;
+
+
+/**
+ * Sets the state of control signals on a given connection.
+ * @param {number} connectionId The id of the opened connection.
+ * @param {!chrome.serial.ControlSignals} signals
+ *     The set of signal changes to send to the device.
+ * @param {function(boolean)} callback Called once the control signals
+ *     have been set.
+ * @see https://developer.chrome.com/apps/serial#method-setControlSignals
+ */
+chrome.serial.setControlSignals = function(connectionId, signals, callback) {};
+
+
+/**
+ * Event raised when data has been read from the connection.
+ * @type {!ChromeObjectEvent}
+ * @see https://developer.chrome.com/apps/serial#event-onReceive
+ */
+chrome.serial.onReceive;
+
+
+/**
+ * Event raised when an error occurred while the runtime was waiting for
+ * data on the serial port. Once this event is raised, the connection may
+ * be set to paused. A "timeout" error does not pause the connection.
+ * @type {!ChromeObjectEvent}
+ * @see https://developer.chrome.com/apps/serial#event-onReceiveError
+ */
+chrome.serial.onReceiveError;
 
 
 /**

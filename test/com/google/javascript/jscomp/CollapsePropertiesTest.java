@@ -1273,7 +1273,7 @@ public class CollapsePropertiesTest extends CompilerTestCase {
   }
 
   public void testPropertyOnGlobalFunction() {
-    testSame("function Map() {} Map.foo = 3; Map;");
+    testSame("function Map() {} Map.foo = 3; alert(Map);");
   }
 
   public void testIssue389() {
@@ -1617,8 +1617,7 @@ public class CollapsePropertiesTest extends CompilerTestCase {
         " var Fruit = null;\n" +
         " if (f == Enums$Fruit$APPLE) alert('apple');\n" +
         " if (f == Enums$Fruit$BANANA) alert('banana');\n" +
-        "}",
-        null);
+        "}");
   }
 
   public void testCollapsePropertiesOfClass1() {
@@ -1703,5 +1702,115 @@ public class CollapsePropertiesTest extends CompilerTestCase {
         "} catch (e) {" +
         "  console.log(e.name)" +
         "}");
+  }
+
+  public void test_b19179602() {
+    test(
+        "var a = {};\n"
+        + "/** @constructor */ a.b = function() {};\n"
+        + "a.b.staticProp = 5;\n"
+        + "function f() {\n"
+        + "  while (true) {\n"
+        // b is declared inside a loop, so it is reassigned multiple times
+        + "    var b = a.b;\n"
+        + "    alert(b.staticProp);\n"
+        + "  }\n"
+        + "}\n",
+
+        "var a$b = function() {};\n"
+        + "var a$b$staticProp = 5;\n"
+        + "\n"
+        + "function f() {\n"
+        + "  while (true) {\n"
+        + "    var b = a$b;\n"
+        + "    alert(b.staticProp);\n"
+        + "  }\n"
+        + "}",
+        null, CollapseProperties.UNSAFE_CTOR_ALIASING);
+  }
+
+  public void test_b19179602_declareOutsideLoop() {
+    test(
+        "var a = {};\n"
+        + "/** @constructor */ a.b = function() {};\n"
+        + "a.b.staticProp = 5;\n"
+        + "function f() {\n"
+        // b is declared outside the loop
+        + "  var b = a.b;\n"
+        + "  while (true) {\n"
+        + "    alert(b.staticProp);\n"
+        + "  }\n"
+        + "}",
+
+        "var a$b = function() {};\n"
+        + "var a$b$staticProp = 5;\n"
+        + "\n"
+        + "function f() {\n"
+        + "  var b = null;\n"
+        + "  while (true) {\n"
+        + "    alert(a$b$staticProp);\n"
+        + "  }\n"
+        + "}");
+  }
+
+  public void testCtorManyAssignmentsDontInlineDontWarn() {
+    test(
+        "var a = {};\n"
+        + "/** @constructor */ a.b = function() {};\n"
+        + "a.b.staticProp = 5;\n"
+        + "function f(y, z) {\n"
+        + "  var x = a.b;\n"
+        + "  if (y) {\n"
+        + "    x = z;\n"
+        + "  }\n"
+        + "  return new x();\n"
+        + "}",
+
+        "var a$b = function() {};\n"
+        + "var a$b$staticProp = 5;\n"
+        + "function f(y, z) {\n"
+        + "  var x = a$b;\n"
+        + "  if (y) {\n"
+        + "    x = z;\n"
+        + "  }\n"
+        + "  return new x();\n"
+        + "}");
+  }
+
+  public void testCtorManyAssignmentsDontInlineWarn() {
+    test(
+        "var a = {};\n"
+        + "/** @constructor */ a.b = function() {};\n"
+        + "a.b.staticProp = 5;\n"
+        + "function f(y, z) {\n"
+        + "  var x = a.b;\n"
+        + "  if (y) {\n"
+        + "    x = z;\n"
+        + "  }\n"
+        + "  return x.staticProp;\n"
+        + "}",
+
+        "var a$b = function() {};\n"
+        + "var a$b$staticProp = 5;\n"
+        + "function f(y, z) {\n"
+        + "  var x = a$b;\n"
+        + "  if (y) {\n"
+        + "    x = z;\n"
+        + "  }\n"
+        + "  return x.staticProp;\n"
+        + "}",
+        null, CollapseProperties.UNSAFE_CTOR_ALIASING);
+  }
+
+  public void testExpressionResultReferenceWontPreventCollapse() {
+    test("var ns = {};\n"
+        + "ns.Outer = {};\n"
+        + "\n"
+        + "ns.Outer;\n"
+        + "ns.Outer.Inner = function() {}\n",
+
+        "var ns$Outer={};\n"
+        + "ns$Outer;\n"
+        + "var ns$Outer$Inner=function(){};\n");
   }
 }

@@ -53,7 +53,20 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
       + " */\n"
       + "function Boolean(arg) {}\n"
       + "/** @return {string} */\n"
-      + "Boolean.prototype.toString = function() { return '' };";
+      + "Boolean.prototype.toString = function() { return '' };\n"
+      + "/**\n"
+      + " * @param {?=} opt_begin\n"
+      + " * @param {?=} opt_end\n"
+      + " * @return {!Array.<T>}\n"
+      + " * @this {{length: number}|string}\n"
+      + " * @template T\n"
+      + " */\n"
+      + "Array.prototype.slice = function(opt_begin, opt_end) {};\n"
+      + "/**\n"
+      + " * @param {...?} var_args\n"
+      + " * @return {!Array.<?>}\n"
+      + " */\n"
+      + "Array.prototype.concat = function(var_args) {};\n";
 
   @Override
   protected void setUp() {
@@ -69,6 +82,25 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         return pass;
       }
     };
+  }
+
+  protected final void addES6TranspilationPasses() {
+    passes.add(makePassFactory("Es6RenameVariablesInParamLists",
+            new Es6RenameVariablesInParamLists(compiler)));
+    passes.add(makePassFactory("Es6SplitVariableDeclarations",
+            new Es6SplitVariableDeclarations(compiler)));
+    passes.add(makePassFactory("es6ConvertSuper",
+            new Es6ConvertSuper(compiler)));
+    passes.add(makePassFactory("convertEs6",
+            new Es6ToEs3Converter(compiler)));
+    passes.add(makePassFactory("Es6RewriteLetConst",
+            new Es6RewriteLetConst(compiler)));
+    passes.add(makePassFactory("rewriteGenerators",
+            new Es6RewriteGenerators(compiler)));
+    passes.add(makePassFactory("Es6RuntimeLibrary",
+            new InjectEs6RuntimeLibrary(compiler)));
+    passes.add(makePassFactory("Es6StaticInheritance",
+            new Es6ToEs3ClassSideInheritance(compiler)));
   }
 
   protected final void parseAndTypeCheck(String externs, String js) {

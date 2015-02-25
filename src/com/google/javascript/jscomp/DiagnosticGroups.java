@@ -217,7 +217,6 @@ public class DiagnosticGroups {
 
   static {
       DiagnosticGroups.registerGroup("newCheckTypesWarningsOverload",
-          JSTypeCreatorFromJSDoc.INVALID_GENERICS_INSTANTIATION,
           NewTypeInference.NULLABLE_DEREFERENCE);
 
       // Warnings that are absent in closure library
@@ -412,7 +411,8 @@ public class DiagnosticGroups {
           CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
-          CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER);
+          CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
+          ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC);
 
   public static final DiagnosticGroup USE_OF_GOOG_BASE =
       DiagnosticGroups.registerGroup("useOfGoogBase",

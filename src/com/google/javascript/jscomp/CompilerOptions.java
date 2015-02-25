@@ -60,6 +60,13 @@ public class CompilerOptions implements Serializable, Cloneable {
   private static final long serialVersionUID = 7L;
 
   /**
+   * The warning classes that are available.
+   */
+  protected DiagnosticGroups getDiagnosticGroups() {
+    return new DiagnosticGroups();
+  }
+
+  /**
    * The JavaScript language version accepted.
    */
   private LanguageMode languageIn;
@@ -338,6 +345,16 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Move code to a deeper module */
   public boolean crossModuleCodeMotion;
+
+  /**
+   * Don't generate stub functions when moving methods deeper.
+   *
+   * Note, switching on this option may break existing code that depends on
+   * enumerating prototype methods for mixin behavior, such as goog.mixin or
+   * goog.object.extend, since the prototype assignments will be removed from
+   * the parent module and moved to a later module.
+   **/
+  boolean crossModuleCodeMotionNoStubMethods;
 
   /**
    * Whether when module B depends on module A and module B declares a symbol,
@@ -693,7 +710,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   public Set<String> stripTypePrefixes;
 
   /** Custom passes */
-  public transient
+  protected transient
       Multimap<CustomPassExecutionTime, CompilerPass> customPasses;
 
   /** Mark no side effect calls */
@@ -1264,6 +1281,17 @@ public class CompilerOptions implements Serializable, Cloneable {
     addWarningsGuard(new DiagnosticGroupWarningsGuard(type, level));
   }
 
+  /**
+   * Configure the given type of warning to the given level.
+   */
+  public void setWarningLevel(String groupName, CheckLevel level) {
+    DiagnosticGroup type = getDiagnosticGroups().forName(groupName);
+    if (type == null) {
+      throw new RuntimeException("Unknown DiagnosticGroup name: " + groupName);
+    }
+    setWarningLevel(type, level);
+  }
+
   WarningsGuard getWarningsGuard() {
     return warningsGuard;
   }
@@ -1821,6 +1849,11 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.crossModuleCodeMotion = crossModuleCodeMotion;
   }
 
+  public void setCrossModuleCodeMotionNoStubMethods(boolean
+      crossModuleCodeMotionNoStubMethods) {
+    this.crossModuleCodeMotionNoStubMethods = crossModuleCodeMotionNoStubMethods;
+  }
+
   public void setParentModuleCanSeeSymbolsDeclaredInChildren(
       boolean parentModuleCanSeeSymbolsDeclaredInChildren) {
     this.parentModuleCanSeeSymbolsDeclaredInChildren =
@@ -2095,14 +2128,6 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setStripTypePrefixes(Set<String> stripTypePrefixes) {
     this.stripTypePrefixes = stripTypePrefixes;
-  }
-
-  /**
-   * @deprecated Use {@link #addCustomPass}
-   */
-  @Deprecated
-  public void setCustomPasses(Multimap<CustomPassExecutionTime, CompilerPass> customPasses) {
-    this.customPasses = customPasses;
   }
 
   public void addCustomPass(CustomPassExecutionTime time, CompilerPass customPass) {

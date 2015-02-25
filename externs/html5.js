@@ -2308,6 +2308,7 @@ HTMLElement.prototype.dataset;
 
 /**
  * @constructor
+ * @see https://dom.spec.whatwg.org/#interface-domtokenlist
  */
 function DOMTokenList() {}
 
@@ -2332,14 +2333,14 @@ DOMTokenList.prototype.item = function(index) {};
 DOMTokenList.prototype.contains = function(token) {};
 
 /**
- * @param {string} token The CSS class to add to this element.
+ * @param {...string} var_args The CSS class(es) to add to this element.
  */
-DOMTokenList.prototype.add = function(token) {};
+DOMTokenList.prototype.add = function(var_args) {};
 
 /**
- * @param {string} token The CSS class to remove from this element.
+ * @param {...string} var_args The CSS class(es) to remove from this element.
  */
-DOMTokenList.prototype.remove = function(token) {};
+DOMTokenList.prototype.remove = function(var_args) {};
 
 /**
  * @param {string} token The CSS class to toggle from this element.
@@ -3047,3 +3048,145 @@ HTMLImageElement.prototype.sizes;
 
 /** @type {string} */
 HTMLImageElement.prototype.srcset;
+
+
+/**
+ * 4.11 Interactive elements
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html
+ */
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#the-details-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLDetailsElement() {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-details-open
+ * @type {boolean}
+ */
+HTMLDetailsElement.prototype.open;
+
+
+// As of 2/20/2015, <summary> has no special web IDL interface nor global
+// constructor (i.e. HTMLSummaryElement).
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menu-type
+ * @type {string}
+ */
+HTMLMenuElement.prototype.type;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menu-label
+ * @type {string}
+ */
+HTMLMenuElement.prototype.label;
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#the-menuitem-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLMenuItemElement() {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-type
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.type;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-label
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.label;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-icon
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.icon;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-disabled
+ * @type {boolean}
+ */
+HTMLMenuItemElement.prototype.disabled;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-checked
+ * @type {boolean}
+ */
+HTMLMenuItemElement.prototype.checked;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-radiogroup
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.radiogroup;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-default
+ * @type {boolean}
+ */
+HTMLMenuItemElement.prototype.default;
+
+// TODO(dbeam): add HTMLMenuItemElement.prototype.command if it's implemented.
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#relatedevent
+ * @param {string} type
+ * @param {{relatedTarget: (EventTarget|undefined)}=} opt_eventInitDict
+ * @constructor
+ * @extends {Event}
+ */
+function RelatedEvent(type, opt_eventInitDict) {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-relatedevent-relatedtarget
+ * @type {EventTarget|undefined}
+ */
+RelatedEvent.prototype.relatedTarget;
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#the-dialog-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLDialogElement() {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-open
+ * @type {boolean}
+ */
+HTMLDialogElement.prototype.open;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-returnvalue
+ * @type {string}
+ */
+HTMLDialogElement.prototype.returnValue;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-show
+ * @param {(MouseEvent|Element)=} opt_anchor
+ */
+HTMLDialogElement.prototype.show = function(opt_anchor) {};
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-showmodal
+ * @param {(MouseEvent|Element)=} opt_anchor
+ */
+HTMLDialogElement.prototype.showModal = function(opt_anchor) {};
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-close
+ * @param {string=} opt_returnValue
+ */
+HTMLDialogElement.prototype.close = function(opt_returnValue) {};

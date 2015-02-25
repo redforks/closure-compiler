@@ -4410,6 +4410,16 @@ public class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
         + "  var /** number */ n = y || x;\n"
         + "}",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "function /** number */ f(/** ?number */ x) {\n"
+        + "  return x || 42;\n"
+        + "}");
+
+    typeCheck(
+        "function /** (number|string) */ f(/** ?number */ x) {\n"
+        + "  return x || 'str';\n"
+        + "}");
   }
 
   public void testNonStringComparisons() {
@@ -4788,6 +4798,10 @@ public class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
         + "  for (var x in { a: 1, b: 2 }) { y = x; }\n"
         + "}",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "function f(/** Object? */ o) { for (var x in o); }",
+        NewTypeInference.NULLABLE_DEREFERENCE);
 
     typeCheck("for (var x in 123) ;", NewTypeInference.FORIN_EXPECTS_OBJECT);
 
