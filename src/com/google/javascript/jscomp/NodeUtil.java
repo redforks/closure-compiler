@@ -27,9 +27,9 @@ import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
 import java.util.Collection;
@@ -421,7 +421,7 @@ public final class NodeUtil {
    * In two last cases with named function expressions, the second name is
    * returned (the variable or qualified name).
    *
-   * @param n A class node
+   * @param clazz A class node
    * @return the node best representing the class's name
    */
   static Node getClassNameNode(Node clazz) {
@@ -454,7 +454,7 @@ public final class NodeUtil {
     return getNameNode(n);
   }
 
-  static String getFunctionName(Node n) {
+  public static String getFunctionName(Node n) {
     Node nameNode = getFunctionNameNode(n);
     return nameNode == null ? null : nameNode.getQualifiedName();
   }
@@ -3284,7 +3284,7 @@ public final class NodeUtil {
       return false;
     }
 
-    Scope.Var var = scope.getVar(node.getString());
+    Var var = scope.getVar(node.getString());
     return var != null && (var.isInferredConst() || var.isConst());
   }
 

@@ -27,9 +27,9 @@ import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.ParserRunner.ParseResult;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.SimpleSourceFile;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.SimpleSourceFile;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 import com.google.javascript.rhino.testing.TestErrorReporter;
 
@@ -2585,12 +2585,12 @@ public class NewParserTest extends BaseJSTypeTestCase {
    */
   private Node parseWarning(String string, String... warnings) {
     TestErrorReporter testErrorReporter = new TestErrorReporter(null, warnings);
-    Node script = null;
     StaticSourceFile file = new SimpleSourceFile("input", false);
-    script = ParserRunner.parse(file,
-      string,
-      ParserRunner.createConfig(isIdeMode, mode, false, null),
-      testErrorReporter).ast;
+    Node script = ParserRunner.parse(
+        file,
+        string,
+        ParserRunner.createConfig(isIdeMode, mode, false, null),
+        testErrorReporter).ast;
 
     // verifying that all warnings were seen
     assertThat(testErrorReporter.hasEncounteredAllErrors()).isTrue();

@@ -18,9 +18,9 @@ package com.google.javascript.jscomp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
 import com.google.javascript.jscomp.CodingConvention.Bind;
@@ -36,14 +36,14 @@ import com.google.javascript.jscomp.newtypes.QualifiedName;
 import com.google.javascript.jscomp.newtypes.TypeEnv;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -280,12 +280,12 @@ public class NewTypeInference implements CompilerPass {
     this.warnings = new WarningReporter(compiler);
     this.compiler = compiler;
     this.convention = compiler.getCodingConvention();
-    this.envs = new HashMap<>();
-    this.summaries = new HashMap<>();
-    this.deferredChecks = new HashMap<>();
+    this.envs = new LinkedHashMap<>();
+    this.summaries = new LinkedHashMap<>();
+    this.deferredChecks = new LinkedHashMap<>();
     this.isClosurePassOn = isClosurePassOn;
     this.ABSTRACT_METHOD_NAME = convention.getAbstractMethodName();
-    assertionFunctionsMap = new HashMap<>();
+    assertionFunctionsMap = new LinkedHashMap<>();
     for (AssertionFunctionSpec assertionFunction :
              convention.getAssertionFunctions()) {
       assertionFunctionsMap.put(assertionFunction.getFunctionName(),
@@ -356,7 +356,7 @@ public class NewTypeInference implements CompilerPass {
       return envs.get(inEdges.get(0));
     }
 
-    Set<TypeEnv> envSet = new HashSet<>();
+    Set<TypeEnv> envSet = new LinkedHashSet<>();
     for (DiGraphEdge<Node, ControlFlowGraph.Branch> de : inEdges) {
       TypeEnv env = envs.get(de);
       if (env != null) {
@@ -377,7 +377,7 @@ public class NewTypeInference implements CompilerPass {
       return envs.get(outEdges.get(0));
     }
 
-    Set<TypeEnv> envSet = new HashSet<>();
+    Set<TypeEnv> envSet = new LinkedHashSet<>();
     for (DiGraphEdge<Node, ControlFlowGraph.Branch> de : outEdges) {
       TypeEnv env = envs.get(de);
       if (env != null) {
@@ -409,7 +409,7 @@ public class NewTypeInference implements CompilerPass {
 
     // For function scopes, add the formal parameters and the free variables
     // from outer scopes to the environment.
-    Set<String> nonLocals = new HashSet<>();
+    Set<String> nonLocals = new LinkedHashSet<>();
     if (currentScope.isFunction()) {
       if (currentScope.getName() != null) {
         nonLocals.add(currentScope.getName());
@@ -427,6 +427,9 @@ public class NewTypeInference implements CompilerPass {
       JSType declType = currentScope.getDeclaredTypeOf(name);
       JSType initType = declType == null
           ? envGetType(entryEnv, name) : pickInitialType(declType);
+      println("Adding non-local ", name,
+          " with decltype: ", declType,
+          " and inittype: ", initType);
       entryEnv = envPutType(entryEnv, name, initType);
     }
 
@@ -526,7 +529,7 @@ public class NewTypeInference implements CompilerPass {
       DiGraphNode<Node, ControlFlowGraph.Branch> dn,
       List<DiGraphNode<Node, ControlFlowGraph.Branch>> workset) {
     buildWorksetHelper(dn, workset,
-        new HashSet<DiGraphNode<Node, ControlFlowGraph.Branch>>());
+        new LinkedHashSet<DiGraphNode<Node, ControlFlowGraph.Branch>>());
   }
 
   private void buildWorksetHelper(
@@ -1354,8 +1357,8 @@ public class NewTypeInference implements CompilerPass {
     // First, evaluate ignoring the specialized context
     objPair = analyzeExprFwd(obj, inEnv);
     JSType objType = objPair.type;
-    if (!objType.equals(JSType.TOP) &&
-        !objType.equals(JSType.UNKNOWN) &&
+    if (!objType.isTop() &&
+        !objType.isUnknown() &&
         !objType.hasNonScalar()) {
       warnInvalidOperand(
           obj, Token.INSTANCEOF,
@@ -1475,8 +1478,7 @@ public class NewTypeInference implements CompilerPass {
       warnInvalidOperand(lhs, Token.ASSIGN_ADD, JSType.NUM_OR_STR, lhsType);
     }
     // if lhs is a string, rhs can still be a number
-    JSType rhsReqType = lhsType.equals(JSType.NUMBER) ?
-        JSType.NUMBER : JSType.NUM_OR_STR;
+    JSType rhsReqType = lhsType.isNumber() ? JSType.NUMBER : JSType.NUM_OR_STR;
     EnvTypePair pair = analyzeExprFwd(rhs, lvalue.env, rhsReqType);
     if (!pair.type.isSubtypeOf(rhsReqType)) {
       warnInvalidOperand(rhs, Token.ASSIGN_ADD, rhsReqType, pair.type);
@@ -2075,7 +2077,7 @@ public class NewTypeInference implements CompilerPass {
   private ImmutableMap<String, JSType> calcTypeInstantiation(Node callNode,
       Node firstArg, FunctionType funType, TypeEnv typeEnv, boolean isFwd) {
     List<String> typeParameters = funType.getTypeParameters();
-    Multimap<String, JSType> typeMultimap = HashMultimap.create();
+    Multimap<String, JSType> typeMultimap = LinkedHashMultimap.create();
     Node arg = firstArg;
     int i = 0;
     while (arg != null) {
@@ -2704,7 +2706,7 @@ public class NewTypeInference implements CompilerPass {
       case Token.URSH:
         return analyzeBinaryNumericOpBwd(expr, outEnv);
       case Token.ADD:
-        return analyzeAddBwd(expr, outEnv);
+        return analyzeAddBwd(expr, outEnv, requiredType);
       case Token.OR:
       case Token.AND:
         return analyzeLogicalOpBwd(expr, outEnv);
@@ -2840,11 +2842,12 @@ public class NewTypeInference implements CompilerPass {
     return pair;
   }
 
-  private EnvTypePair analyzeAddBwd(Node expr, TypeEnv outEnv) {
+  private EnvTypePair analyzeAddBwd(Node expr, TypeEnv outEnv, JSType requiredType) {
     Node lhs = expr.getFirstChild();
     Node rhs = expr.getLastChild();
-    EnvTypePair rhsPair = analyzeExprBwd(rhs, outEnv, JSType.NUM_OR_STR);
-    EnvTypePair lhsPair = analyzeExprBwd(lhs, rhsPair.env, JSType.NUM_OR_STR);
+    JSType randType = requiredType.isNumber() ? JSType.NUMBER : JSType.NUM_OR_STR;
+    EnvTypePair rhsPair = analyzeExprBwd(rhs, outEnv, randType);
+    EnvTypePair lhsPair = analyzeExprBwd(lhs, rhsPair.env, randType);
     lhsPair.type = JSType.plus(lhsPair.type, rhsPair.type);
     return lhsPair;
   }
@@ -2911,8 +2914,7 @@ public class NewTypeInference implements CompilerPass {
         requiredType, JSType.NUM_OR_STR);
     LValueResultBwd lvalue = analyzeLValueBwd(lhs, outEnv, lhsReqType, false);
     // if lhs is a string, rhs can still be a number
-    JSType rhsReqType = lvalue.type.equals(JSType.NUMBER) ?
-        JSType.NUMBER : JSType.NUM_OR_STR;
+    JSType rhsReqType = lvalue.type.isNumber() ? JSType.NUMBER : JSType.NUM_OR_STR;
     EnvTypePair pair = analyzeExprBwd(rhs, outEnv, rhsReqType);
     pair.env = analyzeLValueBwd(lhs, pair.env, lhsReqType, false).env;
     return pair;
@@ -3362,7 +3364,7 @@ public class NewTypeInference implements CompilerPass {
   private LValueResultFwd analyzeArrayElmLvalFwd(
       Node prop, LValueResultFwd lvalue) {
     EnvTypePair pair = analyzeExprFwd(prop, lvalue.env, JSType.NUMBER);
-    if (!pair.type.equals(JSType.NUMBER)) {
+    if (!pair.type.isNumber()) {
       // Some unknown computed property; don't treat as element access.
       return new LValueResultFwd(pair.env, JSType.UNKNOWN, null, null);
     }

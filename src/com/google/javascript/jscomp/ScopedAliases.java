@@ -24,7 +24,6 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.AliasTransformation;
 import com.google.javascript.jscomp.CompilerOptions.AliasTransformationHandler;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -369,9 +368,7 @@ class ScopedAliases implements HotSwapCompilerPass {
         } else if (isVar || isFunctionDecl) {
           boolean isHoisted = NodeUtil.isHoistedFunctionDeclaration(parent);
           Node grandparent = parent.getParent();
-          Node value = v.getInitialValue() != null ?
-              v.getInitialValue() :
-              null;
+          Node value = v.getInitialValue();
           Node varNode = null;
 
           // Grab the docinfo before we do any AST manipulation.

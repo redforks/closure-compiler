@@ -81,12 +81,15 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   private boolean allowEs6Out;
 
-  /** */
+  /**
+   * Allow ES6 as the output language.
+   * WARNING: Enabling this option may cause the compiler to crash
+   *     or produce incorrect output.
+   */
   public void setAllowEs6Out(boolean value) {
     allowEs6Out = value;
   }
 
-  /** */
   public boolean getAllowEs6Out() {
     return allowEs6Out;
   }
@@ -148,8 +151,6 @@ public class CompilerOptions implements Serializable, Cloneable {
    * </ul>
    */
   public boolean ideMode;
-
-  boolean saveDataStructures = false;
 
   /**
    * Even if checkTypes is disabled, clients might want to still infer types.
@@ -616,7 +617,17 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Input anonymous function renaming map. */
   VariableMap inputAnonymousFunctionNamingMap;
 
-  /** Input variable renaming map. */
+  /**
+   * Input variable renaming map.
+   * <p>During renaming, the compiler uses this map and the inputPropertyMap to
+   * try to preserve renaming mappings from a previous compilation.
+   * The application is delta encoding: keeping the diff between consecutive
+   * versions of one's code small.
+   * The compiler does NOT guarantee to respect these maps; projects should not
+   * use these maps to prevent renaming or to select particular names.
+   * Point questioners to this post:
+   * http://closuretools.blogspot.com/2011/01/property-by-any-other-name-part-3.html
+   */
   VariableMap inputVariableMap;
 
   /** Input property renaming map. */
@@ -787,9 +798,6 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Rewrite CommonJS modules so that they can be concatenated together. */
   boolean processCommonJSModules = false;
-
-  /** Rewrite ES6 modules so that they can be concatenated together. */
-  boolean rewriteEs6Modules = false;
 
   /** CommonJS module prefix. */
   String commonJSModulePathPrefix =
@@ -1778,14 +1786,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.ideMode = ideMode;
   }
 
-  /**
-   * Whether to keep internal data structures around after we're
-   * finished compiling. We do this by default when IDE mode is on.
-   */
-  public void setSaveDataStructures(boolean save) {
-    this.saveDataStructures = save;
-  }
-
   public void setSkipAllPasses(boolean skipAllPasses) {
     this.skipAllPasses = skipAllPasses;
   }
@@ -2231,6 +2231,10 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.lineLengthThreshold = lineLengthThreshold;
   }
 
+  public int getLineLengthThreshold() {
+    return this.lineLengthThreshold;
+  }
+
   public void setExternExports(boolean externExports) {
     this.externExports = externExports;
   }
@@ -2269,14 +2273,6 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public void setProcessCommonJSModules(boolean processCommonJSModules) {
     this.processCommonJSModules = processCommonJSModules;
-  }
-
-  /**
-   * Rewrites ES6 modules so that modules can be concatenated together,
-   * by renaming all globals to avoid conflicting with other modules.
-   */
-  public void setRewriteEs6Modules(boolean rewriteEs6Modules) {
-    this.rewriteEs6Modules = rewriteEs6Modules;
   }
 
   /**

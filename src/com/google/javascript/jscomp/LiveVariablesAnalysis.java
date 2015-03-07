@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphEdge;
 import com.google.javascript.jscomp.graph.LatticeElement;
 import com.google.javascript.rhino.Node;
@@ -126,8 +125,8 @@ class LiveVariablesAnalysis extends
     computeEscaped(jsScope, escaped, compiler);
   }
 
-  public Set<Var> getEscapedLocals() {
-    return escaped;
+  public Set<? extends Var> getEscapedLocals() {
+    return (Set<? extends Var>) escaped;
   }
 
   public int getVarIndex(String var) {

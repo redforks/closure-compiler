@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.type.ClosureReverseAbstractInterpreter;
 import com.google.javascript.jscomp.type.SemanticReverseAbstractInterpreter;
 import com.google.javascript.rhino.InputId;
@@ -58,7 +57,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testInitialTypingScope() {
-    Scope s = new TypedScopeCreator(compiler,
+    TypedScope s = new TypedScopeCreator(compiler,
         CodingConventions.getDefault()).createInitialScope(
             new Node(Token.BLOCK));
 
@@ -7179,7 +7178,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
    */
   public void testBug911118() throws Exception {
     // verifying the type assigned to function expressions assigned variables
-    Scope s = parseAndTypeCheckWithScope("var a = function(){};").scope;
+    TypedScope s = parseAndTypeCheckWithScope("var a = function(){};").scope;
     JSType type = s.getVar("a").getType();
     assertEquals("function (): undefined", type.toString());
 
@@ -7732,7 +7731,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testNew12() throws Exception {
     TypeCheckResult p = parseAndTypeCheckWithScope("var a = new Array();");
-    Var a = p.scope.getVar("a");
+    TypedVar a = p.scope.getVar("a");
 
     assertTypeEquals(ARRAY_TYPE, a.getType());
   }
@@ -7741,7 +7740,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     TypeCheckResult p = parseAndTypeCheckWithScope(
         "/** @constructor */function FooBar(){};" +
         "var a = new FooBar();");
-    Var a = p.scope.getVar("a");
+    TypedVar a = p.scope.getVar("a");
 
     assertTrue(a.getType() instanceof ObjectType);
     assertEquals("FooBar", a.getType().toString());
@@ -7751,7 +7750,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     TypeCheckResult p = parseAndTypeCheckWithScope(
         "/** @constructor */var FooBar = function(){};" +
         "var a = new FooBar();");
-    Var a = p.scope.getVar("a");
+    TypedVar a = p.scope.getVar("a");
 
     assertTrue(a.getType() instanceof ObjectType);
     assertEquals("FooBar", a.getType().toString());
@@ -7762,7 +7761,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "var goog = {};" +
         "/** @constructor */goog.A = function(){};" +
         "var a = new goog.A();");
-    Var a = p.scope.getVar("a");
+    TypedVar a = p.scope.getVar("a");
 
     assertTrue(a.getType() instanceof ObjectType);
     assertEquals("goog.A", a.getType().toString());
@@ -8190,6 +8189,18 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @constructor\n * @extends {base} */function derived() {}\n" +
         "/** @type {!derived} */ var baz = " +
         "/** @type {!derived} */(new base());\n");
+  }
+
+  public void testCast4Types() throws Exception {
+    // downcast must be explicit
+    Node root = parseAndTypeCheck(
+        "/** @constructor */function base() {}\n" +
+        "/** @constructor\n * @extends {base} */function derived() {}\n" +
+        "/** @type {!derived} */ var baz = " +
+        "/** @type {!derived} */(new base());\n");
+    Node castedExprNode = root.getLastChild().getFirstChild().getFirstChild().getFirstChild();
+    assertEquals("derived", castedExprNode.getJSType().toString());
+    assertEquals("base", castedExprNode.getJSTypeBeforeCast().toString());
   }
 
   public void testCast5() throws Exception {
@@ -11333,7 +11344,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     typeCheck(n);
     MemoizedScopeCreator scopeCreator = new MemoizedScopeCreator(
         new TypedScopeCreator(compiler));
-    Scope topScope = scopeCreator.createScope(n, null);
+    TypedScope topScope = scopeCreator.createScope(n, null);
 
     Node second = compiler.parseTestCode("new Foo");
 
@@ -13297,7 +13308,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   /**
-   * Parses and type checks the JavaScript code and returns the Scope used
+   * Parses and type checks the JavaScript code and returns the TypedScope used
    * whilst type checking.
    */
   private TypeCheckResult parseAndTypeCheckWithScope(String js) {
@@ -13321,7 +13332,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         Joiner.on(", ").join(compiler.getErrors()),
         0, compiler.getErrorCount());
 
-    Scope s = makeTypeCheck().processForTesting(externsNode, n);
+    TypedScope s = makeTypeCheck().processForTesting(externsNode, n);
     return new TypeCheckResult(n, s);
   }
 
@@ -13373,9 +13384,9 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   private static class TypeCheckResult {
     private final Node root;
-    private final Scope scope;
+    private final TypedScope scope;
 
-    private TypeCheckResult(Node root, Scope scope) {
+    private TypeCheckResult(Node root, TypedScope scope) {
       this.root = root;
       this.scope = scope;
     }

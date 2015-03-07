@@ -33,7 +33,7 @@ import com.google.debugging.sourcemap.proto.Mapping.OriginalMapping;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.JSModuleGraph.MissingModuleException;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
-import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.jscomp.TypeValidator.TypeMismatch;
 import com.google.javascript.jscomp.deps.SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
@@ -1212,6 +1212,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  // Only used by jsdev
   public MemoizedScopeCreator getTypedScopeCreator() {
     return getPassConfig().getTypedScopeCreator();
   }
@@ -1264,7 +1265,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  public Scope getTopScope() {
+  public TypedScope getTopScope() {
     return getPassConfig().getTopScope();
   }
 
@@ -1283,11 +1284,17 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  // Only used by passes in the old type checker.
   TypeValidator getTypeValidator() {
     if (typeValidator == null) {
       typeValidator = new TypeValidator(this);
     }
     return typeValidator;
+  }
+
+  @Override
+  Iterable<TypeMismatch> getTypeMismatches() {
+    return getTypeValidator().getMismatches();
   }
 
   @Override
@@ -1338,7 +1345,7 @@ public class Compiler extends AbstractCompiler {
         externsRoot.addChildToBack(n);
       }
 
-      if (options.rewriteEs6Modules) {
+      if (options.lowerFromEs6()) {
         processEs6Modules();
       }
 
@@ -2166,12 +2173,6 @@ public class Compiler extends AbstractCompiler {
         acceptConstKeyword(),
         options.extraAnnotationNames);
   }
-
-  @Override
-  public boolean isTypeCheckingEnabled() {
-    return options.checkTypes;
-  }
-
 
   //------------------------------------------------------------------------
   // Error reporting

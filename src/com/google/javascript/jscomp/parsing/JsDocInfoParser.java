@@ -31,8 +31,8 @@ import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SimpleErrorReporter;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.util.HashSet;
 import java.util.List;
@@ -1473,7 +1473,7 @@ public final class JsDocInfoParser {
                                       int startCharno,
                                       boolean matchingLC,
                                       boolean onlyParseSimpleNames) {
-    Node typeNode = null;
+    Node typeNode;
 
     if (onlyParseSimpleNames) {
       typeNode = parseTypeNameAnnotation(token);

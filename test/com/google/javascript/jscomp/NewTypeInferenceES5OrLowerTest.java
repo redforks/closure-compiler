@@ -5190,6 +5190,13 @@ public class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
         + "Foo.prototype.f = function(x) { this.f(x); };");
   }
 
+  public void testGenericReturnType() {
+    typeCheck(
+        "/** @return {T|string} @template T */"
+        + "function f() { return 'str'; }");
+  }
+
+
   public void testUnification() {
     typeCheck(
         "/** @constructor */ function Foo(){};\n"
@@ -7609,6 +7616,30 @@ public class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
         + "  x['random' + 'propname'] = 123;\n"
         + "}",
         TypeValidator.ILLEGAL_PROPERTY_ACCESS);
+
+    typeCheck(
+        "/**\n"
+        + " * @constructor\n"
+        + " * @struct\n"
+        + " */\n"
+        + "function Foo() {\n"
+        + "  /** @type {number} */\n"
+        + "  this.prop;\n"
+        + "  this.prop = 'asdf';\n"
+        + "}\n",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "/**\n"
+        + " * @constructor\n"
+        + " * @struct\n"
+        + " */\n"
+        + "function Foo() {\n"
+        + "  /** @type {number} */\n"
+        + "  this.prop;\n"
+        + "}\n"
+        + "(new Foo).prop = 'asdf';\n",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
   }
 
   public void testDictPropAccess() {
@@ -10437,5 +10468,18 @@ public class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
         + "    goog.bind(x, {}, 1, 2);\n"
         + "  }\n"
         + "}");
+  }
+
+  public void testPlusBackwardInference() {
+    typeCheck(
+        "function f(/** number */ x, w) {\n"
+        + "  var y = x + 2;\n"
+        + "  function g() { return (y + 2) - 5; }\n"
+        + "}\n");
+
+    typeCheck(
+        "function f(/** number */ x, w) {\n"
+        + "  function h() { return (w + 2) - 5; }\n"
+        + "}\n");
   }
 }

@@ -58,10 +58,14 @@ var JQLiteSelector;
 var angular = {};
 
 /**
- * @param {Object} self
- * @param {Function} fn
- * @param {...*} args
- * @return {Function}
+ * @param {T} self Specifies the object which this should point to when the
+ *     function is run.
+ * @param {?function(this:T, ...)} fn A function to partially apply.
+ * @return {!Function} A partially-applied form of the function bind() was
+ *     invoked as a method of.
+ * @param {...*} args Additional arguments that are partially applied to the
+ *     function.
+ * @template T
  */
 angular.bind = function(self, fn, args) {};
 
@@ -2043,7 +2047,8 @@ angular.$routeParams;
 /**
  * @typedef {{
  *   otherwise:
- *       function(angular.$routeProvider.Params): !angular.$routeProvider,
+ *       function(
+ *           (string|!angular.$routeProvider.Params)): !angular.$routeProvider,
  *   when:
  *       function(
  *           string, angular.$routeProvider.Params): !angular.$routeProvider
@@ -2052,7 +2057,7 @@ angular.$routeParams;
 angular.$routeProvider;
 
 /**
- * @param {angular.$routeProvider.Params} params
+ * @param {(string|!angular.$routeProvider.Params)} params
  * @return {!angular.$routeProvider}
  */
 angular.$routeProvider.otherwise = function(params) {};

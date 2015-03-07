@@ -28,9 +28,9 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,9 +108,9 @@ public class JSTypeCreatorFromJSDoc {
     }
   }
 
-  private Set<JSError> warnings = new HashSet<>();
+  private Set<JSError> warnings = new LinkedHashSet<>();
   // Unknown type names indexed by JSDoc AST node at which they were found.
-  private Map<Node, String> unknownTypeNames = new HashMap<>();
+  private Map<Node, String> unknownTypeNames = new LinkedHashMap<>();
 
   public JSTypeCreatorFromJSDoc(CodingConvention convention) {
     this.convention = convention;
@@ -249,7 +249,7 @@ public class JSTypeCreatorFromJSDoc {
   private JSType getRecordTypeHelper(Node n, DeclaredTypeRegistry registry,
       ImmutableList<String> typeParameters)
       throws UnknownTypeException {
-    Map<String, JSType> fields = new HashMap<>();
+    Map<String, JSType> fields = new LinkedHashMap<>();
     // For each of the fields in the record type.
     for (Node fieldTypeNode = n.getFirstChild().getFirstChild();
          fieldTypeNode != null;
@@ -698,8 +698,15 @@ public class JSTypeCreatorFromJSDoc {
   }
 
   private static class ParamIterator {
+    /** The parameter names from the JSDocInfo. Only set if 'params' is null. */
     Iterator<String> paramNames;
+
+    /**
+     * The PARAM_LIST node containing the function parameters. Only set if
+     * 'paramNames' is null.
+     */
     Node params;
+
     int index = -1;
 
     ParamIterator(Node params, JSDocInfo jsdoc) {
@@ -831,8 +838,7 @@ public class JSTypeCreatorFromJSDoc {
               param.getJSDocInfo(), registry, typeParameters);
       boolean isRequired = true;
       boolean isRestFormals = false;
-      JSTypeExpression texp =
-          jsdoc == null ? null : jsdoc.getParameterType(pname);
+      JSTypeExpression texp = jsdoc == null ? null : jsdoc.getParameterType(pname);
       Node jsdocNode = texp == null ? null : texp.getRoot();
       if (param != null) {
         if (convention.isOptionalParameter(param)) {

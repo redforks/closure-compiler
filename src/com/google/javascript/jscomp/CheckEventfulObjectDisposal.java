@@ -22,7 +22,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
@@ -351,7 +350,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
       key = n.getQualifiedName();
 
       if (scopeNode.isFunction()) {
-        JSType parentScopeType = t.getScope().getParentScope().getTypeOfThis();
+        JSType parentScopeType = t.getTypedScope().getParentScope().getTypeOfThis();
         /*
          * If the locally defined variable is defined within a function, use
          * the function name to create ID.
@@ -391,7 +390,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
           //    this.eh = new goog.events.EventHandler();
           //  }
           //};
-          key = t.getScope().getParentScope().getTypeOfThis() + "~" + key;
+          key = t.getTypedScope().getParentScope().getTypeOfThis() + "~" + key;
         } else {
           if (n.getFirstChild() == null) {
             key = base.getJSType() + "=" + key;
@@ -453,7 +452,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
 
     // Construct eventizer graph
     if (checkingPolicy == DisposalCheckingPolicy.AGGRESSIVE) {
-      NodeTraversal.traverse(compiler, root, new ComputeEventizeTraversal());
+      NodeTraversal.traverseTyped(compiler, root, new ComputeEventizeTraversal());
       computeEventful();
     }
 
@@ -465,7 +464,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     eventfulObjectMap = new HashMap<>();
 
     // Traverse tree
-    NodeTraversal.traverse(compiler, root, new Traversal());
+    NodeTraversal.traverseTyped(compiler, root, new Traversal());
 
     /*
      * Scan eventfulObjectMap for allocated eventful objects that
@@ -685,7 +684,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
       String functionName = null;
 
       /*
-       * Scope entered is a function definition
+       * TypedScope entered is a function definition
        */
       if (n.isFunction()) {
         functionName = NodeUtil.getFunctionName(n);
@@ -706,9 +705,9 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
               /*
                * Initialize eventizes relationship
                */
-              if (t.getScope() != null &&
-                  t.getScope().getTypeOfThis() != null) {
-                ObjectType objectType = ObjectType.cast(t.getScope()
+              if (t.getTypedScope() != null &&
+                  t.getTypedScope().getTypeOfThis() != null) {
+                ObjectType objectType = ObjectType.cast(t.getTypedScope()
                     .getTypeOfThis().dereference());
 
                 /*
@@ -880,7 +879,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     private Node localEventfulObjectAssign(
         NodeTraversal t, Node propertyNode) {
       Node parent;
-      if (!t.getScope().isGlobal()) {
+      if (!t.getTypedScope().isGlobal()) {
         /*
          * In function
          */
@@ -1267,10 +1266,10 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
        */
       ControlFlowGraph<Node> cfg = t.getControlFlowGraph();
       LiveVariablesAnalysis liveness =
-          new LiveVariablesAnalysis(cfg, t.getScope(), compiler);
+          new LiveVariablesAnalysis(cfg, t.getTypedScope(), compiler);
       liveness.analyze();
 
-      for (Var v : liveness.getEscapedLocals()) {
+      for (TypedVar v : ((Set<TypedVar>) liveness.getEscapedLocals())) {
         eventfulObjectDisposed(t, v.getNode());
       }
     }

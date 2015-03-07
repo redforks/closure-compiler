@@ -26,7 +26,6 @@ import com.google.javascript.jscomp.DataFlowAnalysis.FlowState;
 import com.google.javascript.jscomp.LiveVariablesAnalysis.LiveVariableLattice;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.jscomp.graph.GraphColoring;
 import com.google.javascript.jscomp.graph.GraphColoring.GreedyGraphColoring;
@@ -122,7 +121,7 @@ class CoalesceVariableNames extends AbstractPostOrderCallback implements
 
     UndiGraph<Var, Void> interferenceGraph =
         computeVariableNamesInterferenceGraph(
-            t, cfg, liveness.getEscapedLocals());
+            t, cfg, (Set<Var>) liveness.getEscapedLocals());
 
     GraphColoring<Var, Void> coloring =
         new GreedyGraphColoring<>(interferenceGraph,

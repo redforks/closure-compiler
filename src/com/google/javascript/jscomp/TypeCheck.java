@@ -31,7 +31,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.jscomp.CodingConvention.SubclassType;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -297,7 +296,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   private final ReverseAbstractInterpreter reverseInterpreter;
 
   private final JSTypeRegistry typeRegistry;
-  private Scope topScope;
+  private TypedScope topScope;
 
   private MemoizedScopeCreator scopeCreator;
 
@@ -330,7 +329,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   public TypeCheck(AbstractCompiler compiler,
       ReverseAbstractInterpreter reverseInterpreter,
       JSTypeRegistry typeRegistry,
-      Scope topScope,
+      TypedScope topScope,
       MemoizedScopeCreator scopeCreator,
       CheckLevel reportMissingOverride) {
     this.compiler = compiler;
@@ -400,7 +399,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   }
 
   /** Main entry point of this phase for testing code. */
-  public Scope processForTesting(Node externsRoot, Node jsRoot) {
+  public TypedScope processForTesting(Node externsRoot, Node jsRoot) {
     Preconditions.checkState(scopeCreator == null);
     Preconditions.checkState(topScope == null);
 
@@ -444,7 +443,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     switch (n.getType()) {
       case Token.FUNCTION:
         // normal type checking
-        final Scope outerScope = t.getScope();
+        final TypedScope outerScope = t.getTypedScope();
         final String functionPrivateName = n.getFirstChild().getString();
         if (functionPrivateName != null && functionPrivateName.length() > 0 &&
             outerScope.isDeclared(functionPrivateName, false) &&
@@ -496,6 +495,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         }
         ensureTyped(t, n, castType);
 
+        expr.putProp(Node.TYPE_BEFORE_CAST, exprType);
         if (castType.isSubtype(exprType) || expr.isObjectLit()) {
           expr.setJSType(castType);
         }
@@ -519,7 +519,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         break;
 
       case Token.THIS:
-        ensureTyped(t, n, t.getScope().getTypeOfThis());
+        ensureTyped(t, n, t.getTypedScope().getTypeOfThis());
         break;
 
       case Token.NULL:
@@ -972,14 +972,14 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     JSType leftType = getJSType(lvalue);
     if (lvalue.isQualifiedName()) {
       // variable with inferred type case
-      Var var = t.getScope().getVar(lvalue.getQualifiedName());
+      TypedVar var = t.getTypedScope().getVar(lvalue.getQualifiedName());
       if (var != null) {
         if (var.isTypeInferred()) {
           return;
         }
 
         if (NodeUtil.getRootOfQualifiedName(lvalue).isThis() &&
-            t.getScope() != var.getScope()) {
+            t.getTypedScope() != var.getScope()) {
           // Don't look at "this.foo" variables from other scopes.
           return;
         }
@@ -1425,7 +1425,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     JSType type = n.getJSType();
     if (type == null) {
       type = getNativeType(UNKNOWN_TYPE);
-      Var var = t.getScope().getVar(n.getString());
+      TypedVar var = t.getTypedScope().getVar(n.getString());
       if (var != null) {
         JSType varType = var.getType();
         if (varType != null) {
@@ -1515,14 +1515,14 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         if (pair != null && pair.distance * 4 < propName.length()) {
           report(t, n.getLastChild(), INEXISTENT_PROPERTY_WITH_SUGGESTION,
               propName,
-              validator.getReadableJSTypeName(n.getFirstChild(), true),
+              typeRegistry.getReadableJSTypeName(n.getFirstChild(), true),
               pair.suggestion);
         } else {
           DiagnosticType reportType = lowConfidence ?
               POSSIBLE_INEXISTENT_PROPERTY :
               INEXISTENT_PROPERTY;
           report(t, n.getLastChild(), reportType, propName,
-              validator.getReadableJSTypeName(n.getFirstChild(), true));
+              typeRegistry.getReadableJSTypeName(n.getFirstChild(), true));
         }
       }
     }
@@ -1611,13 +1611,12 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     for (Node name : n.children()) {
       Node value = name.getFirstChild();
       // A null var would indicate a bug in the scope creation logic.
-      Var var = t.getScope().getVar(name.getString());
+      TypedVar var = t.getTypedScope().getVar(name.getString());
 
       if (value != null) {
         JSType valueType = getJSType(value);
         JSType nameType = var.getType();
         nameType = (nameType == null) ? getNativeType(UNKNOWN_TYPE) : nameType;
-
         JSDocInfo info = name.getJSDocInfo();
         if (info == null) {
           info = varInfo;
@@ -1789,7 +1788,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   private void checkCallConventions(NodeTraversal t, Node n) {
     SubclassRelationship relationship =
         compiler.getCodingConvention().getClassesDefinedByCall(n);
-    Scope scope = t.getScope();
+    TypedScope scope = t.getTypedScope();
     if (relationship != null) {
       ObjectType superClass = TypeValidator.getInstanceOfCtor(
           scope.getVar(relationship.superclassName));
@@ -1890,7 +1889,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     int maxArgs = functionType.getMaxArguments();
     if (minArgs > numArgs || maxArgs < numArgs) {
       report(t, call, WRONG_ARGUMENT_COUNT,
-              validator.getReadableJSTypeName(call.getFirstChild(), false),
+              typeRegistry.getReadableJSTypeName(call.getFirstChild(), false),
               String.valueOf(numArgs), String.valueOf(minArgs),
               maxArgs != Integer.MAX_VALUE ?
               " and no more than " + maxArgs + " argument(s)" : "");
@@ -2030,7 +2029,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     JSType valueEnumPrimitiveType =
         valueEnumType.getElementsType().getPrimitiveType();
     validator.expectCanAssignTo(t, value, valueEnumPrimitiveType,
-        declInfo.getEnumParameterType().evaluate(t.getScope(), typeRegistry),
+        declInfo.getEnumParameterType().evaluate(t.getTypedScope(), typeRegistry),
         "incompatible enum element types");
   }
 

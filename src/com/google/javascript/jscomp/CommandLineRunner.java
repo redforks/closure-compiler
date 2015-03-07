@@ -408,11 +408,6 @@ public class CommandLineRunner extends
         usage = "Process CommonJS modules to a concatenable form.")
     private boolean processCommonJsModules = false;
 
-    @Option(name = "--rewrite_es6_modules",
-        hidden = true,
-        usage = "Rewrite ES6 modules to a concatenable form.")
-    private boolean rewriteEs6Modules = false;
-
     @Option(name = "--transpile_only",
         hidden = true,
         usage = "Run ES6 to ES3 transpilation only, skip other passes.")
@@ -528,7 +523,8 @@ public class CommandLineRunner extends
         hidden = true,
         usage = "Experimental: Allows ES6 language_out, for compiling "
         + "ES6 to ES6 as well as transpiling to ES6 from lower versions. "
-        + "Enabling this flag may cause the compiler to crash.")
+        + "Enabling this flag may cause the compiler to crash or produce "
+        + "incorrect output.")
     private boolean allowEs6Out = false;
 
     @Option(name = "--version",
@@ -1090,7 +1086,6 @@ public class CommandLineRunner extends
           .setLanguageIn(flags.languageIn)
           .setLanguageOut(flags.languageOut)
           .setProcessCommonJSModules(flags.processCommonJsModules)
-          .setRewriteEs6Modules(flags.rewriteEs6Modules)
           .setTranspileOnly(flags.transpileOnly)
           .setCommonJSModulePathPrefix(flags.commonJsPathPrefix)
           .setTransformAMDToCJSModules(flags.transformAmdModules)
@@ -1277,6 +1272,7 @@ public class CommandLineRunner extends
     "ie_vml.js",
     "iphone.js",
     "mediasource.js",
+    "page_visibility.js",
     "v8.js",
     "webstorage.js",
     "w3c_anim_timing.js",
