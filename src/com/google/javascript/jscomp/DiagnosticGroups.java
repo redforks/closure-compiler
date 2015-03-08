@@ -416,8 +416,9 @@ public class DiagnosticGroups {
           CheckJSDoc.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
-          CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
-          ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC);
+          CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER
+          // ,ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC
+          );
 
   public static final DiagnosticGroup USE_OF_GOOG_BASE =
       DiagnosticGroups.registerGroup("useOfGoogBase",

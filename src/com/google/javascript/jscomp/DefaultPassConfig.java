@@ -1513,12 +1513,13 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       return combineChecks(compiler, ImmutableList.<Callback>of(
-          new CheckEnums(compiler),
+          // new CheckEnums(compiler),
           new CheckInterfaces(compiler),
-          new CheckJSDoc(compiler),
+          // new CheckJSDoc(compiler),
           new CheckNullableReturn(compiler),
-          new CheckPrototypeProperties(compiler),
-          new ImplicitNullabilityCheck(compiler)));
+          new CheckPrototypeProperties(compiler)
+          // , new ImplicitNullabilityCheck(compiler)
+          ));
     }
   };
 
