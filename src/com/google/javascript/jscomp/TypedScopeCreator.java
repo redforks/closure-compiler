@@ -382,13 +382,11 @@ final class TypedScopeCreator implements ScopeCreator {
 
     private void identifyNameNode(
         Node nameNode, JSDocInfo info) {
-      if (nameNode.isQualifiedName()) {
-        if (info != null) {
-          if (info.hasEnumParameterType()) {
-            registry.identifyNonNullableName(nameNode.getQualifiedName());
-          } else if (info.hasTypedefType()) {
-            registry.identifyNonNullableName(nameNode.getQualifiedName());
-          }
+      if (info != null && nameNode.isQualifiedName()) {
+        if (info.hasEnumParameterType()) {
+          registry.identifyNonNullableName(nameNode.getQualifiedName());
+        } else if (info.hasTypedefType()) {
+          registry.identifyNonNullableName(nameNode.getQualifiedName());
         }
       }
     }
@@ -1517,8 +1515,8 @@ final class TypedScopeCreator implements ScopeCreator {
           if (functionType != null) {
             FunctionType getterType =
                 typeRegistry.createFunctionType(objectType);
-            codingConvention.applySingletonGetter(
-                functionType, getterType, objectType);
+            codingConvention.applySingletonGetter(functionType, getterType,
+                objectType);
           }
         }
       }

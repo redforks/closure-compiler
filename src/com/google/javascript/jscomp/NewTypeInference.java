@@ -1807,7 +1807,7 @@ public class NewTypeInference implements CompilerPass {
       return new EnvTypePair(env, JSType.UNKNOWN);
     }
     JSType assertedType =
-        (JSType) assertionFunctionSpec.getAssertedType(callNode, currentScope);
+        assertionFunctionSpec.getAssertedNewType(callNode, currentScope);
     if (assertedType.isUnknown()) {
       warnings.add(
           JSError.make(callNode, NewTypeInference.UNKNOWN_ASSERTION_TYPE));
@@ -2085,7 +2085,7 @@ public class NewTypeInference implements CompilerPass {
           isFwd ? analyzeExprFwd(arg, typeEnv) : analyzeExprBwd(arg, typeEnv);
       JSType unifTarget = funType.getFormalType(i);
       JSType unifSource = pair.type;
-      if (!unifTarget.unifyWith(unifSource, typeParameters, typeMultimap)) {
+      if (!unifTarget.unifyWithSubtype(unifSource, typeParameters, typeMultimap)) {
         // Unification may fail b/c of types irrelevant to generics, eg,
         // number vs string.
         // In this case, don't warn here; we'll show invalid-arg-type later.

@@ -22,9 +22,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import com.google.javascript.rhino.FunctionTypeI;
-import com.google.javascript.rhino.ObjectTypeI;
-import com.google.javascript.rhino.TypeI;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -39,7 +36,7 @@ import java.util.TreeSet;
  * @author blickly@google.com (Ben Lickly)
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
-public abstract class JSType implements TypeI {
+public abstract class JSType {
   protected static final int BOTTOM_MASK = 0x0;
   protected static final int TYPEVAR_MASK = 0x1;
   protected static final int NON_SCALAR_MASK = 0x2;
@@ -249,7 +246,6 @@ public abstract class JSType implements TypeI {
     return TOP_MASK == getMask();
   }
 
-  @Override
   public boolean isBottom() {
     return BOTTOM_MASK == getMask();
   }
@@ -564,38 +560,32 @@ public abstract class JSType implements TypeI {
 
   /**
    * Unify {@code this}, which may contain free type variables,
-   * with {@code other}, a concrete type, modifying the supplied
+   * with {@code other}, a concrete subtype, modifying the supplied
    * {@code typeMultimap} to add any new template variable type bindings.
+   * Note that if {@code this} is a union type, some of the union members may
+   * be ignored if they are not present in {@code other}.
    * @return Whether unification succeeded
    */
-  public boolean unifyWith(JSType other, List<String> typeParameters,
+  public boolean unifyWithSubtype(JSType other, List<String> typeParameters,
       Multimap<String, JSType> typeMultimap) {
-    if (this.isUnknown()) {
+    if (this.isUnknown() || this.isTop()) {
       return true;
-    } else if (this.isTop()) {
-      return other.isTop();
     } else if (getMask() == TYPEVAR_MASK
         && typeParameters.contains(getTypeVar())) {
       updateTypemap(typeMultimap, getTypeVar(), other);
       return true;
-    } else if (other.isTop()) {
-      return false;
     } else if (other.isUnknown()) {
       return true;
+    } else if (other.isTop()) {
+      // T|number doesn't unify with TOP
+      return false;
     }
 
     Set<EnumType> ununifiedEnums = ImmutableSet.of();
     if (getEnums().isEmpty()) {
       ununifiedEnums = other.getEnums();
     } else if (other.getEnums().isEmpty()) {
-      return false;
-    } else {
       ununifiedEnums = new LinkedHashSet<>();
-      for (EnumType e : getEnums()) {
-        if (!other.getEnums().contains(e)) {
-          return false;
-        }
-      }
       for (EnumType e : other.getEnums()) {
         if (!getEnums().contains(e)) {
           ununifiedEnums.add(e);
@@ -603,27 +593,26 @@ public abstract class JSType implements TypeI {
       }
     }
 
-    Set<ObjectType> ununified = new LinkedHashSet<>(other.getObjs());
+    Set<ObjectType> ununifiedObjs = new LinkedHashSet<>(other.getObjs());
     // Each obj in this must unify w/ exactly one obj in other.
     // However, we don't check that two different objects of this don't unify
     // with the same other type.
+    // Fancy cases are unfortunately iteration-order dependent, eg,
+    // Foo<number>|Foo<string> may or may not unify with Foo<T>|Foo<string>
     for (ObjectType targetObj : getObjs()) {
-      boolean hasUnified = false;
       for (ObjectType sourceObj : other.getObjs()) {
-        if (targetObj.unifyWith(sourceObj, typeParameters, typeMultimap)) {
-          ununified.remove(sourceObj);
-          hasUnified = true;
+        if (targetObj.unifyWithSubtype(sourceObj, typeParameters, typeMultimap)) {
+          ununifiedObjs.remove(sourceObj);
         }
-      }
-      if (!hasUnified) {
-        return false;
       }
     }
 
     String thisTypevar = getTypeVar();
     String otherTypevar = other.getTypeVar();
     if (thisTypevar == null || !typeParameters.contains(thisTypevar)) {
-      return Objects.equals(thisTypevar, otherTypevar) && getMask() == other.getMask();
+      return ununifiedObjs.isEmpty() && ununifiedEnums.isEmpty()
+          && (otherTypevar == null || otherTypevar.equals(thisTypevar))
+          && getMask() == (getMask() | other.getMask());
     } else {
       // this is (T | ...)
       int templateMask = BOTTOM_MASK;
@@ -632,18 +621,15 @@ public abstract class JSType implements TypeI {
       templateMask |= otherScalarBits & ~thisScalarBits;
 
       if (templateMask == BOTTOM_MASK) {
-        // nothing left in other to assign to thisTypevar
-        return false;
+        // nothing left in other to assign to thisTypevar, so don't update typemap
+        return ununifiedObjs.isEmpty() && ununifiedEnums.isEmpty();
       }
       JSType templateType = makeType(
           promoteBoolean(templateMask),
-          ImmutableSet.copyOf(ununified),
+          ImmutableSet.copyOf(ununifiedObjs),
           otherTypevar,
           ImmutableSet.copyOf(ununifiedEnums));
       updateTypemap(typeMultimap, getTypeVar(), templateType);
-      // We don't do fancy unification, eg,
-      // T|number doesn't unify with TOP
-      // Foo<number>|Foo<string> doesn't unify with Foo<T>|Foo<string>
       return true;
     }
   }
@@ -810,9 +796,8 @@ public abstract class JSType implements TypeI {
     return isSubtypeOfHelper(false, other);
   }
 
-  @Override
-  public boolean isSubtypeOf(TypeI other) {
-    return isSubtypeOfHelper(true, (JSType) other);
+  public boolean isSubtypeOf(JSType other) {
+    return isSubtypeOfHelper(true, other);
   }
 
   private boolean isSubtypeOfHelper(
@@ -1094,64 +1079,6 @@ public abstract class JSType implements TypeI {
           return builder.append("Unrecognized type: " + tags);
         }
     }
-  }
-
-  @Override
-  public boolean isConstructor() {
-    FunctionType ft = getFunTypeIfSingletonObj();
-    return ft != null && ft.isConstructor();
-  }
-
-  @Override
-  public boolean isFunctionType() {
-    return getFunType() != null;
-  }
-
-  @Override
-  public boolean isInterface() {
-    FunctionType ft = getFunTypeIfSingletonObj();
-    return ft != null && ft.isInterfaceDefinition();
-  }
-
-  @Override
-  public boolean isEquivalentTo(TypeI type) {
-    return equals(type);
-  }
-
-  @Override
-  public boolean isUnknownType() {
-    return isUnknown();
-  }
-
-  // TODO(dimvar): must implement these to use NTI in the rest of the passes.
-  @Override
-  public TypeI restrictByNotNullOrUndefined() {
-    throw new UnsupportedOperationException(
-        "JSType#restrictByNotNullOrUndefined not implemented.");
-  }
-
-  @Override
-  public FunctionTypeI toMaybeFunctionType() {
-    throw new UnsupportedOperationException(
-        "JSType#toMaybeFunctionType not implemented.");
-  }
-
-  @Override
-  public ObjectTypeI toMaybeObjectType() {
-    throw new UnsupportedOperationException(
-        "JSType#toMaybeObjectType not implemented.");
-  }
-
-  @Override
-  public boolean hasOwnProperty(String propName) {
-    throw new UnsupportedOperationException(
-        "JSType#hasOwnProperty not implemented.");
-  }
-
-  @Override
-  public String getReferenceName() {
-    throw new UnsupportedOperationException(
-        "JSType#getReferenceName not implemented");
   }
 
   @Override
