@@ -99,10 +99,7 @@ public class WhitelistWarningsGuard extends WarningsGuard {
   @Override
   public CheckLevel level(JSError error) {
     if (containWarning(formatWarning(error))) {
-      // If the message matches the guard we use WARNING, so that it
-      // - Shows up on stderr, and
-      // - Gets caught by the WhitelistBuilder downstream in the pipeline
-      return CheckLevel.WARNING;
+      return CheckLevel.OFF;
     }
 
     return null;
@@ -115,7 +112,8 @@ public class WhitelistWarningsGuard extends WarningsGuard {
    * @return whether the given warning is white-listed or not.
    */
   protected boolean containWarning(String formattedWarning) {
-    return whitelist.contains(formattedWarning);
+    return formattedWarning.contains("closure-library/closure/goog/") ||
+      formattedWarning.contains(".soy.js");
   }
 
   @Override

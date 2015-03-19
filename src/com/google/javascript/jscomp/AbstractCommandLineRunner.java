@@ -261,9 +261,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       }
     }
 
-    if (!config.warningsWhitelistFile.isEmpty()) {
-      addWhitelistWarningsGuard(options, new File(config.warningsWhitelistFile));
-    }
+    options.addWarningsGuard(new WhitelistWarningsGuard());
 
     createDefineOrTweakReplacements(config.define, options, false);
 
