@@ -275,7 +275,7 @@ public class TypeInferenceTest extends TestCase {
         createUndefinableType(STRING_TYPE), null);
     assumingThisType(thisType);
     inFunction("var y = 1; this.foo = x; y = this.foo;");
-    verify("y", CHECKED_UNKNOWN_TYPE);
+    verify("y", createUndefinableType(STRING_TYPE));
   }
 
   public void testAssert1() {
@@ -1095,7 +1095,7 @@ public class TypeInferenceTest extends TestCase {
         "var x = /** @type {Object} */ (this).method;");
     verify(
         "x",
-        registry.createFunctionType(
+        registry.createFunctionTypeWithInstanceType(
             registry.getNativeObjectType(OBJECT_TYPE),
             registry.getNativeType(BOOLEAN_TYPE),
             ImmutableList.<JSType>of() /* params */));
