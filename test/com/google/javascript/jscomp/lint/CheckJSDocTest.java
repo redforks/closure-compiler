@@ -30,7 +30,7 @@ import com.google.javascript.jscomp.CompilerTestCase;
 /**
  * Test case for {@link CheckJSDoc}.
  */
-public class CheckJSDocTest extends CompilerTestCase {
+public final class CheckJSDocTest extends CompilerTestCase {
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
     return new CheckJSDoc(compiler);
@@ -95,6 +95,10 @@ public class CheckJSDocTest extends CompilerTestCase {
         " * @param {string} y",
         " */",
         "function f(x, y) {}"));
+
+    testSame(Joiner.on('\n').join(
+        "/** @override */",
+        "Foo.bar = function(x, y) {}"));
   }
 
   public void testMissingPrivate() {

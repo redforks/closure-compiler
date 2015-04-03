@@ -60,7 +60,7 @@ import java.util.Set;
 // is to satisfy the existing API. Some of it is because passes really do
 // need to share state in non-trivial ways. This should be audited and
 // cleaned up.
-public class DefaultPassConfig extends PassConfig {
+public final class DefaultPassConfig extends PassConfig {
 
   /* For the --mark-as-compiled pass */
   private static final String COMPILED_CONSTANT_NAME = "COMPILED";
@@ -264,6 +264,10 @@ public class DefaultPassConfig extends PassConfig {
 
     if (options.angularPass) {
       checks.add(angularPass);
+    }
+
+    if (options.polymerPass) {
+      checks.add(polymerPass);
     }
 
     checks.add(checkSideEffects);
@@ -2611,6 +2615,15 @@ public class DefaultPassConfig extends PassConfig {
           }
         }
       };
+    }
+  };
+
+  /** Rewrites Polymer({}) */
+  private final HotSwapPassFactory polymerPass =
+      new HotSwapPassFactory("polymerPass", true) {
+    @Override
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+      return new PolymerPass(compiler);
     }
   };
 

@@ -274,9 +274,9 @@ class GlobalTypeInfo implements CompilerPass {
     //   defined in the global scope.
     CollectNamedTypes rootCnt = new CollectNamedTypes(globalScope);
     if (externs != null) {
-      new NodeTraversal(compiler, rootCnt).traverse(externs);
+      NodeTraversal.traverse(compiler, externs, rootCnt);
     }
-    new NodeTraversal(compiler, rootCnt).traverse(root);
+    NodeTraversal.traverse(compiler, root, rootCnt);
     // (2) Determine the type represented by each typedef and each enum
     globalScope.resolveTypedefs(typeParser);
     globalScope.resolveEnums(typeParser);
@@ -284,7 +284,7 @@ class GlobalTypeInfo implements CompilerPass {
     for (int i = 1; i < scopes.size(); i++) {
       Scope s = scopes.get(i);
       CollectNamedTypes cnt = new CollectNamedTypes(s);
-      new NodeTraversal(compiler, cnt).traverse(s.getBody());
+      NodeTraversal.traverse(compiler, s.getBody(), cnt);
       s.resolveTypedefs(typeParser);
       s.resolveEnums(typeParser);
       if (NewTypeInference.measureMem) {
@@ -297,9 +297,9 @@ class GlobalTypeInfo implements CompilerPass {
     //     - Declare properties on types
     ProcessScope rootPs = new ProcessScope(globalScope);
     if (externs != null) {
-      new NodeTraversal(compiler, rootPs).traverse(externs);
+      NodeTraversal.traverse(compiler, externs, rootPs);
     }
-    new NodeTraversal(compiler, rootPs).traverse(root);
+    NodeTraversal.traverse(compiler, root, rootPs);
     // (5) Things that must happen after the traversal of the scope
     rootPs.finishProcessingScope();
 
@@ -307,7 +307,7 @@ class GlobalTypeInfo implements CompilerPass {
     for (int i = 1; i < scopes.size(); i++) {
       Scope s = scopes.get(i);
       ProcessScope ps = new ProcessScope(s);
-      new NodeTraversal(compiler, ps).traverse(s.getBody());
+      NodeTraversal.traverse(compiler, s.getBody(), ps);
       ps.finishProcessingScope();
       if (NewTypeInference.measureMem) {
         NewTypeInference.updatePeakMem();
@@ -1065,14 +1065,14 @@ class GlobalTypeInfo implements CompilerPass {
           if (jsdoc != null && jsdoc.getLendsName() != null) {
             lendsObjlits.add(n);
           }
-          Node receiver = parent.isAssign() ? parent.getFirstChild() : parent;
-          if (NodeUtil.isNamespaceDecl(receiver)
-              && currentScope.isNamespace(receiver)) {
+          Node maybeLvalue = parent.isAssign() ? parent.getFirstChild() : parent;
+          if (NodeUtil.isNamespaceDecl(maybeLvalue)
+              && currentScope.isNamespace(maybeLvalue)) {
             for (Node prop : n.children()) {
               visitNamespacePropertyDeclaration(
-                  prop, receiver, prop.getString());
+                  prop, maybeLvalue, prop.getString());
             }
-          } else {
+          } else if (!NodeUtil.isPrototypeAssignment(maybeLvalue)) {
             for (Node prop : n.children()) {
               if (prop.getJSDocInfo() != null) {
                 declaredObjLitProps.put(prop,
@@ -1096,27 +1096,27 @@ class GlobalTypeInfo implements CompilerPass {
           warnings.add(JSError.make(getProp, MISPLACED_CONST_ANNOTATION));
         }
         visitClassPropertyDeclaration(getProp);
-        return;
       }
       // Prototype property
-      if (isPropertyDeclaration(getProp) && isPrototypeProperty(getProp)) {
+      else if (isPropertyDeclaration(getProp) && isPrototypeProperty(getProp)) {
         visitPrototypePropertyDeclaration(getProp);
-        return;
+      }
+      // Direct assignment to the prototype
+      else if (isPropertyDeclaration(getProp) && NodeUtil.isPrototypeAssignment(getProp)) {
+        visitPrototypeAssignment(getProp);
       }
       // "Static" property on constructor
-      if (isPropertyDeclaration(getProp) &&
+      else if (isPropertyDeclaration(getProp) &&
           isStaticCtorProp(getProp, currentScope)) {
         visitConstructorPropertyDeclaration(getProp);
-        return;
       }
       // Namespace property
-      if (isPropertyDeclaration(getProp) &&
+      else if (isPropertyDeclaration(getProp) &&
           currentScope.isNamespace(getProp.getFirstChild())) {
         visitNamespacePropertyDeclaration(getProp);
-        return;
       }
       // Other property
-      if (isAnnotatedAsConst(getProp)) {
+      else if (isAnnotatedAsConst(getProp)) {
         warnings.add(JSError.make(getProp, MISPLACED_CONST_ANNOTATION));
       }
     }
@@ -1174,6 +1174,18 @@ class GlobalTypeInfo implements CompilerPass {
       }
       String pname = NodeUtil.getPrototypePropertyName(getProp);
       mayAddPropToPrototype(rawType, pname, getProp, initializer);
+    }
+
+    private void visitPrototypeAssignment(Node getProp) {
+      Preconditions.checkArgument(getProp.isGetProp());
+      getProp.putBooleanProp(Node.ANALYZED_DURING_GTI, true);
+      Node ctorNameNode = NodeUtil.getPrototypeClassName(getProp);
+      QualifiedName ctorQname = QualifiedName.fromNode(ctorNameNode);
+      RawNominalType rawType = currentScope.getNominalType(ctorQname);
+      for (Node objLitChild : getProp.getParent().getLastChild().children()) {
+        mayAddPropToPrototype(rawType, objLitChild.getString(), objLitChild,
+            objLitChild.getLastChild());
+      }
     }
 
     private void visitConstructorPropertyDeclaration(Node getProp) {
@@ -1511,6 +1523,7 @@ class GlobalTypeInfo implements CompilerPass {
     // 1) Why is it just specific to "duplicate" and to properties?
     // 2) The docs say that it's only allowed in the top level, but the code
     //    allows it in all scopes.
+    //    https://github.com/google/closure-compiler/wiki/Warnings#suppress-tags
     // For now, we implement it b/c it exists in the current type inference.
     // But I wouldn't mind if we stopped supporting it.
     private boolean suppressDupPropWarning(
@@ -1631,7 +1644,7 @@ class GlobalTypeInfo implements CompilerPass {
 
     /**
      * Called for the usual style of prototype-property definitions,
-     * but also for @lends.
+     * but also for @lends and for direct assignments of object literals to prototypes.
      */
     private void mayAddPropToPrototype(
         RawNominalType rawType, String pname, Node defSite, Node initializer) {
@@ -1651,8 +1664,7 @@ class GlobalTypeInfo implements CompilerPass {
         // prototype property.
         methodScope = visitFunctionLate(initializer, rawType);
         methodType = methodScope.getDeclaredType();
-        propDeclType =
-            commonTypes.fromFunctionType(methodType.toFunctionType());
+        propDeclType = commonTypes.fromFunctionType(methodType.toFunctionType());
       } else {
         JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(defSite);
         if (jsdoc != null && jsdoc.containsFunctionDeclaration()) {
@@ -1660,22 +1672,19 @@ class GlobalTypeInfo implements CompilerPass {
           methodScope = null;
           methodType = computeFnDeclaredType(
               jsdoc, pname, defSite, rawType, currentScope);
-          propDeclType =
-              commonTypes.fromFunctionType(methodType.toFunctionType());
+          propDeclType = commonTypes.fromFunctionType(methodType.toFunctionType());
         } else if (jsdoc != null && jsdoc.hasType()) {
           // We are parsing a non-function prototype property
           methodScope = null;
           methodType = null;
-          propDeclType =
-              typeParser.getDeclaredTypeOfNode(jsdoc, rawType, currentScope);
+          propDeclType = typeParser.getDeclaredTypeOfNode(jsdoc, rawType, currentScope);
         } else {
           methodScope = null;
           methodType = null;
           propDeclType = null;
         }
       }
-      propertyDefs.put(
-          rawType, pname, new PropertyDef(defSite, methodType, methodScope));
+      propertyDefs.put(rawType, pname, new PropertyDef(defSite, methodType, methodScope));
 
       // Add the property to the class with the appropriate type.
       boolean isConst = isConst(defSite);
@@ -1972,6 +1981,11 @@ class GlobalTypeInfo implements CompilerPass {
 
     private void setDeclaredType(DeclaredFunctionType declaredType) {
       this.declaredType = declaredType;
+      // In NTI, we set the type of a function node after we create the summary.
+      // NTI doesn't analyze externs, so we set the type for extern functions here.
+      if (this.root.isFromExterns()) {
+        this.root.setTypeI(getCommonTypes().fromFunctionType(declaredType.toFunctionType()));
+      }
     }
 
     DeclaredFunctionType getDeclaredType() {

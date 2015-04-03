@@ -27,7 +27,7 @@ import com.google.javascript.rhino.Node;
  * Converts {@code super} nodes. This has to run before the main
  * {@link Es6ToEs3Converter} pass.
  */
-public class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCompilerPass {
+public final class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCompilerPass {
   static final DiagnosticType NO_SUPERTYPE = DiagnosticType.error(
       "JSC_NO_SUPERTYPE",
       "The super keyword may only appear in classes with an extends clause.");
@@ -53,11 +53,10 @@ public class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCompilerP
       for (Node member = n.getLastChild().getFirstChild();
           member != null;
           member = member.getNext()) {
-        if (member.isGetterDef() || member.isSetterDef()
-            || member.getBooleanProp(Node.COMPUTED_PROP_GETTER)
+        if (member.getBooleanProp(Node.COMPUTED_PROP_GETTER)
             || member.getBooleanProp(Node.COMPUTED_PROP_SETTER)) {
           compiler.report(JSError.make(member, CANNOT_CONVERT,
-              "getters or setters in class definitions"));
+              "computed getter or setter in class definition"));
           return false;
         }
         if (member.isMemberFunctionDef() && member.getString().equals("constructor")) {

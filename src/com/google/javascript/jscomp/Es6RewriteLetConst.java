@@ -40,7 +40,7 @@ import java.util.Set;
  *
  * @author moz@google.com (Michael Zhou)
  */
-public class Es6RewriteLetConst extends AbstractPostOrderCallback
+public final class Es6RewriteLetConst extends AbstractPostOrderCallback
     implements HotSwapCompilerPass {
 
   private final AbstractCompiler compiler;
@@ -128,9 +128,7 @@ public class Es6RewriteLetConst extends AbstractPostOrderCallback
     if (!blockScopedDeclarations.isEmpty()) {
       for (Node n : blockScopedDeclarations) {
         if (n.isConst()) {
-          JSDocInfoBuilder builder = (n.getJSDocInfo() == null)
-              ? new JSDocInfoBuilder(true)
-              : JSDocInfoBuilder.copyFrom(n.getJSDocInfo());
+          JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
           builder.recordConstancy();
           JSDocInfo info = builder.build(n);
           info.setAssociatedNode(n);

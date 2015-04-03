@@ -23,7 +23,7 @@ import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
  *
  * @author tbreisacher@google.com (Tyler Breisacher)
  */
-public class Es6ToEs3ConverterTest extends CompilerTestCase {
+public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   private static final String EXTERNS_BASE = Joiner.on('\n').join(
       "/**",
       " * @param {...*} var_args",
@@ -846,14 +846,107 @@ public class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   /**
-   * If languageOut is ES5, getters/setters in object literals are supported,
-   * but getters/setters in classes are not.
+   * If languageOut is ES5, getters/setters in object literals are supported.
+   * Getters/setters in classes will be supported (b/19735276) but are not yet.
    */
   public void testClassGetterSetter() {
     languageOut = LanguageMode.ECMASCRIPT5;
 
-    testError("class C { get value() {} }", Es6ToEs3Converter.CANNOT_CONVERT);
-    testError("class C { set value(v) {} }", Es6ToEs3Converter.CANNOT_CONVERT);
+    test("class C { get value() { return 0; } }", Joiner.on('\n').join(
+        "/** @constructor @struct */",
+        "var C = function() {};",
+        "/** @type {?} */",
+        "C.prototype.value;",
+        "Object.defineProperties(C.prototype, {",
+        "  value: {",
+        "    /** @this {C} */",
+        "    get: function() {",
+        "      return 0;",
+        "    }",
+        "  }",
+        "});"));
+
+    test("class C { set value(val) { this.internalVal = val; } }", Joiner.on('\n').join(
+        "/** @constructor @struct */",
+        "var C = function() {};",
+        "/** @type {?} */",
+        "C.prototype.value;",
+        "Object.defineProperties(C.prototype, {",
+        "  value: {",
+        "    /** @this {C} */",
+        "    set: function(val) {",
+        "      this.internalVal = val;",
+        "    }",
+        "  }",
+        "});"));
+
+    test(Joiner.on('\n').join(
+        "class C {",
+        "  set value(val) {",
+        "    this.internalVal = val;",
+        "  }",
+        "  get value() {",
+        "    return this.internalVal;",
+        "  }",
+        "}"),
+
+        Joiner.on('\n').join(
+        "/** @constructor @struct */",
+        "var C = function() {};",
+        "/** @type {?} */",
+        "C.prototype.value;",
+        "Object.defineProperties(C.prototype, {",
+        "  value: {",
+        "    /** @this {C} */",
+        "    set: function(val) {",
+        "      this.internalVal = val;",
+        "    },",
+        "    /** @this {C} */",
+        "    get: function() {",
+        "      return this.internalVal;",
+        "    }",
+        "  }",
+        "});"));
+
+    test(Joiner.on('\n').join(
+        "class C {",
+        "  get alwaysTwo() {",
+        "    return 2;",
+        "  }",
+        "",
+        "  get alwaysThree() {",
+        "    return 3;",
+        "  }",
+        "}"),
+
+        Joiner.on('\n').join(
+        "/** @constructor @struct */",
+        "var C = function() {};",
+        "/** @type {?} */",
+        "C.prototype.alwaysTwo;",
+        "/** @type {?} */",
+        "C.prototype.alwaysThree;",
+        "Object.defineProperties(C.prototype, {",
+        "  alwaysTwo: {",
+        "    /** @this {C} */",
+        "    get: function() {",
+        "      return 2;",
+        "    }",
+        "  },",
+        "  alwaysThree: {",
+        "    /** @this {C} */",
+        "    get: function() {",
+        "      return 3;",
+        "    }",
+        "  },",
+        "});"));
+  }
+
+  /**
+   * Computed property getters and setters in classes are not supported.
+   */
+  public void testClassComputedPropGetterSetter() {
+    languageOut = LanguageMode.ECMASCRIPT5;
 
     testError("class C { get [foo]() {}}", Es6ToEs3Converter.CANNOT_CONVERT);
     testError("class C { set [foo](val) {}}", Es6ToEs3Converter.CANNOT_CONVERT);

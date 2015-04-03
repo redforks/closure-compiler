@@ -23,7 +23,7 @@ import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
 
-public class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
+public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
 
   public void testExterns() {
     typeCheck(
@@ -2684,6 +2684,44 @@ public class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBase {
         + "Foo.prototype.method.pnum = 123;\n"
         + "var /** number */ n = Foo.prototype['method.pnum'];",
         TypeCheck.INEXISTENT_PROPERTY);
+  }
+
+  public void testPrototypeAssignment() {
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "Foo.prototype = { a: 1, b: 2 };\n"
+        + "var x = (new Foo).a;\n");
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "Foo.prototype = { a: 1, b: 2 - 'asdf' };\n"
+        + "var x = (new Foo).a;\n",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "Foo.prototype = { a: 1, /** @const */ b: 2 };\n"
+        + "(new Foo).b = 3;\n",
+        NewTypeInference.CONST_REASSIGNED);
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "Foo.prototype = { method: function(/** number */ x) {} };\n"
+        + "(new Foo).method('asdf');\n",
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "Foo.prototype = { method: function(/** number */ x) {} };\n"
+        + "/** @constructor @extends {Foo} */\n"
+        + "function Bar() {}\n"
+        + "(new Bar).method('asdf');\n",
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
   }
 
   public void testAssignmentsToPrototype() {

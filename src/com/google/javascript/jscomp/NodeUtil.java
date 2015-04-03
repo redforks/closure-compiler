@@ -1804,6 +1804,19 @@ public final class NodeUtil {
   }
 
   /**
+   * @return The first property in the objlit that matches the key.
+   */
+  @Nullable static Node getFirstPropMatchingKey(Node objlit, String keyName) {
+    Preconditions.checkState(objlit.isObjectLit());
+    for (Node keyNode : objlit.children()) {
+      if (keyNode.isStringKey() && keyNode.getString().equals(keyName)) {
+        return keyNode.getFirstChild();
+      }
+    }
+    return null;
+  }
+
+  /**
    * Returns true if the shallow scope contains references to 'this' keyword
    */
   static boolean referencesThis(Node n) {
@@ -2946,6 +2959,16 @@ public final class NodeUtil {
       return false;
     }
     return isPrototypePropertyDeclaration(assignNode.getParent());
+  }
+
+  static boolean isPrototypeAssignment(Node getProp) {
+    if (!getProp.isGetProp()) {
+      return false;
+    }
+    Node parent = getProp.getParent();
+    return parent.isAssign() && parent.getFirstChild() == getProp
+        && parent.getFirstChild().getLastChild().getString().equals("prototype")
+        && parent.getLastChild().isObjectLit();
   }
 
   /**
