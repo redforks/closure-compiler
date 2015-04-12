@@ -30,6 +30,7 @@ import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.Property;
 
 import java.util.ArrayDeque;
 
@@ -334,7 +335,6 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
 
     if (docInfo != null && docInfo.isDeprecated() &&
         shouldEmitDeprecationWarning(t, n, parent)) {
-
       if (docInfo.getDeprecationReason() != null) {
         compiler.report(
             t.makeError(n, DEPRECATED_NAME_REASON, n.getString(),
@@ -670,12 +670,10 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       }
     }
 
-
-
     if (objectType != null) {
-      JSDocInfo docInfo = objectType.getOwnPropertyJSDocInfo(propertyName);
-      definingSource = docInfo.getStaticSourceFile();
-      isClassType = docInfo.isConstructor();
+      Property p = objectType.getOwnSlot(propertyName);
+      definingSource = p.getNode().getStaticSourceFile();
+      isClassType = p.getJSDocInfo().isConstructor();
     } else if (isPrivateByConvention) {
       // We can only check visibility references if we know what file
       // it was defined in.

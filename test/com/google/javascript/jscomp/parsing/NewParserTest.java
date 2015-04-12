@@ -2563,6 +2563,21 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     assertThat(stop - start).named("runtime").isLessThan(5000L);
   }
 
+  public void testInvalidHandling1() {
+    parse(""
+        + "/**\n"
+        + " * @fileoverview Definition.\n"
+        + " * @mods {ns.bar}\n"
+        + " * @modName mod\n"
+        + " *\n"
+        + " * @extends {ns.bar}\n"
+        + " * @author someone\n"
+        + " */\n"
+        + "\n"
+        + "goog.provide('ns.foo');\n"
+        + "");
+  }
+
   private Node script(Node stmt) {
     Node n = new Node(Token.SCRIPT, stmt);
     n.setIsSyntheticBlock(true);
@@ -2591,8 +2606,8 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     Node script = result.ast;
 
     // verifying that all errors were seen
-    assertThat(testErrorReporter.hasEncounteredAllErrors()).isTrue();
-    assertThat(testErrorReporter.hasEncounteredAllWarnings()).isTrue();
+    testErrorReporter.assertHasEncounteredAllErrors();
+    testErrorReporter.assertHasEncounteredAllWarnings();
 
     return script;
   }
@@ -2612,8 +2627,8 @@ public final class NewParserTest extends BaseJSTypeTestCase {
         testErrorReporter).ast;
 
     // verifying that all warnings were seen
-    assertThat(testErrorReporter.hasEncounteredAllErrors()).isTrue();
-    assertThat(testErrorReporter.hasEncounteredAllWarnings()).isTrue();
+    testErrorReporter.assertHasEncounteredAllErrors();
+    testErrorReporter.assertHasEncounteredAllWarnings();
 
     return script;
   }

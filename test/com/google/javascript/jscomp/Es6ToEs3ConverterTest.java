@@ -1170,6 +1170,36 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
         TypeCheck.WRONG_ARGUMENT_COUNT);
   }
 
+  public void testDefaultUndefinedParameters() {
+    enableTypeCheck(CheckLevel.WARNING);
+
+    test("function f(zero, one=undefined) {}",
+         "function f(zero, one) {}");
+
+    test("function f(zero, one=void 42) {}",
+         "function f(zero, one) {}");
+
+    test("function f(zero, one=void(42)) {}",
+         "function f(zero, one) {}");
+
+    test("function f(zero, one=void '\\x42') {}",
+         "function f(zero, one) {}");
+
+    test("function f(zero, one='undefined') {}",
+        Joiner.on('\n').join(
+          "function f(zero, one) {",
+          "  one = (one === undefined) ? 'undefined' : one;",
+          "}"
+    ));
+
+    test("function f(zero, one=void g()) {}",
+        Joiner.on('\n').join(
+          "function f(zero, one) {",
+          "  one = (one === undefined) ? void g() : one;",
+          "}"
+    ));
+  }
+
   public void testRestParameter() {
     test("function f(...zero) {}",
         Joiner.on('\n').join(
@@ -1875,4 +1905,8 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
     ));
   }
 
+  public void testUnicodeEscapes() {
+    test("var \\u{73} = \'\\u{2603}\'", "var s = \'\u2603\'");  // ☃
+    test("var \\u{63} = \'\\u{1f42a}\'", "var c = \'\uD83D\uDC2A\'");  // 🐪
+  }
 }

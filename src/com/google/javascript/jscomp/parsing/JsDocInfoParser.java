@@ -51,7 +51,6 @@ public final class JsDocInfoParser {
   private final JsDocTokenStream stream;
   private final JSDocInfoBuilder jsdocBuilder;
   private final StaticSourceFile sourceFile;
-  private final Node associatedNode;
   private final ErrorReporter errorReporter;
   private final ErrorReporterParser parser = new ErrorReporterParser();
 
@@ -99,7 +98,7 @@ public final class JsDocInfoParser {
   private static final Set<String> idGeneratorAnnotationKeywords =
       ImmutableSet.of("unique", "consistent", "stable", "mapped");
 
-  private Node.FileLevelJsDocBuilder fileLevelJsDocBuilder;
+  private JSDocInfoBuilder fileLevelJsDocBuilder;
 
   /**
    * Sets the JsDocBuilder for the file-level (root) node of this parse. The
@@ -109,7 +108,7 @@ public final class JsDocInfoParser {
    * @param fileLevelJsDocBuilder
    */
   void setFileLevelJsDocBuilder(
-      Node.FileLevelJsDocBuilder fileLevelJsDocBuilder) {
+      JSDocInfoBuilder fileLevelJsDocBuilder) {
     this.fileLevelJsDocBuilder = fileLevelJsDocBuilder;
   }
 
@@ -131,13 +130,11 @@ public final class JsDocInfoParser {
   JsDocInfoParser(JsDocTokenStream stream,
                   String comment,
                   int commentPosition,
-                  Node associatedNode,
                   StaticSourceFile sourceFile,
                   Config config,
                   ErrorReporter errorReporter) {
     this.stream = stream;
 
-    this.associatedNode = associatedNode;
     this.sourceFile = sourceFile;
 
     this.jsdocBuilder = new JSDocInfoBuilder(config.parseJsDocDocumentation);
@@ -203,7 +200,6 @@ public final class JsDocInfoParser {
         typeString,
         0,
         null,
-        null,
         config,
         NullErrorReporter.forOldRhino());
 
@@ -258,6 +254,9 @@ public final class JsDocInfoParser {
 
         case EOC:
           boolean success = true;
+          // TODO(johnlenz): It should be a parse error to have an @extends
+          // or similiar annotations in a file overview block.
+          checkExtendedTypes(extendedTypes);
           if (hasParsedFileOverviewDocInfo()) {
             fileOverviewJSDocInfo = retrieveAndResetParsedJSDocInfo();
             Visibility visibility = fileOverviewJSDocInfo.getVisibility();
@@ -275,12 +274,11 @@ public final class JsDocInfoParser {
                 break;
             }
           }
-          checkExtendedTypes(extendedTypes);
           return success;
 
         case EOF:
           // discard any accumulated information
-          jsdocBuilder.build(null);
+          jsdocBuilder.build();
           parser.addParserWarning("msg.unexpected.eof",
               stream.getLineno(), stream.getCharno());
           checkExtendedTypes(extendedTypes);
@@ -504,7 +502,7 @@ public final class JsDocInfoParser {
 
           if (preserve.length() > 0) {
             if (fileLevelJsDocBuilder != null) {
-              fileLevelJsDocBuilder.append(preserve);
+              fileLevelJsDocBuilder.addLicense(preserve);
             }
           }
 
@@ -2649,7 +2647,7 @@ public final class JsDocInfoParser {
   }
 
   JSDocInfo retrieveAndResetParsedJSDocInfo() {
-    return jsdocBuilder.build(associatedNode);
+    return jsdocBuilder.build();
   }
 
   /**

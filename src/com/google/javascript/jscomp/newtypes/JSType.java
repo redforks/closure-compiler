@@ -63,6 +63,12 @@ public abstract class JSType implements TypeI {
   protected static final int TOP_SCALAR_MASK =
       NUMBER_MASK | STRING_MASK | BOOLEAN_MASK | NULL_MASK | UNDEFINED_MASK;
 
+  // The corresponding type in the old type system. It's mutable because we
+  // don't set it at construction; only when we attach a type on an AST node.
+  // It doesn't participate in equals and hashCode. Its type is Object because
+  // we don't want to depend on rhino/jstype in this package.
+  protected Object oldType = null;
+
   static final Map<String, JSType> MAP_TO_UNKNOWN =
       new Map<String, JSType>() {
     public void clear() {
@@ -169,6 +175,52 @@ public abstract class JSType implements TypeI {
 
   protected abstract ImmutableSet<EnumType> getEnums();
 
+  public Object getOldType() {
+    return this.oldType;
+  }
+
+  public void setOldType(Object t) {
+    // Preconditions.checkState(this.oldType == null);
+    this.oldType = t;
+  }
+
+  // DO NOT USE THIS METHOD IN THIS FILE!
+  // It represents unions very inefficiently and is only used by client code to avoid exposing the
+  // internal representation which uses bitmaps.
+  // Also, this method stops distinguishing between true and false; it promotes to boolean.
+  public Collection<JSType> getAlternates() {
+    if (isTop() || isUnknown()) {
+      return ImmutableSet.of(this);
+    }
+    ImmutableSet.Builder<JSType> builder = ImmutableSet.builder();
+    int mask = getMask();
+    if ((mask & NUMBER_MASK) != 0) {
+      builder.add(NUMBER);
+    }
+    if ((mask & STRING_MASK) != 0) {
+      builder.add(STRING);
+    }
+    if (isBoolean()) {
+      builder.add(BOOLEAN);
+    }
+    if ((mask & NULL_MASK) != 0) {
+      builder.add(NULL);
+    }
+    if ((mask & UNDEFINED_MASK) != 0) {
+      builder.add(UNDEFINED);
+    }
+    if ((mask & TYPEVAR_MASK) != 0) {
+      builder.add(fromTypeVar(getTypeVar()));
+    }
+    for (ObjectType obj : getObjs()) {
+      builder.add(fromObjectType(obj));
+    }
+    for (EnumType e : getEnums()) {
+      builder.add(fromEnum(e));
+    }
+    return builder.build();
+  }
+
   // Factory method for wrapping a function in a JSType
   static JSType fromFunctionType(FunctionType fn, NominalType fnNominal) {
     return makeType(
@@ -182,11 +234,11 @@ public abstract class JSType implements TypeI {
     return makeType(NON_SCALAR_MASK, ImmutableSet.of(obj), null, ImmutableSet.<EnumType>of());
   }
 
-  public static JSType fromTypeVar(String template) {
+  public static JSType fromTypeVar(String typevarName) {
     return makeType(
         TYPEVAR_MASK,
         ImmutableSet.<ObjectType>of(),
-        template,
+        typevarName,
         ImmutableSet.<EnumType>of());
   }
 
@@ -309,7 +361,7 @@ public abstract class JSType implements TypeI {
     return (getMask() & NULL_MASK) != 0;
   }
 
-  boolean isTypeVariable() {
+  public boolean isTypeVariable() {
     return (getMask() & TYPEVAR_MASK) != 0 && (getMask() & ~TYPEVAR_MASK) == 0;
   }
 
@@ -891,11 +943,15 @@ public abstract class JSType implements TypeI {
     return Iterables.getOnlyElement(getObjs()).getNominalType();
   }
 
-  public boolean isInterfaceDefinition() {
-    if (getObjs().isEmpty() || getObjs().size() > 1) {
-      return false;
+  public ObjectType getObjectTypeIfSingletonObj() {
+    if (getMask() != NON_SCALAR_MASK || getObjs().size() > 1) {
+      return null;
     }
-    FunctionType ft = Iterables.getOnlyElement(getObjs()).getFunType();
+    return Iterables.getOnlyElement(getObjs());
+  }
+
+  public boolean isInterfaceDefinition() {
+    FunctionType ft = getFunTypeIfSingletonObj();
     return ft != null && ft.isInterfaceDefinition();
   }
 
@@ -1104,8 +1160,7 @@ public abstract class JSType implements TypeI {
 
   @Override
   public boolean isInterface() {
-    NominalType nt = getNominalTypeIfSingletonObj();
-    return nt != null && nt.isInterface();
+    return isInterfaceDefinition();
   }
 
   @Override
@@ -1138,6 +1193,10 @@ public abstract class JSType implements TypeI {
     }
     Preconditions.checkArgument(o instanceof JSType);
     JSType t2 = (JSType) o;
+    // TODO(blickly): We had forgotten to compare the typevar and enums here and
+    // in hashCode. When adding them, the unit tests pass, but there is a new
+    // call-function-with-bottom-formals warning that breaks head Closure.
+    // Fix bug in NTI and do correct equality and hashCode here.
     return getMask() == t2.getMask() && Objects.equals(getObjs(), t2.getObjs());
   }
 

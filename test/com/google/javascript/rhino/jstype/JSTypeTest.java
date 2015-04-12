@@ -47,6 +47,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SimpleErrorReporter;
 import com.google.javascript.rhino.Token;
@@ -3166,8 +3167,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
    * properties of its instance type.
    */
   public void testFunctionPrototypeAndImplicitPrototype2() {
-    FunctionType constructor =
-        registry.createConstructorType(null, null, null, null);
+    FunctionType constructor = registry.createConstructorType(
+        null, null, registry.createParameters(null, null, null), null, null);
     ObjectType instance = constructor.getInstanceType();
 
     // replacing the prototype
@@ -3180,7 +3181,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
   /** Tests assigning JsDoc on a prototype property. */
   public void testJSDocOnPrototypeProperty() throws Exception {
-    subclassCtor.setPropertyJSDocInfo("prototype", new JSDocInfo());
+    subclassCtor.setPropertyJSDocInfo("prototype",
+        new JSDocInfoBuilder(false).build());
     assertNull(subclassCtor.getOwnPropertyJSDocInfo("prototype"));
   }
 
@@ -3800,7 +3802,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     sup.defineDeclaredProperty("b", DATE_TYPE, null);
     assertEquals(nativeProperties + 2, sup.getPropertiesCount());
 
-    ObjectType sub = registry.createObjectType(sup);
+    ObjectType sub = registry.createObjectType(null, sup);
     assertEquals(nativeProperties + 2, sub.getPropertiesCount());
   }
 
@@ -3859,7 +3861,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     sup.defineDeclaredProperty("a", OBJECT_TYPE, null);
     assertEquals(nativeProperties + 1, sup.getPropertiesCount());
 
-    ObjectType sub = registry.createObjectType(sup);
+    ObjectType sub = registry.createObjectType(null, sup);
     sub.defineDeclaredProperty("a", OBJECT_TYPE, null);
     assertEquals(nativeProperties + 1, sub.getPropertiesCount());
   }
@@ -4401,9 +4403,11 @@ public class JSTypeTest extends BaseJSTypeTestCase {
   }
 
   public void testSubtypingFunctionPrototypeType() throws Exception {
-    FunctionType sub1 = registry.createConstructorType(null, null, null, null);
+    FunctionType sub1 = registry.createConstructorType(
+        null, null, registry.createParameters(null, null, null), null, null);
     sub1.setPrototypeBasedOn(googBar);
-    FunctionType sub2 = registry.createConstructorType(null, null, null, null);
+    FunctionType sub2 = registry.createConstructorType(
+        null, null, registry.createParameters(null, null, null), null, null);
     sub2.setPrototypeBasedOn(googBar);
 
     ObjectType o1 = sub1.getInstanceType();
@@ -4919,7 +4923,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
    */
   public void testSubtypingDerivedExtendsNamedBaseType() throws Exception {
     ObjectType derived =
-        registry.createObjectType(registry.createObjectType(namedGoogBar));
+        registry.createObjectType(null, registry.createObjectType(null, namedGoogBar));
 
     assertTrue(derived.isSubtype(googBar.getInstanceType()));
   }
@@ -5601,8 +5605,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
   }
 
   public void testRegisterPropertyMemoization() {
-    ObjectType derived1 = registry.createObjectType("d1", null, namedGoogBar);
-    ObjectType derived2 = registry.createObjectType("d2", null, namedGoogBar);
+    ObjectType derived1 = registry.createObjectType("d1", namedGoogBar);
+    ObjectType derived2 = registry.createObjectType("d2", namedGoogBar);
 
     derived1.defineDeclaredProperty("propz", UNKNOWN_TYPE, null);
 
@@ -5624,8 +5628,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
    * {@link JSTypeRegistry#getGreatestSubtypeWithProperty(JSType, String)}.
    */
   public void testGreatestSubtypeWithProperty() {
-    ObjectType foo = registry.createObjectType("foo", null, OBJECT_TYPE);
-    ObjectType bar = registry.createObjectType("bar", null, namedGoogBar);
+    ObjectType foo = registry.createObjectType("foo", OBJECT_TYPE);
+    ObjectType bar = registry.createObjectType("bar", namedGoogBar);
 
     foo.defineDeclaredProperty("propz", UNKNOWN_TYPE, null);
     bar.defineDeclaredProperty("propz", UNKNOWN_TYPE, null);
@@ -5853,21 +5857,20 @@ public class JSTypeTest extends BaseJSTypeTestCase {
   }
 
   /**
-   * Tests the factory methods
-   * {@link JSTypeRegistry#createObjectType(ObjectType)}} and
-   * {@link JSTypeRegistry#createObjectType(String, Node, ObjectType)}}.
+   * Tests the factory method
+   * {@link JSTypeRegistry#createObjectType(String, ObjectType)}}.
    */
   public void testCreateObjectType() throws Exception {
     // simple
     ObjectType subDate =
-        registry.createObjectType(DATE_TYPE.getImplicitPrototype());
+        registry.createObjectType(null, DATE_TYPE.getImplicitPrototype());
     assertTypeEquals(DATE_TYPE.getImplicitPrototype(),
         subDate.getImplicitPrototype());
     assertNull(subDate.getReferenceName());
     assertEquals("{...}", subDate.toString());
 
     // name, node, prototype
-    ObjectType subError = registry.createObjectType("Foo", null,
+    ObjectType subError = registry.createObjectType("Foo",
         ERROR_TYPE.getImplicitPrototype());
     assertTypeEquals(ERROR_TYPE.getImplicitPrototype(),
         subError.getImplicitPrototype());
@@ -5910,8 +5913,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
    */
   public void testHasOwnProperty() throws Exception {
     ObjectType sup =
-        registry.createObjectType(registry.createAnonymousObjectType(null));
-    ObjectType sub = registry.createObjectType(sup);
+        registry.createObjectType(null, registry.createAnonymousObjectType(null));
+    ObjectType sub = registry.createObjectType(null, sup);
 
     sup.defineProperty("base", null, false, null);
     sub.defineProperty("sub", null, false, null);
@@ -5959,8 +5962,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
   public void testGetPropertyNames() throws Exception {
     ObjectType sup =
-        registry.createObjectType(registry.createAnonymousObjectType(null));
-    ObjectType sub = registry.createObjectType(sup);
+        registry.createObjectType(null, registry.createAnonymousObjectType(null));
+    ObjectType sub = registry.createObjectType(null, sup);
 
     sup.defineProperty("base", null, false, null);
     sub.defineProperty("sub", null, false, null);
@@ -5976,8 +5979,9 @@ public class JSTypeTest extends BaseJSTypeTestCase {
   }
 
   public void testGetAndSetJSDocInfoWithNamedType() throws Exception {
-    JSDocInfo info = new JSDocInfo();
-    info.setDeprecated(true);
+    JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+    builder.recordDeprecated();
+    JSDocInfo info = builder.build();
 
     assertNull(namedGoogBar.getOwnPropertyJSDocInfo("X"));
     namedGoogBar.setPropertyJSDocInfo("X", info);
@@ -5988,14 +5992,16 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
   public void testGetAndSetJSDocInfoWithObjectTypes() throws Exception {
     ObjectType sup =
-        registry.createObjectType(registry.createAnonymousObjectType(null));
-    ObjectType sub = registry.createObjectType(sup);
+        registry.createObjectType(null, registry.createAnonymousObjectType(null));
+    ObjectType sub = registry.createObjectType(null, sup);
 
-    JSDocInfo deprecated = new JSDocInfo();
-    deprecated.setDeprecated(true);
+    JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+    builder.recordDeprecated();
+    JSDocInfo deprecated = builder.build();
 
-    JSDocInfo privateInfo = new JSDocInfo();
-    privateInfo.setVisibility(Visibility.PRIVATE);
+    builder = new JSDocInfoBuilder(false);
+    builder.recordVisibility(Visibility.PRIVATE);
+    JSDocInfo privateInfo = builder.build();
 
     sup.defineProperty("X", NUMBER_TYPE, true, null);
     sup.setPropertyJSDocInfo("X", privateInfo);
@@ -6008,13 +6014,15 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         sup.getOwnPropertyJSDocInfo("X").getVisibility());
     assertTypeEquals(NUMBER_TYPE, sup.getPropertyType("X"));
     assertTrue(sub.getOwnPropertyJSDocInfo("X").isDeprecated());
-    assertNull(sub.getOwnPropertyJSDocInfo("X").getVisibility());
+    assertEquals(Visibility.INHERITED,
+        sub.getOwnPropertyJSDocInfo("X").getVisibility());
     assertTypeEquals(NUMBER_TYPE, sub.getPropertyType("X"));
   }
 
   public void testGetAndSetJSDocInfoWithNoType() throws Exception {
-    JSDocInfo deprecated = new JSDocInfo();
-    deprecated.setDeprecated(true);
+    JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+    builder.recordDeprecated();
+    JSDocInfo deprecated = builder.build();
 
     NO_TYPE.setPropertyJSDocInfo("X", deprecated);
     assertNull(NO_TYPE.getOwnPropertyJSDocInfo("X"));

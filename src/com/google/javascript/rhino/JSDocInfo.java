@@ -122,8 +122,8 @@ public class JSDocInfo implements Serializable {
     String meaning = null;
     String deprecated = null;
     String license = null;
-    Set<String> suppressions = null;
-    Set<String> modifies = null;
+    ImmutableSet<String> suppressions = null;
+    ImmutableSet<String> modifies = null;
     String lendsName = null;
 
     // Bit flags for properties.
@@ -173,8 +173,8 @@ public class JSDocInfo implements Serializable {
       other.meaning = meaning;
       other.deprecated = deprecated;
       other.license = license;
-      other.suppressions = suppressions == null ? null : new HashSet<>(suppressions);
-      other.modifies = modifies == null ? null : new HashSet<>(modifies);
+      other.suppressions = suppressions == null ? null : ImmutableSet.copyOf(suppressions);
+      other.modifies = modifies == null ? null :  ImmutableSet.copyOf(modifies);
       other.lendsName = lendsName;
 
       other.propertyBitField = propertyBitField;
@@ -345,9 +345,6 @@ public class JSDocInfo implements Serializable {
 
   private LazilyInitializedDocumentation documentation = null;
 
-  // The Node this JSDoc is associated with.
-  private Node associatedNode = null;
-
   private Visibility visibility = null;
 
   /**
@@ -443,12 +440,12 @@ public class JSDocInfo implements Serializable {
    * Creates a {@link JSDocInfo} object. This object should be created using
    * a {@link JSDocInfoBuilder}.
    */
-  public JSDocInfo(boolean includeDocumentation) {
+  JSDocInfo(boolean includeDocumentation) {
     this.includeDocumentation = includeDocumentation;
   }
 
   // Visible for testing.
-  public JSDocInfo() {}
+  JSDocInfo() {}
 
   @Override
   public JSDocInfo clone() {
@@ -565,8 +562,7 @@ public class JSDocInfo implements Serializable {
     setFlag(value, MASK_NOALIAS);
   }
 
-  // Visible for testing.
-  public void setDeprecated(boolean value) {
+  void setDeprecated(boolean value) {
     setFlag(value, MASK_DEPRECATED);
   }
 
@@ -835,8 +831,7 @@ public class JSDocInfo implements Serializable {
     return (bitset & mask) != 0x00;
   }
 
-  // Visible for testing.
-  public void setVisibility(Visibility visibility) {
+  void setVisibility(Visibility visibility) {
     this.visibility = visibility;
   }
 
@@ -899,13 +894,17 @@ public class JSDocInfo implements Serializable {
   /**
    * Add a suppressed warning.
    */
-  public void addSuppression(String suppression) {
+  void addSuppression(String suppression) {
     lazyInitInfo();
 
     if (info.suppressions == null) {
-      info.suppressions = Sets.newHashSet();
+      info.suppressions = ImmutableSet.of(suppression);
+    } else {
+      info.suppressions = new ImmutableSet.Builder<String>()
+          .addAll(info.suppressions)
+          .add(suppression)
+          .build();
     }
-    info.suppressions.add(suppression);
   }
 
   /**
@@ -919,20 +918,8 @@ public class JSDocInfo implements Serializable {
       return false;
     }
 
-    info.suppressions = suppressions;
+    info.suppressions = ImmutableSet.copyOf(suppressions);
     return true;
-  }
-
-  /**
-   * Add modifies values.
-   */
-  void addModifies(String modifies) {
-    lazyInitInfo();
-
-    if (info.modifies == null) {
-      info.modifies = Sets.newHashSet();
-    }
-    info.modifies.add(modifies);
   }
 
   /**
@@ -946,7 +933,7 @@ public class JSDocInfo implements Serializable {
       return false;
     }
 
-    info.modifies = modifies;
+    info.modifies = ImmutableSet.copyOf(modifies);
     return true;
   }
 
@@ -1129,7 +1116,7 @@ public class JSDocInfo implements Serializable {
   boolean declareTemplateTypeName(String newTemplateTypeName) {
     lazyInitInfo();
 
-    if (isTypeTransformationName(newTemplateTypeName)) {
+    if (isTypeTransformationName(newTemplateTypeName) || hasTypedefType()) {
       return false;
     }
     if (info.templateTypeNames == null){
@@ -1280,8 +1267,12 @@ public class JSDocInfo implements Serializable {
     setType(type, TYPEFIELD_ENUM);
   }
 
-  void setTypedefType(JSTypeExpression type) {
-    setType(type, TYPEFIELD_TYPEDEF);
+  boolean declareTypedefType(JSTypeExpression type) {
+    if (getTemplateTypeNames().isEmpty()) {
+      setType(type, TYPEFIELD_TYPEDEF);
+      return true;
+    }
+    return false;
   }
 
   private void setType(JSTypeExpression type, int mask) {
@@ -1578,14 +1569,10 @@ public class JSDocInfo implements Serializable {
     return (info == null) ? null : info.license;
   }
 
-  /** License directives can appear in multiple comments, and always
-   * apply to the entire file.  Break protection and allow outsiders to
-   * update the license string so that we can attach the license text even
-   * when the JSDocInfo has been created and tagged with other information.
+  /**
    * @param license String containing new license text.
    */
-
-  public void setLicense(String license) {
+  void setLicense(String license) {
     lazyInitInfo();
     info.license = license;
   }
@@ -1791,33 +1778,6 @@ public class JSDocInfo implements Serializable {
    */
   public String getFileOverview() {
     return documentation == null ? null : documentation.fileOverview;
-  }
-
-  public Node getAssociatedNode() {
-    return this.associatedNode;
-  }
-
-  /**
-   * Sets the node associated with this JSDoc.
-   * Notice that many nodes may have pointer to the same JSDocInfo
-   * object (because we propagate it across the type graph). But there
-   * is only one canonical "owner" node of the JSDocInfo, which corresponds
-   * to its original place in the syntax tree.
-   */
-  public void setAssociatedNode(Node node) {
-    this.associatedNode = node;
-  }
-
-  /** Gets the name of the source file that contains this JSDoc. */
-  public StaticSourceFile getStaticSourceFile() {
-    return this.associatedNode != null
-        ? this.associatedNode.getStaticSourceFile() : null;
-  }
-
-  /** Gets the name of the source file that contains this JSDoc. */
-  public String getSourceName() {
-    return this.associatedNode != null
-        ? this.associatedNode.getSourceFileName() : null;
   }
 
   /** Gets the list of all markers for the documentation in this JSDoc. */

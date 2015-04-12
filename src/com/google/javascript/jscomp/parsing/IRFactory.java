@@ -112,6 +112,7 @@ import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Node.TypeDeclarationNode;
 import com.google.javascript.rhino.StaticSourceFile;
@@ -223,9 +224,7 @@ class IRFactory {
 
   // @license text gets appended onto the fileLevelJsDocBuilder as found,
   // and stored in JSDocInfo for placeholder node.
-  Node rootNodeJsDocHolder = new Node(Token.SCRIPT);
-  Node.FileLevelJsDocBuilder fileLevelJsDocBuilder =
-      rootNodeJsDocHolder.getJsDocBuilderForNode();
+  JSDocInfoBuilder fileLevelJsDocBuilder;
   JSDocInfo fileOverviewInfo = null;
 
   // Use a template node for properties set on all nodes to minimize the
@@ -250,6 +249,8 @@ class IRFactory {
     this.currentComment = nextCommentIter.hasNext() ? nextCommentIter.next() : null;
     this.newlines = Lists.newArrayList();
     this.sourceFile = sourceFile;
+    this.fileLevelJsDocBuilder = new JSDocInfoBuilder(
+        config.parseJsDocDocumentation);
 
     // Pre-generate all the newlines in the file.
     for (int charNo = 0; true; charNo++) {
@@ -660,19 +661,19 @@ class IRFactory {
     // Only after we've seen all @fileoverview entries, attach the
     // last one to the root node, and copy the found license strings
     // to that node.
-    JSDocInfo rootNodeJsDoc = rootNodeJsDocHolder.getJSDocInfo();
+    JSDocInfo rootNodeJsDoc = fileLevelJsDocBuilder.build();
     if (rootNodeJsDoc != null) {
       irNode.setJSDocInfo(rootNodeJsDoc);
-      rootNodeJsDoc.setAssociatedNode(irNode);
     }
 
     if (fileOverviewInfo != null) {
       if ((irNode.getJSDocInfo() != null) &&
           (irNode.getJSDocInfo().getLicense() != null)) {
-        fileOverviewInfo.setLicense(irNode.getJSDocInfo().getLicense());
+        JSDocInfoBuilder builder = JSDocInfoBuilder.copyFrom(fileOverviewInfo);
+        builder.recordLicense(irNode.getJSDocInfo().getLicense());
+        fileOverviewInfo = builder.build();
       }
       irNode.setJSDocInfo(fileOverviewInfo);
-      fileOverviewInfo.setAssociatedNode(irNode);
     }
   }
 
@@ -841,15 +842,10 @@ class IRFactory {
     Node node = justTransform(tree);
     if (info != null) {
       node = maybeInjectCastNode(tree, info, node);
-      attachJSDoc(info, node);
+      node.setJSDocInfo(info);
     }
     setSourceInfo(node, tree);
     return node;
-  }
-
-  private static void attachJSDoc(JSDocInfo info, Node n) {
-    info.setAssociatedNode(n);
-    n.setJSDocInfo(info);
   }
 
   private Node maybeInjectCastNode(ParseTree node, JSDocInfo info, Node irNode) {
@@ -998,7 +994,6 @@ class IRFactory {
                                charno + numOpeningChars),
           comment,
           position,
-          null,
           sourceFile,
           config,
           errorReporter);
@@ -1025,7 +1020,6 @@ class IRFactory {
               charno + numOpeningChars),
           comment,
           node.location.start.offset,
-          null,
           sourceFile,
           config,
           errorReporter);
@@ -1475,7 +1469,7 @@ class IRFactory {
         }
         node = newStringNode(Token.NAME, identifierToken.value);
         if (info != null) {
-          attachJSDoc(info, node);
+          node.setJSDocInfo(info);
         }
       }
       setSourceInfo(node, identifierToken);
@@ -1512,7 +1506,7 @@ class IRFactory {
       }
       Node node = newStringNode(Token.NAME, identifierToken.toString());
       if (info != null) {
-        attachJSDoc(info, node);
+        node.setJSDocInfo(info);
       }
       setSourceInfo(node, identifierToken);
       return node;
