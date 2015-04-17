@@ -16,6 +16,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.CaseFormat;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
@@ -26,8 +27,10 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Rewrites "Polymer({})" calls into a form that is suitable for type checking and dead code
@@ -57,6 +60,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
 
   private final AbstractCompiler compiler;
   private Node polymerElementExterns;
+  private Set<String> nativeExternsAdded;
   private final Map<String, String> tagNameMap;
   private List<Node> polymerElementProps;
 
@@ -64,6 +68,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     this.compiler = compiler;
     tagNameMap = TagNameToType.getMap();
     polymerElementProps = new ArrayList<>();
+    nativeExternsAdded = new HashSet<>();
   }
 
   @Override
@@ -224,7 +229,6 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       constructor.useSourceInfoFromForTree(callNode);
     } else {
       ctorInfo = NodeUtil.getBestJSDocInfo(constructor);
-      constructor.removeProp(Node.JSDOC_INFO_PROP);
     }
 
     Node baseClass = NodeUtil.getFirstPropMatchingKey(descriptor, "extends");
@@ -264,10 +268,14 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     objLitDoc.recordLends(cls.target.getQualifiedName() + ".prototype");
     objLit.setJSDocInfo(objLitDoc.build());
 
+    this.addThisTypeToFunctions(objLit, cls.target.getQualifiedName());
+
     // For simplicity add everything into a block, before adding it to the AST.
     Node block = IR.block();
 
-    this.appendPolymerElementExterns(cls);
+    if (cls.nativeBaseElement != null) {
+      this.appendPolymerElementExterns(cls);
+    }
     JSDocInfoBuilder constructorDoc = this.getConstructorDoc(cls);
 
     // Remove the original constructor JS docs from the objlit.
@@ -309,6 +317,22 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     }
 
     compiler.reportCodeChange();
+  }
+
+  /**
+   * Add an @this annotation to all functions in the objLit.
+   */
+  private void addThisTypeToFunctions(Node objLit, String thisType) {
+    Preconditions.checkState(objLit.isObjectLit());
+    for (Node keyNode : objLit.children()) {
+      Node value = keyNode.getFirstChild();
+      if (value != null && value.isFunction()) {
+        JSDocInfoBuilder fnDoc = JSDocInfoBuilder.maybeCopyFrom(keyNode.getJSDocInfo());
+        fnDoc.recordThisType(new JSTypeExpression(
+            new Node(Token.BANG, IR.string(thisType)), VIRTUAL_FILE));
+        keyNode.setJSDocInfo(fnDoc.build());
+      }
+    }
   }
 
   /**
@@ -356,6 +380,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       case "Boolean":
       case "String":
       case "Number":
+      case "Function":
         typeNode = IR.string(typeString.toLowerCase());
         break;
       case "Array":
@@ -377,7 +402,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
    * added. If the element does not extend a native HTML element, this method is a no-op.
    */
   private void appendPolymerElementExterns(final ClassDefinition cls) {
-    if (cls.nativeBaseElement == null) {
+    if (!nativeExternsAdded.add(cls.nativeBaseElement)) {
       return;
     }
 

@@ -1875,7 +1875,7 @@ public final class NodeUtil {
    *     destructuring pattern.
    */
   static boolean isDestructuringDeclaration(Node n) {
-    if (n.isVar() || n.isLet() || n.isConst()) {
+    if (isNameDeclaration(n)) {
       for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
         if (c.isArrayPattern() || c.isObjectPattern()) {
           return true;
@@ -3366,28 +3366,6 @@ public final class NodeUtil {
     return false;
   }
 
-  /**
-   * Get the JSDocInfo for a function.
-   * @deprecated Prefer #getBestJSDocInfo instead.
-   */
-  @Deprecated
-  public static JSDocInfo getFunctionJSDocInfo(Node n) {
-    Preconditions.checkState(n.isFunction());
-    JSDocInfo fnInfo = n.getJSDocInfo();
-    if (fnInfo == null && NodeUtil.isFunctionExpression(n)) {
-      // Look for the info on other nodes.
-      Node parent = n.getParent();
-      if (parent.isAssign()) {
-        // on ASSIGNs
-        fnInfo = parent.getJSDocInfo();
-      } else if (parent.isName()) {
-        // on var NAME = function() { ... };
-        fnInfo = parent.getParent().getJSDocInfo();
-      }
-    }
-    return fnInfo;
-  }
-
   static boolean functionHasInlineJsdocs(Node fn) {
     if (!fn.isFunction()) {
       return false;
@@ -3613,6 +3591,11 @@ public final class NodeUtil {
         return getBestJSDocInfo(parent);
       } else if (parent.isVar() && parent.hasOneChild()) {
         return parent.getJSDocInfo();
+      } else if ((parent.isHook() && parent.getFirstChild() != n)
+                 || parent.isOr()
+                 || parent.isAnd()
+                 || (parent.isComma() && parent.getFirstChild() != n)) {
+        return getBestJSDocInfo(parent);
       }
     }
     return info;

@@ -262,6 +262,7 @@ class GlobalTypeInfo implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
+    Preconditions.checkNotNull(warnings, "Cannot rerun GlobalTypeInfo.process");
     Preconditions.checkArgument(externs == null || externs.isSyntheticBlock());
     Preconditions.checkArgument(root.isSyntheticBlock());
     globalScope =
@@ -2491,6 +2492,9 @@ class GlobalTypeInfo implements CompilerPass {
       }
       for (Map.Entry<String, EnumType> entry : localEnums.entrySet()) {
         locals.put(entry.getKey(), entry.getValue().toJSType());
+      }
+      for (String typedefName : localTypedefs.keySet()) {
+        locals.put(typedefName, JSType.TOP);
       }
       localNamespaces = ImmutableMap.of();
       localClassDefs = ImmutableMap.of();

@@ -234,6 +234,25 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         NewTypeInference.MISTYPED_ASSIGN_RHS);
   }
 
+  public void testAlhpaRenamingDoesntChangeType() {
+    typeCheck(
+        "/**\n"
+        + " * @param {U} x\n"
+        + " * @param {U} y\n"
+        + " * @template U\n"
+        + " */\n"
+        + "function f(x, y){}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {function(T, T): boolean} comp\n"
+        + " * @param {!Array<T>} arr\n"
+        + " */\n"
+        + "function g(comp, arr) {\n"
+        + "  var compare = comp || f;\n"
+        + "  compare(arr[0], arr[1]);\n"
+        + "}");
+  }
+
   public void testInvalidThisReference() {
     typeCheck("this.x = 5;", CheckGlobalThis.GLOBAL_THIS);
     typeCheck("function f(x){}; f(this);", CheckGlobalThis.GLOBAL_THIS);
@@ -1084,6 +1103,48 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "  f(123) < 'str';\n"
         + "  return outer;\n"
         + "}");
+  }
+
+  public void testShadowing() {
+    typeCheck(
+        "var /** number */ x = 5;\n"
+        + "function f() {\n"
+        + "  var /** string */ x = 'str';\n"
+        + "  return x - 5;\n"
+        + "}",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(
+        "var /** number */ x = 5;\n"
+        + "function f() {\n"
+        + "  /** @typedef {string} */ var x;\n"
+        + "  return x - 5;\n"
+        + "}",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(
+        "var /** number */ x = 5;\n"
+        + "function f() {\n"
+        + "  /** @enum {string} */ var x = { FOO : 'str' };\n"
+        + "  return x - 5;\n"
+        + "}",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    // Types that are only present in types, and not in code do not cause shadowing in code
+    typeCheck(
+        "var /** number */ X = 5;\n"
+        + "/** @template X */\n"
+        + "function f() {\n"
+        + "  return X - 5;\n"
+        + "}");
+
+    typeCheck(
+        "var /** string */ X = 'str';\n"
+        + "/** @template X */\n"
+        + "function f() {\n"
+        + "  return X - 5;\n"
+        + "}",
+        NewTypeInference.INVALID_OPERAND_TYPE);
   }
 
   public void testFunctionsInsideFunctions() {

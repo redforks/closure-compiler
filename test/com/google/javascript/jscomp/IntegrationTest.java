@@ -376,22 +376,26 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilationLevel.ADVANCED_OPTIMIZATIONS
         .setOptionsForCompilationLevel(options);
     test(options,
-         "var x = {eeny: 1, /** @expose */ meeny: 2};" +
-         "/** @constructor */ var Foo = function() {};" +
-         "/** @expose */  Foo.prototype.miny = 3;" +
-         "Foo.prototype.moe = 4;" +
-         "/** @expose */  Foo.prototype.tiger;" +
-         "function moe(a, b) { return a.meeny + b.miny + a.tiger; }" +
-         "window['x'] = x;" +
-         "window['Foo'] = Foo;" +
-         "window['moe'] = moe;",
-         "function a(){}" +
-         "a.prototype.miny=3;" +
-         "window.x={a:1,meeny:2};" +
-         "window.Foo=a;" +
-         "window.moe=function(b,c){" +
-         "  return b.meeny+c.miny+b.tiger" +
-         "}");
+        new String[] {"var x = {eeny: 1, /** @expose */ meeny: 2};" +
+            "/** @constructor */ var Foo = function() {};" +
+            "/** @expose */  Foo.prototype.miny = 3;" +
+            "Foo.prototype.moe = 4;" +
+            "/** @expose */  Foo.prototype.tiger;" +
+            "function moe(a, b) { return a.meeny + b.miny + a.tiger; }" +
+            "window['x'] = x;" +
+            "window['Foo'] = Foo;" +
+            "window['moe'] = moe;"},
+        new String[] {"function a(){}" +
+            "a.prototype.miny=3;" +
+            "window.x={a:1,meeny:2};" +
+            "window.Foo=a;" +
+            "window.moe=function(b,c){" +
+            "  return b.meeny+c.miny+b.tiger" +
+            "}"},
+        new DiagnosticType[]{
+            RhinoErrorReporter.PARSE_ERROR,
+            RhinoErrorReporter.PARSE_ERROR,
+            RhinoErrorReporter.PARSE_ERROR});
   }
 
   public void testCheckSymbolsOff() {
@@ -2868,10 +2872,11 @@ public final class IntegrationTest extends IntegrationTestCase {
   }
 
   // Tests that unused classes are removed, even if they are passed to $jscomp.inherits.
-  public void testES6UnusedClassesAreRemoved() {
+  private void testES6UnusedClassesAreRemoved(CodingConvention convention) {
     CompilerOptions options = createCompilerOptions();
     options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
     options.setLanguageOut(LanguageMode.ECMASCRIPT3);
+    options.setCodingConvention(convention);
     CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
     Compiler compiler = compile(options, Joiner.on('\n').join(
         "class Base {}",
@@ -2879,6 +2884,12 @@ public final class IntegrationTest extends IntegrationTestCase {
         "alert(1);"));
     String result = compiler.toSource(compiler.getJsRoot());
     assertThat(result).isEqualTo("alert(1)");
+  }
+
+  public void testES6UnusedClassesAreRemoved() {
+    testES6UnusedClassesAreRemoved(CodingConventions.getDefault());
+    testES6UnusedClassesAreRemoved(new ClosureCodingConvention());
+    testES6UnusedClassesAreRemoved(new GoogleCodingConvention());
   }
 
   /**
