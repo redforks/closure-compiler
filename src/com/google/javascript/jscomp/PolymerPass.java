@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
@@ -100,7 +101,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (ispolymerElementExterns(n)) {
+      if (isPolymerElementExterns(n)) {
         polymerElementExterns = n;
       } else if (isPolymerElementPropExpr(n)) {
         polymerElementProps.add(n);
@@ -110,7 +111,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     /**
      * @return Whether the node is the declaration of PolymerElement.
      */
-    private boolean ispolymerElementExterns(Node value) {
+    private boolean isPolymerElementExterns(Node value) {
       return value != null && value.isVar()
           && value.getFirstChild().matchesQualifiedName(POLYMER_ELEMENT_NAME);
     }
@@ -139,17 +140,17 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     if (isPolymerCall(n)) {
-      rewriteClassDefinition(n, parent);
+      rewriteClassDefinition(n, parent, t);
     }
   }
 
-  private void rewriteClassDefinition(Node n, Node parent) {
+  private void rewriteClassDefinition(Node n, Node parent, NodeTraversal t) {
     ClassDefinition def = extractClassDefinition(n);
     if (def != null) {
       if (NodeUtil.isNameDeclaration(parent.getParent()) || parent.isAssign()) {
-        rewritePolymerClass(parent.getParent(), def);
+        rewritePolymerClass(parent.getParent(), def, t);
       } else {
-        rewritePolymerClass(parent, def);
+        rewritePolymerClass(parent, def, t);
       }
     }
   }
@@ -254,7 +255,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     return members.build();
   }
 
-  private void rewritePolymerClass(Node exprRoot, final ClassDefinition cls) {
+  private void rewritePolymerClass(Node exprRoot, final ClassDefinition cls, NodeTraversal t) {
     // Add {@code @lends} to the object literal.
     Node call = exprRoot.getFirstChild();
     if (call.isAssign()) {
@@ -302,13 +303,26 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     appendPropertiesToBlock(cls, block);
 
     block.useSourceInfoFromForTree(exprRoot);
-    Node parent = exprRoot.getParent();
     Node stmts = block.removeChildren();
-    Node beforeRoot = parent.getChildBefore(exprRoot);
-    if (beforeRoot == null) {
-      parent.addChildrenToFront(stmts);
+    Node parent = exprRoot.getParent();
+
+    // If the call to Polymer() is not in the global scope and the assignment target is not
+    // namespaced (which likely means it's exported to the global scope), put the type declaration
+    // into the global scope at the start of the current script.
+    //
+    // This avoids unknown type warnings which are a result of the compiler's poor understanding of
+    // types declared inside IIFEs or any non-global scope. We should revisit this decision after
+    // moving to the new type inference system which should be able to infer these types better.
+    if (!t.getScope().isGlobal() && !cls.target.isGetProp()) {
+      Node scriptNode = NodeUtil.getEnclosingScript(exprRoot);
+      scriptNode.addChildrenToFront(stmts);
     } else {
-      parent.addChildrenAfter(stmts, beforeRoot);
+      Node beforeRoot = parent.getChildBefore(exprRoot);
+      if (beforeRoot == null) {
+        parent.addChildrenToFront(stmts);
+      } else {
+        parent.addChildrenAfter(stmts, beforeRoot);
+      }
     }
 
     if (exprRoot.isVar()) {
@@ -339,10 +353,11 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
    * Appends all properties in the ClassDefinition to the prototype of the custom element.
    */
   private void appendPropertiesToBlock(final ClassDefinition cls, Node block) {
-    String path = cls.target.getQualifiedName() + ".prototype.";
+    String qualifiedPath = cls.target.getQualifiedName() + ".prototype.";
     for (MemberDefinition prop : cls.props) {
-      Node propertyNode = IR.exprResult(NodeUtil.newQName(compiler, path + prop.name.getString()));
-      JSDocInfoBuilder docs = JSDocInfoBuilder.maybeCopyFrom(prop.info);
+      Node propertyNode = IR.exprResult(
+          NodeUtil.newQName(compiler, qualifiedPath + prop.name.getString()));
+      JSDocInfoBuilder info = JSDocInfoBuilder.maybeCopyFrom(prop.info);
       prop.name.removeProp(Node.JSDOC_INFO_PROP);
 
       // Note that if the JSDoc already has a type, the type inferred from the Polymer syntax is
@@ -351,10 +366,23 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       if (propType == null) {
         return;
       }
-      docs.recordType(propType);
+      info.recordType(propType);
 
-      propertyNode.getFirstChild().setJSDocInfo(docs.build());
+      // TODO(jlklein): Remove this when the renamer is fully feature complete, catching all
+      // rename issues listed in http://goo.gl/L4mdQA.
+      Preconditions.checkState(info.recordExport());
+      info.recordVisibility(Visibility.PUBLIC);
+
+      propertyNode.getFirstChild().setJSDocInfo(info.build());
       block.addChildToBack(propertyNode);
+
+      // Generate the setter for readOnly properties.
+      if (prop.value.isObjectLit()) {
+        Node readOnlyValue = NodeUtil.getFirstPropMatchingKey(prop.value, "readOnly");
+        if (readOnlyValue != null && readOnlyValue.isTrue()) {
+          block.addChildToBack(makeReadOnlySetter(prop.name.getString(), propType, qualifiedPath));
+        }
+      }
     }
   }
 
@@ -394,6 +422,26 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     }
 
     return new JSTypeExpression(typeNode, VIRTUAL_FILE);
+  }
+
+  /**
+   * Adds the generated setter for a readonly property.
+   * @see https://www.polymer-project.org/0.8/docs/devguide/properties.html#read-only
+   */
+  private Node makeReadOnlySetter(String propName, JSTypeExpression propType,
+      String qualifiedPath) {
+    String setterName = "_set" + propName.substring(0, 1).toUpperCase() + propName.substring(1);
+    Node fnNode = IR.function(IR.name(""), IR.paramList(IR.name(propName)), IR.block());
+    Node exprResNode = IR.exprResult(
+        IR.assign(NodeUtil.newQName(compiler, qualifiedPath + setterName), fnNode));
+
+    JSDocInfoBuilder info = new JSDocInfoBuilder(true);
+    info.recordVisibility(Visibility.PRIVATE);
+    info.recordExport();
+    info.recordParameter(propName, propType);
+    exprResNode.getFirstChild().setJSDocInfo(info.build());
+
+    return exprResNode;
   }
 
   /**
@@ -446,6 +494,11 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
         new Node(Token.BANG, IR.string(getPolymerElementType(cls))), VIRTUAL_FILE);
 
     constructorDoc.recordBaseType(baseType);
+
+    // TODO(jlklein): Remove this when the renamer is fully feature complete, catching all
+    // rename issues listed in http://goo.gl/L4mdQA.
+    Preconditions.checkState(constructorDoc.recordExport());
+    constructorDoc.recordVisibility(Visibility.PUBLIC);
     return constructorDoc;
   }
 

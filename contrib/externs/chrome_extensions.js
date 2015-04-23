@@ -7534,29 +7534,33 @@ chrome.notifications.ButtonCallback;
 
 
 /**
- * @param {string} notificationId
- * @param {!chrome.notifications.NotificationOptions} options
- * @param {function(string): void} callback
+ * @param {string|!chrome.notifications.NotificationOptions}
+ *     notificationIdOrOptions
+ * @param {(!chrome.notifications.NotificationOptions|function(string): void)=}
+ *     opt_optionsOrCallback
+ * @param {(function(string): void)=} opt_callback
  * @see http://developer.chrome.com/extensions/notifications.html#method-create
  */
-chrome.notifications.create = function(notificationId, options, callback) {};
+chrome.notifications.create = function(notificationIdOrOptions,
+    opt_optionsOrCallback, opt_callback) {};
 
 
 /**
  * @param {string} notificationId
  * @param {!chrome.notifications.NotificationOptions} options
- * @param {!chrome.notifications.BooleanCallback} callback
+ * @param {chrome.notifications.BooleanCallback=} opt_callback
  * @see http://developer.chrome.com/extensions/notifications.html#method-update
  */
-chrome.notifications.update = function(notificationId, options, callback) {};
+chrome.notifications.update =
+    function(notificationId, options, opt_callback) {};
 
 
 /**
  * @param {string} notificationId
- * @param {!chrome.notifications.BooleanCallback} callback
+ * @param {!chrome.notifications.BooleanCallback=} opt_callback
  * @see http://developer.chrome.com/extensions/notifications.html#method-clear
  */
-chrome.notifications.clear = function(notificationId, callback) {};
+chrome.notifications.clear = function(notificationId, opt_callback) {};
 
 
 /**
@@ -8467,6 +8471,32 @@ chrome.networkingPrivate.CellularStateProperties.prototype.SignalStrength;
 /**
  * @constructor
  * @struct
+ * @see https://developer.chrome.com/extensions/networkingPrivate#type-DeviceStateProperties
+ */
+chrome.networkingPrivate.DeviceStateProperties = function() {};
+
+
+/**
+ * @type {boolean|undefined}
+ */
+chrome.networkingPrivate.DeviceStateProperties.prototype.Scanning;
+
+
+/**
+ * @type {string}
+ */
+chrome.networkingPrivate.DeviceStateProperties.prototype.State;
+
+
+/**
+ * @type {string}
+ */
+chrome.networkingPrivate.DeviceStateProperties.prototype.Type;
+
+
+/**
+ * @constructor
+ * @struct
  * @see https://developer.chrome.com/extensions/networkingPrivate#type-EthernetStateProperties
  */
 chrome.networkingPrivate.EthernetStateProperties = function() {};
@@ -8563,7 +8593,7 @@ chrome.networkingPrivate.WiMAXStateProperties = function() {};
 /**
  * @type {number|undefined}
  */
-chrome.networkingPrivate.WiFiStateProperties.prototype.SignalStrength;
+chrome.networkingPrivate.WiMAXStateProperties.prototype.SignalStrength;
 
 
 /**
@@ -8665,23 +8695,33 @@ chrome.networkingPrivate.forgetNetwork = function(guid, opt_callback) {};
 
 /**
  * @param {!chrome.networkingPrivate.NetworkFilter} filter
- * @param {function(!Array.<!chrome.networkingPrivate.NetworkStateProperties>)=}
- *     opt_callback
+ * @param {function(!Array.<!chrome.networkingPrivate.NetworkStateProperties>)}
+ *     callback
  */
-chrome.networkingPrivate.getNetworks = function(filter, opt_callback) {};
+chrome.networkingPrivate.getNetworks = function(filter, callback) {};
 
 
 /**
  * @param {string} type
- * @param {function(!Array.<!chrome.networkingPrivate.NetworkStateProperties>)=}
- *      opt_callback
+ * @param {function(!Array.<!chrome.networkingPrivate.NetworkStateProperties>)}
+ *      callback
  * @deprecated Use chrome.networkingPrivate.getNetworks with filter.visible=true
  */
-chrome.networkingPrivate.getVisibleNetworks = function(type, opt_callback) {};
+chrome.networkingPrivate.getVisibleNetworks = function(type, callback) {};
 
 
-/** @param {function(!Array.<string>)=} opt_callback */
-chrome.networkingPrivate.getEnabledNetworkTypes = function(opt_callback) {};
+/**
+ * @param {function(!Array.<string>)} callback
+ * @deprecated Use chrome.networkingPrivate.getDeviceStates.
+ */
+chrome.networkingPrivate.getEnabledNetworkTypes = function(callback) {};
+
+
+/**
+ * @param {function(!Array.<!chrome.networkingPrivate.DeviceStateProperties>)}
+ *     callback
+ */
+chrome.networkingPrivate.getDeviceStates = function(callback) {};
 
 
 /** @param {string} networkType */

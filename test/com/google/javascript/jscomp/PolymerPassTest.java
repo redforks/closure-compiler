@@ -144,7 +144,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} */",
+        "/** @constructor @extends {PolymerElement} @export */",
         "var X = function() {};",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
@@ -158,7 +158,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} */",
+        "/** @constructor @extends {PolymerElement} @export */",
         "var XElement = function() {};",
         "Polymer(/** @lends {XElement.prototype} */ {",
         "  is: 'x',",
@@ -174,11 +174,91 @@ public class PolymerPassTest extends CompilerTestCase {
 
         Joiner.on("\n").join(
         "var x = {};",
-        "/** @constructor @extends {PolymerElement} */",
+        "/** @constructor @extends {PolymerElement} @export */",
         "x.Z = function() {};",
         "x.Z = Polymer(/** @lends {x.Z.prototype} */ {",
         "  is: 'x-element',",
         "});"));
+  }
+
+  /**
+   * Since 'x' is a global name, the type system understands
+   * 'x.Z' as a type name, so there is no need to extract the
+   * type to the global namespace.
+   */
+  public void testIIFEExtractionInGlobalNamespace() {
+    test(Joiner.on("\n").join(
+        "var x = {};",
+        "(function() {",
+        "  x.Z = Polymer({",
+        "    is: 'x-element',",
+        "    sayHi: function() { alert('hi'); },",
+        "  });",
+        "})()"),
+
+        Joiner.on("\n").join(
+        "var x = {};",
+        "(function() {",
+        "  /** @constructor @extends {PolymerElement} @export */",
+        "  x.Z = function() {};",
+        "  x.Z = Polymer(/** @lends {x.Z.prototype} */ {",
+        "    is: 'x-element',",
+        "    /** @this {x.Z} */",
+        "    sayHi: function() { alert('hi'); },",
+        "  });",
+        "})()"));
+  }
+
+  /**
+   * The definition of XElement is placed in the global namespace,
+   * outside the IIFE so that the type system will understand that
+   * XElement is a type.
+   */
+  public void testIIFEExtractionNoAssignmentTarget() {
+    test(Joiner.on("\n").join(
+        "(function() {",
+        "  Polymer({",
+        "    is: 'x',",
+        "    sayHi: function() { alert('hi'); },",
+        "  });",
+        "})()"),
+
+        Joiner.on("\n").join(
+        "/** @constructor @extends {PolymerElement} @export */",
+        "var XElement = function() {};",
+        "(function() {",
+        "  Polymer(/** @lends {XElement.prototype} */ {",
+        "    is: 'x',",
+        "    /** @this {XElement} */",
+        "    sayHi: function() { alert('hi'); },",
+        "  });",
+        "})()"));
+  }
+
+  /**
+   * The definition of FooThing is placed in the global namespace,
+   * outside the IIFE so that the type system will understand that
+   * FooThing is a type.
+   */
+  public void testIIFEExtractionVarTarget() {
+    test(Joiner.on("\n").join(
+        "(function() {",
+        "  var FooThing = Polymer({",
+        "    is: 'x',",
+        "    sayHi: function() { alert('hi'); },",
+        "  });",
+        "})()"),
+
+        Joiner.on("\n").join(
+        "/** @constructor @extends {PolymerElement} @export */",
+        "var FooThing = function() {};",
+        "(function() {",
+        "  FooThing = Polymer(/** @lends {FooThing.prototype} */ {",
+        "    is: 'x',",
+        "    /** @this {FooThing} */",
+        "    sayHi: function() { alert('hi'); },",
+        "  });",
+        "})()"));
   }
 
   public void testConstructorExtraction() {
@@ -195,6 +275,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "/**",
         " * @param {string} name",
         " * @constructor @extends {PolymerElement}",
+        " * @export ",
         " */",
         "var X = function(name) { alert('hi, ' + name); };",
         "X = Polymer(/** @lends {X.prototype} */ {",
@@ -217,7 +298,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} */",
+        "/** @constructor @extends {PolymerElement} @export */",
         "var X = function() {};",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
@@ -241,7 +322,7 @@ public class PolymerPassTest extends CompilerTestCase {
 
     test(js,
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerInputElement} */",
+        "/** @constructor @extends {PolymerInputElement} @export */",
         "var XInputElement = function() {};",
         "Polymer(/** @lends {XInputElement.prototype} */ {",
         "  is: 'x-input',",
@@ -273,11 +354,11 @@ public class PolymerPassTest extends CompilerTestCase {
         "a.B = Polymer({",
         "  is: 'x-element',",
         "  properties: {",
-        "    /** @type {!User} */",
-        "    user: Object,",
+        "    /** @type {!User} @private */",
+        "    user_: Object,",
         "    pets: {",
         "      type: Array,",
-        "      readOnly: true,",
+        "      notify: true,",
         "    },",
         "    name: String,",
         "  },",
@@ -287,18 +368,58 @@ public class PolymerPassTest extends CompilerTestCase {
         "/** @constructor */",
         "var User = function() {};",
         "var a = {};",
-        "/** @constructor @extends {PolymerElement} */",
+        "/** @constructor @extends {PolymerElement} @export */",
         "a.B = function() {};",
-        "/** @type {!User} */",
-        "a.B.prototype.user;",
-        "/** @type {!Array} */",
+        "/** @type {!User} @private @export */",
+        "a.B.prototype.user_;",
+        "/** @type {!Array} @export */",
         "a.B.prototype.pets;",
-        "/** @type {string} */",
+        "/** @type {string} @export */",
         "a.B.prototype.name;",
         "a.B = Polymer(/** @lends {a.B.prototype} */ {",
         "  is: 'x-element',",
         "  properties: {",
-        "    user: Object,",
+        "    user_: Object,",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "});"));
+  }
+
+  public void testReadOnlyPropertySetters() {
+    test(Joiner.on("\n").join(
+        "var a = {};",
+        "a.B = Polymer({",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      readOnly: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "});"),
+
+        Joiner.on("\n").join(
+        "var a = {};",
+        "/** @constructor @extends {PolymerElement} @export */",
+        "a.B = function() {};",
+        "/** @type {!Array} @export */",
+        "a.B.prototype.pets;",
+        "/**",
+        " * @param {!Array} pets",
+        " * @private",
+        " * @export",
+        " */",
+        "a.B.prototype._setPets = function(pets) {};",
+        "/** @type {string} @export */",
+        "a.B.prototype.name;",
+        "a.B = Polymer(/** @lends {a.B.prototype} */ {",
+        "  is: 'x-element',",
+        "  properties: {",
         "    pets: {",
         "      type: Array,",
         "      readOnly: true,",
@@ -330,7 +451,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} */",
+        "/** @constructor @extends {PolymerElement} @export */",
         "var X = function() {};",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
@@ -404,9 +525,9 @@ public class PolymerPassTest extends CompilerTestCase {
         "  },",
         "});"),
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} */",
+        "/** @constructor @extends {PolymerElement} @export */",
         "var X = function() {};",
-        "/** @type {boolean} */",
+        "/** @type {boolean} @export */",
         "X.prototype.isHappy;",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
