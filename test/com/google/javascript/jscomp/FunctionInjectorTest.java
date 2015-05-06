@@ -16,16 +16,17 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
 import com.google.javascript.jscomp.FunctionInjector.CanInlineResult;
 import com.google.javascript.jscomp.FunctionInjector.InliningMode;
 import com.google.javascript.jscomp.FunctionInjector.Reference;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.Node;
+
 import junit.framework.TestCase;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -1440,12 +1441,12 @@ public final class FunctionInjectorTest extends TestCase {
         assumeStrictThis,
         assumeMinimumCapture);
 
-    List<SourceFile> externsInputs = Lists.newArrayList(
+    List<SourceFile> externsInputs = ImmutableList.of(
         SourceFile.fromCode("externs", ""));
 
     CompilerOptions options = new CompilerOptions();
     options.setCodingConvention(new GoogleCodingConvention());
-    compiler.init(externsInputs, Lists.newArrayList(
+    compiler.init(externsInputs, ImmutableList.of(
         SourceFile.fromCode("code", code)), options);
     Node parseRoot = compiler.parseInputs();
     Node externsRoot = parseRoot.getFirstChild();
@@ -1484,7 +1485,7 @@ public final class FunctionInjectorTest extends TestCase {
           assertSame("canInlineReferenceToFunction " + "should be CAN_INLINE_AFTER_DECOMPOSITION",
               canInline, CanInlineResult.AFTER_PREPARATION);
 
-          Set<String> knownConstants = Sets.newHashSet();
+          Set<String> knownConstants = new HashSet<>();
           injector.setKnownConstants(knownConstants);
           injector.maybePrepareCall(ref);
 

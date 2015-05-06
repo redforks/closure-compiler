@@ -18,7 +18,6 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDoc;
@@ -26,6 +25,7 @@ import com.google.javascript.jscomp.lint.CheckNullableReturn;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -39,7 +39,7 @@ public class DiagnosticGroups {
   public DiagnosticGroups() {}
 
   private static final Map<String, DiagnosticGroup> groupsByName =
-      Maps.newHashMap();
+       new HashMap<>();
 
   static DiagnosticGroup registerDeprecatedGroup(String name) {
     return registerGroup(name, new DiagnosticGroup(name, UNUSED));
@@ -415,7 +415,7 @@ public class DiagnosticGroups {
   // recommended that you think of them as "linter" warnings that
   // provide optional suggestions.
   public static final DiagnosticGroup LINT_CHECKS =
-      DiagnosticGroups.registerGroup("lintChecks",
+      DiagnosticGroups.registerGroup("lintChecks", // undocumented
           CheckEnums.DUPLICATE_ENUM_VALUE,
           // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
           // checkTypes DiagnosticGroup
@@ -428,7 +428,8 @@ public class DiagnosticGroups {
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
           CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
-          ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC);
+          ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC,
+          TypeCheck.NON_STRINGIFIABLE_OBJECT_KEY);
 
   public static final DiagnosticGroup USE_OF_GOOG_BASE =
       DiagnosticGroups.registerGroup("useOfGoogBase",
@@ -441,13 +442,14 @@ public class DiagnosticGroups {
   // This group exists so that generated code can suppress these
   // warnings. Not for general use. These diagnostics will most likely
   // be moved to the suspiciousCode group.
-  public static final DiagnosticGroup TRANSITIONAL_SUSPICOUS_CODE_WARNINGS =
-      DiagnosticGroups.registerGroup("transitionalSuspiciousCodeWarnings",
-          PeepholeFoldConstants.INDEX_OUT_OF_BOUNDS_ERROR,
-          PeepholeFoldConstants.NEGATING_A_NON_NUMBER_ERROR,
-          PeepholeFoldConstants.BITWISE_OPERAND_OUT_OF_RANGE,
-          PeepholeFoldConstants.SHIFT_AMOUNT_OUT_OF_BOUNDS,
-          PeepholeFoldConstants.FRACTIONAL_BITWISE_OPERAND);
+  static {
+    DiagnosticGroups.registerGroup("transitionalSuspiciousCodeWarnings",
+        PeepholeFoldConstants.INDEX_OUT_OF_BOUNDS_ERROR,
+        PeepholeFoldConstants.NEGATING_A_NON_NUMBER_ERROR,
+        PeepholeFoldConstants.BITWISE_OPERAND_OUT_OF_RANGE,
+        PeepholeFoldConstants.SHIFT_AMOUNT_OUT_OF_BOUNDS,
+        PeepholeFoldConstants.FRACTIONAL_BITWISE_OPERAND);
+  }
 
   public static final DiagnosticGroup CONFORMANCE_VIOLATIONS =
       DiagnosticGroups.registerGroup("conformanceViolations",

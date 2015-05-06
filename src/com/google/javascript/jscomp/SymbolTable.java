@@ -22,10 +22,7 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
-import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Marker;
@@ -49,8 +46,11 @@ import com.google.javascript.rhino.jstype.StaticTypedScope;
 import com.google.javascript.rhino.jstype.StaticTypedSlot;
 import com.google.javascript.rhino.jstype.UnionType;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -118,12 +118,12 @@ public final class SymbolTable {
    * All syntactic scopes in the program, uniquely identified by the node where
    * they're declared.
    */
-  private final Map<Node, SymbolScope> scopes = Maps.newLinkedHashMap();
+  private final Map<Node, SymbolScope> scopes = new LinkedHashMap<>();
 
   /**
    * All Nodes with JSDocInfo in the program.
    */
-  private final List<Node> docInfos = Lists.newArrayList();
+  private final List<Node> docInfos = new ArrayList<>();
 
   private SymbolScope globalScope = null;
 
@@ -360,7 +360,7 @@ public final class SymbolTable {
 
     UnionType unionType = type.toMaybeUnionType();
     if (unionType != null) {
-      List<Symbol> result = Lists.newArrayListWithExpectedSize(2);
+      List<Symbol> result = new ArrayList<>(2);
       for (JSType alt : unionType.getAlternates()) {
         // Our type system never has nested unions.
         Symbol altSym = getSymbolForTypeHelper(alt, true);
@@ -498,7 +498,7 @@ public final class SymbolTable {
    * "function%0", "function%1", etc.
    */
   public void addAnonymousFunctions() {
-    TreeSet<SymbolScope> scopes = Sets.newTreeSet(lexicalScopeOrdering);
+    TreeSet<SymbolScope> scopes = new TreeSet<>(lexicalScopeOrdering);
     for (SymbolScope scope : getAllScopes()) {
       if (scope.isLexicalScope()) {
         scopes.add(scope);
@@ -729,7 +729,7 @@ public final class SymbolTable {
 
   void fillPropertyScopes() {
     // Collect all object symbols.
-    List<Symbol> types = Lists.newArrayList();
+    List<Symbol> types = new ArrayList<>();
 
     // Create a property scope for each named type and each anonymous object,
     // and populate it with that object's properties.
@@ -959,7 +959,8 @@ public final class SymbolTable {
       if (instanceType.getOwnerFunction().hasInstanceType()) {
         // Merge the properties of "Foo.prototype" and "new Foo()" together.
         instanceType = instanceType.getOwnerFunction().getInstanceType();
-        Set<String> set = Sets.newHashSet(propNames);
+        Set<String> set = new HashSet<>();
+        Iterables.addAll(set, propNames);
         set.addAll(instanceType.getOwnPropertyNames());
         propNames = set;
       }
@@ -1055,7 +1056,7 @@ public final class SymbolTable {
   public static final class Symbol extends SimpleSlot {
     // Use a linked hash map, so that the results are deterministic
     // (and so the declaration always comes first).
-    private final Map<Node, Reference> references = Maps.newLinkedHashMap();
+    private final Map<Node, Reference> references = new LinkedHashMap<>();
 
     private final SymbolScope scope;
 
@@ -1180,7 +1181,7 @@ public final class SymbolTable {
     private final Node rootNode;
     private final SymbolScope parent;
     private final JSType typeOfThis;
-    private final Map<String, Symbol> ownSymbols = Maps.newLinkedHashMap();
+    private final Map<String, Symbol> ownSymbols = new LinkedHashMap<>();
     private final int scopeDepth;
 
     // The number of inner anonymous functions that we've given names to.
@@ -1433,7 +1434,7 @@ public final class SymbolTable {
     // then null should be on the stack. But this should be a rare
     // occurrence. We should strive to always be able to come up
     // with some symbol for 'this'.
-    private final List<Symbol> thisStack = Lists.newArrayList();
+    private final List<Symbol> thisStack = new ArrayList<>();
 
     ThisRefCollector(AbstractCompiler compiler) {
       this.compiler = compiler;

@@ -45,9 +45,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -867,7 +864,7 @@ public class JSDocInfo implements Serializable {
     }
 
     if (documentation.markers == null) {
-      documentation.markers = Lists.newArrayList();
+      documentation.markers = new ArrayList<>();
     }
 
     Marker marker = new Marker();
@@ -962,7 +959,7 @@ public class JSDocInfo implements Serializable {
     }
 
     if (documentation.sees == null) {
-      documentation.sees = Lists.newArrayList();
+      documentation.sees = new ArrayList<>();
     }
 
     documentation.sees.add(reference);
@@ -978,7 +975,7 @@ public class JSDocInfo implements Serializable {
     }
 
     if (documentation.authors == null) {
-      documentation.authors = Lists.newArrayList();
+      documentation.authors = new ArrayList<>();
     }
 
     documentation.authors.add(author);
@@ -1177,7 +1174,7 @@ public class JSDocInfo implements Serializable {
     lazyInitInfo();
 
     if (info.thrownTypes == null) {
-      info.thrownTypes = Lists.newArrayList();
+      info.thrownTypes = new ArrayList<>();
     }
 
     info.thrownTypes.add(jsType);
@@ -1544,7 +1541,7 @@ public class JSDocInfo implements Serializable {
     lazyInitInfo();
     // Lazily initialize disposedParameters
     if (info.disposedParameters == null) {
-      info.disposedParameters = Sets.newHashSet();
+      info.disposedParameters = new HashSet<>();
     }
 
     if (info.disposedParameters.contains(parameterName)) {
@@ -1611,7 +1608,7 @@ public class JSDocInfo implements Serializable {
   boolean addImplementedInterface(JSTypeExpression interfaceName) {
     lazyInitInfo();
     if (info.implementedInterfaces == null) {
-      info.implementedInterfaces = Lists.newArrayListWithCapacity(2);
+      info.implementedInterfaces = new ArrayList<>(2);
     }
     if (info.implementedInterfaces.contains(interfaceName)) {
       return false;
@@ -1652,7 +1649,7 @@ public class JSDocInfo implements Serializable {
   boolean addExtendedInterface(JSTypeExpression type) {
     lazyInitInfo();
     if (info.extendedInterfaces == null) {
-      info.extendedInterfaces = Lists.newArrayListWithCapacity(2);
+      info.extendedInterfaces = new ArrayList<>(2);
     }
     if (info.extendedInterfaces.contains(type)) {
       return false;
@@ -1810,7 +1807,7 @@ public class JSDocInfo implements Serializable {
    * @return collection of all type nodes
    */
   public Collection<Node> getTypeNodes() {
-    List<Node> nodes = Lists.newArrayList();
+    List<Node> nodes = new ArrayList<>();
 
     if (type != null) {
       nodes.add(type.getRoot());

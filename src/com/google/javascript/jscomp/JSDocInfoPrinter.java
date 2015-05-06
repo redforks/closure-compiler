@@ -20,6 +20,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
+import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -81,13 +82,13 @@ public final class JSDocInfoPrinter {
       for (String name : info.getParameterNames()) {
         sb.append("@param {");
         appendTypeNode(sb, info.getParameterType(name).getRoot());
-        sb.append("} " + name + " ");
+        sb.append("} " + name + "\n");
       }
     }
     if (info.hasReturnType()) {
       sb.append("@return {");
       appendTypeNode(sb, info.getReturnType().getRoot());
-      sb.append("} ");
+      sb.append("}\n");
     }
     if (info.hasThisType()) {
       sb.append("@this {");
@@ -97,7 +98,7 @@ public final class JSDocInfoPrinter {
       } else {
         appendTypeNode(sb, typeNode);
       }
-      sb.append("} ");
+      sb.append("}\n");
     }
     if (info.hasBaseType()) {
       sb.append("@extends {");
@@ -107,12 +108,22 @@ public final class JSDocInfoPrinter {
       } else {
         appendTypeNode(sb, typeNode);
       }
-      sb.append("} ");
+      sb.append("}\n");
+    }
+    for (JSTypeExpression type : info.getImplementedInterfaces()) {
+      sb.append("@implements {");
+      Node typeNode = type.getRoot();
+      if (typeNode.getType() == Token.BANG) {
+        appendTypeNode(sb, typeNode.getFirstChild());
+      } else {
+        appendTypeNode(sb, typeNode);
+      }
+      sb.append("}\n");
     }
     if (info.hasTypedefType()) {
       sb.append("@typedef {");
       appendTypeNode(sb, info.getTypedefType().getRoot());
-      sb.append("} ");
+      sb.append("}\n");
     }
     if (info.hasType()) {
       if (info.isInlineType()) {
@@ -122,18 +133,18 @@ public final class JSDocInfoPrinter {
       } else {
         sb.append("@type {");
         appendTypeNode(sb, info.getType().getRoot());
-        sb.append("} ");
+        sb.append("}\n");
       }
     }
     if (!info.getThrownTypes().isEmpty()) {
       sb.append("@throws {");
       appendTypeNode(sb, info.getThrownTypes().get(0).getRoot());
-      sb.append("} ");
+      sb.append("}\n");
     }
     if (info.hasEnumParameterType()) {
       sb.append("@enum {");
       appendTypeNode(sb, info.getEnumParameterType().getRoot());
-      sb.append("} ");
+      sb.append("}\n");
     }
     sb.append("*/");
     return sb.toString();
@@ -147,11 +158,13 @@ public final class JSDocInfoPrinter {
       appendTypeNode(sb, typeNode.getFirstChild());
       sb.append("=");
     } else if (typeNode.getType() == Token.PIPE) {
+      sb.append("(");
       for (int i = 0; i < typeNode.getChildCount() - 1; i++) {
         appendTypeNode(sb, typeNode.getChildAtIndex(i));
         sb.append("|");
       }
       appendTypeNode(sb, typeNode.getLastChild());
+      sb.append(")");
     } else if (typeNode.getType() == Token.ELLIPSIS) {
       sb.append("...");
       if (typeNode.hasChildren()) {
@@ -179,14 +192,16 @@ public final class JSDocInfoPrinter {
     } else if (typeNode.getType() == Token.VOID) {
       sb.append("void");
     } else {
-      if (typeNode.getString().equals("Array")) {
-        if (typeNode.hasChildren()) {
-          sb.append("Array.<");
-          appendTypeNode(sb, typeNode.getFirstChild().getFirstChild());
-          sb.append(">");
-        } else {
-          sb.append("Array");
+      if (typeNode.hasChildren()) {
+        sb.append(typeNode.getString())
+            .append("<");
+        Node child = typeNode.getFirstChild();
+        appendTypeNode(sb, child.getFirstChild());
+        for (int i = 1; i < child.getChildCount(); i++) {
+          sb.append(",");
+          appendTypeNode(sb, child.getChildAtIndex(i));
         }
+        sb.append(">");
       } else {
         sb.append(typeNode.getString());
       }

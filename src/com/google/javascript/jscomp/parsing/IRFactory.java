@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.common.collect.UnmodifiableIterator;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.parser.IdentifierToken;
@@ -119,6 +118,8 @@ import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -223,7 +224,7 @@ class IRFactory {
           "public", "static", "yield");
 
   private final Set<String> reservedKeywords;
-  private final Set<Comment> parsedComments = Sets.newHashSet();
+  private final Set<Comment> parsedComments = new HashSet<>();
 
   // @license text gets appended onto the fileLevelJsDocBuilder as found,
   // and stored in JSDocInfo for placeholder node.
@@ -250,7 +251,7 @@ class IRFactory {
     this.sourceString = sourceString;
     this.nextCommentIter = comments.iterator();
     this.currentComment = nextCommentIter.hasNext() ? nextCommentIter.next() : null;
-    this.newlines = Lists.newArrayList();
+    this.newlines = new ArrayList<>();
     this.sourceFile = sourceFile;
     this.fileLevelJsDocBuilder = new JSDocInfoBuilder(
         config.parseJsDocDocumentation);
@@ -1163,10 +1164,9 @@ class IRFactory {
       while (isDirective(node.getFirstChild())) {
         String directive = node.removeFirstChild().getFirstChild().getString();
         if (directives == null) {
-          directives = Sets.newHashSet(directive);
-        } else {
-          directives.add(directive);
+          directives = new HashSet<>();
         }
+        directives.add(directive);
       }
 
       if (directives != null) {

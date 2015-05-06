@@ -40,7 +40,6 @@
 package com.google.javascript.rhino.jstype;
 
 import static com.google.javascript.rhino.jstype.JSTypeNative.ALL_TYPE;
-import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NO_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.UNKNOWN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
@@ -50,8 +49,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
@@ -63,6 +60,7 @@ import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.RecordTypeBuilder.RecordProperty;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -141,19 +139,19 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   // A map of properties to the types on which those properties have been
   // declared.
   private final Map<String, UnionTypeBuilder> typesIndexedByProperty =
-      Maps.newHashMap();
+       new HashMap<>();
 
   // A map of properties to each reference type on which those
   // properties have been declared. Each type has a unique name used
   // for de-duping.
   private final Map<String, Map<String, ObjectType>>
-      eachRefTypeIndexedByProperty = Maps.newHashMap();
+      eachRefTypeIndexedByProperty = new HashMap<>();
 
   // A map of properties to the greatest subtype on which those properties have
   // been declared. This is filled lazily from the types declared in
   // typesIndexedByProperty.
   private final Map<String, JSType> greatestSubtypeByProperty =
-      Maps.newHashMap();
+       new HashMap<>();
 
   // A map from interface name to types that implement it.
   private final Multimap<String, FunctionType> interfaceToImplementors =
@@ -171,7 +169,7 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   private boolean lastGeneration = true;
 
   // The template type name.
-  private final Map<String, TemplateType> templateTypes = Maps.newHashMap();
+  private final Map<String, TemplateType> templateTypes = new HashMap<>();
 
   // A single empty TemplateTypeMap, which can be safely reused in cases where
   // there are no template types.
@@ -626,7 +624,7 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
       Map<String, ObjectType> typeSet =
           eachRefTypeIndexedByProperty.get(propertyName);
       if (typeSet == null) {
-        typeSet = Maps.newHashMap();
+        typeSet = new HashMap<>();
         eachRefTypeIndexedByProperty.put(propertyName, typeSet);
       }
       ObjectType objType = (ObjectType) type;
@@ -746,7 +744,7 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   }
 
   private static List<ObjectType> getSuperStack(ObjectType a) {
-    List<ObjectType> stack = Lists.newArrayListWithExpectedSize(5);
+    List<ObjectType> stack = new ArrayList<>(5);
     for (ObjectType current = a;
          current != null;
          current = current.getImplicitPrototype()) {

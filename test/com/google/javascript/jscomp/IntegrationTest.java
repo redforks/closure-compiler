@@ -22,7 +22,7 @@ import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -332,11 +332,36 @@ public final class IntegrationTest extends IntegrationTestCase {
     testSame(createCompilerOptions(), "/** @export */ function f() {}");
   }
 
-  public void testGenerateExportsOn() {
+  public void testExportTestFunctionsOn1() {
     CompilerOptions options = createCompilerOptions();
-    options.setGenerateExports(true);
-    test(options, "/** @export */ function f() {}",
-        "/** @export */ function f() {} goog.exportSymbol('f', f);");
+    options.exportTestFunctions = true;
+    test(options, "function testFoo() {}",
+        "/** @export */ function testFoo() {}"
+        + "goog.exportSymbol('testFoo', testFoo);");
+  }
+
+  public void testExportTestFunctionsOn2() {
+    CompilerOptions options = createCompilerOptions();
+    options.setExportTestFunctions(true);
+    options.setClosurePass(true);
+    options.setRenamingPolicy(
+        VariableRenamingPolicy.ALL, PropertyRenamingPolicy.ALL_UNQUOTED);
+    options.setGeneratePseudoNames(true);
+    options.setCollapseProperties(true);
+    test(options,
+        new String[] {
+          "var goog = {};",
+          "goog.provide('goog.testing.testSuite');\n"
+          + "goog.testing.testSuite = function(a) {};\n",
+          " goog.module('testing');\n"
+          + "var testSuite = goog.require('goog.testing.testSuite');\n"
+          + "testSuite({testMethod:function(){}});\n"
+        },
+        new String[] {
+          "",
+          "var $goog$testing$testSuite$$=function($a$$){};",
+          "$goog$testing$testSuite$$({\"testMethod\":function(){}})"
+        });
   }
 
   public void testAngularPassOff() {
@@ -607,7 +632,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     testSame(options, code);
 
-    options.setIdGenerators(Sets.newHashSet("f"));
+    options.setIdGenerators(ImmutableSet.of("f"));
     test(options, code, "function f() {} 'a';");
   }
 
@@ -786,7 +811,7 @@ public final class IntegrationTest extends IntegrationTestCase {
 
   public void testExtraAnnotationNames() {
     CompilerOptions options = createCompilerOptions();
-    options.setExtraAnnotationNames(Sets.newHashSet("TagA", "TagB"));
+    options.setExtraAnnotationNames(ImmutableSet.of("TagA", "TagB"));
     test(
         options,
         "/** @TagA */ var f = new Foo(); /** @TagB */ f.bar();",

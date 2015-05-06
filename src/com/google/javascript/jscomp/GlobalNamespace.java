@@ -22,8 +22,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -43,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Builds a global namespace of all the objects and their properties in
@@ -1056,7 +1055,7 @@ class GlobalNamespace
 
     void addRefInternal(Ref ref) {
       if (refs == null) {
-        refs = Lists.newArrayList();
+        refs = new ArrayList<>();
       }
       refs.add(ref);
     }
@@ -1370,6 +1369,11 @@ class GlobalNamespace
     static Ref createRefForTesting(Type type) {
       return new Ref(type, -1);
     }
+
+    @Override
+    public String toString() {
+      return node.toString();
+    }
   }
 
 
@@ -1402,7 +1406,7 @@ class GlobalNamespace
     @Override public void process(Node externs, Node root) {
       GlobalNamespace namespace = new GlobalNamespace(compiler, externs, root);
 
-      Set<String> currentSymbols = Sets.newTreeSet();
+      Set<String> currentSymbols = new TreeSet<>();
       for (String name : namespace.getNameIndex().keySet()) {
         if (isInterestingSymbol.apply(name)) {
           currentSymbols.add(name);

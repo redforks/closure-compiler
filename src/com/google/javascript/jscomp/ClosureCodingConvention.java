@@ -19,8 +19,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.newtypes.DeclaredTypeRegistry;
 import com.google.javascript.jscomp.newtypes.JSType;
 import com.google.javascript.jscomp.newtypes.QualifiedName;
@@ -30,7 +28,9 @@ import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -55,10 +55,10 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
   public ClosureCodingConvention(CodingConvention wrapped) {
     super(wrapped);
 
-    Set<String> props = Sets.newHashSet(
+    Set<String> props = new HashSet<>(ImmutableSet.of(
         "superClass_",
         "instance_",
-        "getInstance");
+        "getInstance"));
     props.addAll(wrapped.getIndirectlyDeclaredProperties());
     indirectlyDeclaredProperties = ImmutableSet.copyOf(props);
   }
@@ -275,7 +275,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
         n.getChildCount() >= 3) {
       Node typeArray = callName.getNext().getNext();
       if (typeArray.isArrayLit()) {
-        List<String> typeNames = Lists.newArrayList();
+        List<String> typeNames = new ArrayList<>();
         for (Node name = typeArray.getFirstChild(); name != null;
              name = name.getNext()) {
           if (name.isString()) {
@@ -291,7 +291,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
         n.getChildCount() == 2) {
       Node typeDeclaration = n.getChildAtIndex(1);
       if (typeDeclaration.isString()) {
-        return Lists.newArrayList(typeDeclaration.getString());
+        return ImmutableList.of(typeDeclaration.getString());
       }
     }
 

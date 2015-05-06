@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.DefinitionsRemover.Definition;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.graph.DiGraph;
@@ -29,6 +28,7 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
@@ -118,8 +118,8 @@ public final class CallGraph implements CompilerPass {
     this.computeForwardGraph = computeForwardGraph;
     this.computeBackwardGraph = computeBackwardGraph;
 
-    callsitesByNode = Maps.newLinkedHashMap();
-    functionsByNode = Maps.newLinkedHashMap();
+    callsitesByNode = new LinkedHashMap<>();
+    functionsByNode = new LinkedHashMap<>();
   }
 
   /**

@@ -24,6 +24,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.javascript.rhino.Node;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,6 +72,10 @@ public final class NominalType {
     return rawType.objectKind;
   }
 
+  Map<String, JSType> getTypeMap() {
+    return typeMap;
+  }
+
   boolean isClassy() {
     return !isFunction() && !isObject();
   }
@@ -89,6 +94,10 @@ public final class NominalType {
 
   public boolean isDict() {
     return rawType.isDict();
+  }
+
+  public boolean isGeneric() {
+    return rawType.isGeneric();
   }
 
   public boolean isUninstantiatedGenericType() {
@@ -239,7 +248,7 @@ public final class NominalType {
     return ctorFn.nominalType.rawType.getConstructorObject(ctorFn);
   }
 
-  boolean isSubclassOf(NominalType other) {
+  boolean isSubtypeOf(NominalType other) {
     RawNominalType otherRawType = other.rawType;
 
     // interface <: class
@@ -253,7 +262,7 @@ public final class NominalType {
         return false;
       }
       for (NominalType i : rawType.interfaces) {
-        if (i.instantiateGenerics(typeMap).isSubclassOf(other)) {
+        if (i.instantiateGenerics(typeMap).isSubtypeOf(other)) {
           return true;
         }
       }
@@ -268,7 +277,7 @@ public final class NominalType {
         return false;
       } else {
         for (NominalType i : rawType.interfaces) {
-          if (i.instantiateGenerics(typeMap).isSubclassOf(other)) {
+          if (i.instantiateGenerics(typeMap).isSubtypeOf(other)) {
             return true;
           }
         }
@@ -283,7 +292,7 @@ public final class NominalType {
       return false;
     } else {
       return rawType.superClass.instantiateGenerics(typeMap)
-          .isSubclassOf(other);
+          .isSubtypeOf(other);
     }
   }
 
@@ -330,10 +339,10 @@ public final class NominalType {
     if (c1 == null || c2 == null) {
       return null;
     }
-    if (c1.isSubclassOf(c2)) {
+    if (c1.isSubtypeOf(c2)) {
       return c2;
     }
-    return c2.isSubclassOf(c1) ? c1 : null;
+    return c2.isSubtypeOf(c1) ? c1 : null;
   }
 
   // A special-case of meet
@@ -343,18 +352,19 @@ public final class NominalType {
     } else if (c2 == null) {
       return c1;
     }
-    if (c1.isSubclassOf(c2)) {
+    if (c1.isSubtypeOf(c2)) {
       return c1;
     }
-    return c2.isSubclassOf(c1) ? c2 : null;
+    return c2.isSubtypeOf(c1) ? c2 : null;
   }
 
   boolean unifyWithSubtype(NominalType other, List<String> typeParameters,
       Multimap<String, JSType> typeMultimap) {
-    if (this.rawType != other.rawType) {
+    other = other.findMatchingAncestorWith(this);
+    if (other == null) {
       return false;
     }
-    if (this.rawType.typeParameters.isEmpty()) {
+    if (!isGeneric()) {
       // Non-generic nominal types don't contribute to the unification.
       return true;
     }
@@ -367,11 +377,53 @@ public final class NominalType {
       return true;
     }
     boolean hasUnified = true;
-    for (String typeParam : rawType.typeParameters) {
-      hasUnified = hasUnified && typeMap.get(typeParam).unifyWithSubtype(
-          other.typeMap.get(typeParam), typeParameters, typeMultimap);
+    for (String typeParam : this.rawType.typeParameters) {
+      JSType fromOtherMap = other.typeMap.get(typeParam);
+      Preconditions.checkNotNull(fromOtherMap,
+          "Type variable %s not found in map %s", typeParam, other.typeMap);
+      hasUnified = hasUnified && this.typeMap.get(typeParam)
+          .unifyWithSubtype(fromOtherMap, typeParameters, typeMultimap);
     }
-    return hasUnified;
+    return hasUnified && isInvariantWith(typeMultimap, other);
+  }
+
+  // Returns a type with the same raw type as other, but possibly different type maps.
+  private NominalType findMatchingAncestorWith(NominalType other) {
+    RawNominalType thisRaw = this.rawType;
+    if (thisRaw == other.rawType) {
+      return this;
+    }
+    if (isInterface() && other.isClass()) {
+      return null;
+    }
+    if (other.isClass()) {
+      if (thisRaw.superClass == null) {
+        return null;
+      }
+      return getInstantiatedSuperclass().findMatchingAncestorWith(other);
+    }
+    for (NominalType interf : getInstantiatedInterfaces()) {
+      NominalType nt = interf.findMatchingAncestorWith(other);
+      if (nt != null) {
+        return nt;
+      }
+    }
+    return null;
+  }
+
+  private boolean isInvariantWith(Multimap<String, JSType> typeMultimap, NominalType other) {
+    Preconditions.checkState(isGeneric());
+    Preconditions.checkState(this.rawType == other.rawType);
+    Map<String, JSType> newTypeMap = new LinkedHashMap<>();
+    for (String typeVar : typeMultimap.keySet()) {
+      Collection<JSType> c = typeMultimap.get(typeVar);
+      if (c.size() != 1) {
+        return false;
+      }
+      newTypeMap.put(typeVar, Preconditions.checkNotNull(Iterables.getOnlyElement(c)));
+    }
+    NominalType instantiated = instantiateGenerics(newTypeMap);
+    return Objects.equals(instantiated.typeMap, other.typeMap);
   }
 
   @Override
@@ -416,6 +468,11 @@ public final class NominalType {
     private PersistentMap<String, Property> protoProps = PersistentMap.create();
     // The "static" properties of the constructor are stored in the namespace.
     boolean isFinalized = false;
+    // Consider a generic type A<T> which inherits from a generic type B<T>.
+    // All instantiated A classes, such as A<number>, A<string>, etc,
+    // have the same superclass and interfaces fields, because they have the
+    // same raw type. You need to instantiate these fields to get the correct
+    // type maps, eg, see NominalType#isSubtypeOf.
     private NominalType superClass = null;
     private ImmutableSet<NominalType> interfaces = null;
     private final boolean isInterface;
@@ -503,6 +560,11 @@ public final class NominalType {
 
     public boolean isDict() {
       return objectKind.isDict();
+    }
+
+    private boolean isRawSubtypeOf(RawNominalType other) {
+      return other.isClass() ? isClass() && hasAncestorClass(other)
+          : hasAncestorInterface(other);
     }
 
     ImmutableList<String> getTypeParameters() {
@@ -797,7 +859,9 @@ public final class NominalType {
       boolean firstIteration = true;
       builder.append("<");
       for (String typeParam : typeParameters) {
-        if (!firstIteration) {
+        if (firstIteration) {
+          firstIteration = false;
+        } else {
           builder.append(',');
         }
         JSType concrete = typeMap.get(typeParam);

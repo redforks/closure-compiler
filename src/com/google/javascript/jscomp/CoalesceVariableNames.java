@@ -18,8 +18,6 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.ControlFlowGraph.AbstractCfgNodeTraversalCallback;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.DataFlowAnalysis.FlowState;
@@ -38,7 +36,9 @@ import com.google.javascript.rhino.Node;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Reuse variable names if possible.
@@ -79,7 +79,7 @@ class CoalesceVariableNames extends AbstractPostOrderCallback implements
     Preconditions.checkState(!compiler.getLifeCycleStage().isNormalized());
 
     this.compiler = compiler;
-    colorings = Lists.newLinkedList();
+    colorings = new LinkedList<>();
     this.usePseudoNames = usePseudoNames;
   }
 
@@ -172,7 +172,7 @@ class CoalesceVariableNames extends AbstractPostOrderCallback implements
       // we should not sacrifice performance for non-debugging compilation to
       // make this fast.
       String pseudoName = null;
-      Set<String> allMergedNames = Sets.newTreeSet();
+      Set<String> allMergedNames = new TreeSet<>();
       for (Iterator<Var> i = t.getScope().getVars(); i.hasNext();) {
         Var iVar = i.next();
 

@@ -1147,6 +1147,14 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         NewTypeInference.INVALID_OPERAND_TYPE);
   }
 
+  public void testTypedefIsUndefined() {
+    typeCheck(
+        "function f() {\n"
+        + "  /** @typedef {string} */ var x;\n"
+        + "  /** @type {undefined} */ var y = x;\n"
+        + "}");
+  }
+
   public void testFunctionsInsideFunctions() {
     typeCheck(
         "(function() {\n"
@@ -1812,7 +1820,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     typeCheck(
         CLOSURE_BASE + "/** @constructor */ function Foo() {}\n"
-        + "function f(/** (Array.<string>|Foo) */ o) {\n"
+        + "function f(/** (Array<string>|Foo) */ o) {\n"
         + "  goog.asserts.assert(o instanceof Array);\n"
         + "  var /** string */ s = o.length;\n"
         + "}",
@@ -3587,6 +3595,19 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + " */\n"
         + "function f(x, y) { x = y; }",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    // When getting a method signature from the parent, the receiver type is
+    // still the child's type.
+    typeCheck(
+        "/** @interface */\n"
+        + "function High() {}\n"
+        + "/** @param {number} x */\n"
+        + "High.prototype.method = function (x) {};\n"
+        + "/** @constructor @implements {High} */\n"
+        + "function Low() {}\n"
+        + "Low.prototype.method = function (x) {\n"
+        + "  var /** !Low */ y = this;\n"
+        + "};");
   }
 
   public void testInheritanceImplicitObjectSubtyping() {
@@ -4350,6 +4371,19 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @const */ var ns = {};\n"
         + "/** @type {number} */ ns.n = 5;\n"
         + "/** @const */ var x = ns.n;\n",
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+  }
+
+  public void testDontInferUndeclaredFunctionReturn() {
+    typeCheck(
+        "function f() {}\n"
+        + "/** @const */ var x = f();",
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+
+    typeCheck(
+        "/** @const */ var ns = {};\n"
+        + "ns.f = function() {}\n"
+        + "/** @const */ var x = f();",
         GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
   }
 
@@ -5323,12 +5357,12 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "function f() { return 'str'; }");
   }
 
-  public void testUnifyWithGenericUnion() {
+  public void testUnificationWithGenericUnion() {
     typeCheck(
         "/** @constructor @template T */ function Foo(){}\n"
         + "/**\n"
         + " * @template T\n"
-        + " * @param {!Array.<T>|!Foo.<T>} arr\n"
+        + " * @param {!Array<T>|!Foo<T>} arr\n"
         + " * @return {T}\n"
         + " */\n"
         + "function get(arr) {\n"
@@ -5340,7 +5374,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
     typeCheck(
         "/**\n"
         + " * @template T\n"
-        + " * @param {Array.<T>} arr\n"
+        + " * @param {Array<T>} arr\n"
         + " * @return {T|undefined}\n"
         + " */\n"
         + "function get(arr) {\n"
@@ -5354,7 +5388,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
     typeCheck(
         "/**\n"
         + " * @template T\n"
-        + " * @param {Array.<T>} arr\n"
+        + " * @param {Array<T>} arr\n"
         + " * @return {T|undefined}\n"
         + " */\n"
         + "function get(arr) {\n"
@@ -5370,7 +5404,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @constructor @template U */ function Foo(/** U */ x){}\n"
         + "/**\n"
         + " * @template T\n"
-        + " * @param {U|!Array.<T>} arr\n"
+        + " * @param {U|!Array<T>} arr\n"
         + " * @return {U}\n"
         + " */\n"
         + "Foo.prototype.get = function(arr, /** ? */ opt_arg) {\n"
@@ -5383,7 +5417,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @constructor @template U */ function Foo(/** U */ x){}\n"
         + "/**\n"
         + " * @template T\n"
-        + " * @param {U|!Array.<T>} arr\n"
+        + " * @param {U|!Array<T>} arr\n"
         + " * @return {U}\n"
         + " */\n"
         + "Foo.prototype.get = function(arr, /** ? */ opt_arg) {\n"
@@ -5393,6 +5427,22 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "  var /** null */ x = this.get([5], 1);\n"
         + "}",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "/**\n"
+        + " * @template T\n"
+        + " * @constructor\n"
+        + " */\n"
+        + "function Bar() {}\n"
+        + "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {!Bar<(!Bar<T>|!Foo)>} x\n"
+        + " */\n"
+        + "function f(x) {}\n"
+        + "f(/** @type {!Bar<!Bar<number>>} */ (new Bar));",
+        NewTypeInference.FAILED_TO_UNIFY);
   }
 
   public void testBoxedUnification() {
@@ -5411,15 +5461,15 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + " */\n"
         + "function Map(key, val) {};\n"
         + "/**\n"
-        + " * @param {!Map.<K, (V | !Box.<V>)>} inMap\n"
+        + " * @param {!Map<K, (V | !Box<V>)>} inMap\n"
         + " * @constructor\n"
         + " * @template K, V\n"
         + " */\n"
         + "function WrappedMap(inMap){};\n"
-        + "/** @return {(boolean |!Box.<boolean>)} */\n"
+        + "/** @return {(boolean |!Box<boolean>)} */\n"
         + "function getUnion(/** ? */ u) { return u; }\n"
         + "var inMap = new Map('asdf', getUnion(123));\n"
-        + "/** @param {!WrappedMap.<string, boolean>} x */\n"
+        + "/** @param {!WrappedMap<string, boolean>} x */\n"
         + "function getWrappedMap(x) {}\n"
         + "getWrappedMap(new WrappedMap(inMap));");
   }
@@ -6152,6 +6202,19 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "/** @constructor @implements {I<number>} */\n"
         + "function Foo() {}\n"
         + "Foo.prototype.bar = function(x) {};\n"
+        + "(new Foo).bar(123);");
+
+    typeCheck(
+        "/**\n"
+        + " * @template T\n"
+        + " * @interface\n"
+        + " */\n"
+        + "function I() {}\n"
+        + "/** @param {T} x */\n"
+        + "I.prototype.bar = function(x) {};\n"
+        + "/** @constructor @implements {I<number>} */\n"
+        + "function Foo() {}\n"
+        + "Foo.prototype.bar = function(x) {};\n"
         + "(new Foo).bar('str');",
         NewTypeInference.INVALID_ARGUMENT_TYPE);
 
@@ -6326,6 +6389,53 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "/** @constructor @implements {Foo<number>} */\n"
         + "function A() {}\n"
         + "var /** Foo<number> */ x = new A();");
+
+    typeCheck(
+        "/** @interface */\n"
+        + "function High() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {T} x\n"
+        + " * @return {T}\n"
+        + " */\n"
+        + "High.prototype.method = function (x) {};\n"
+        + "/** @constructor @implements {High} */\n"
+        + "function Low() {}\n"
+        + "Low.prototype.method = function (x) {\n"
+        + "  return x;\n"
+        + "};\n"
+        + "(new Low).method(123) - 123;");
+
+    typeCheck(
+        "/** @interface */\n"
+        + "function High() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {T} x\n"
+        + " * @return {T}\n"
+        + " */\n"
+        + "High.prototype.method = function (x) {};\n"
+        + "/** @constructor @implements {High} */\n"
+        + "function Low() {}\n"
+        + "Low.prototype.method = function (x) {\n"
+        + "  return x;\n"
+        + "};\n"
+        + "(new Low).method('str') - 123;",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(
+        "/**\n"
+        + " * @template T\n"
+        + " * @interface\n"
+        + " */\n"
+        + "function High() {}\n"
+        + "/** @return {T} */\n"
+        + "High.prototype.method = function () {};\n"
+        + "/** @constructor @implements {High} */\n"
+        + "function Low() {}\n"
+        + "Low.prototype.method = function () { return /** @type {?} */ (null); };\n"
+        + "(new Low).method() - 123;\n"
+        + "(new Low).method() < 'asdf';");
   }
 
   public void testGenericsSubtyping() {
@@ -6787,6 +6897,17 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         NewTypeInference.INVALID_OPERAND_TYPE);
   }
 
+  public void testInferConstTypeFromQualifiedName() {
+    typeCheck(
+        "/** @const */ var ns = {}\n"
+        + "/** @return {string} */ ns.f = function() { return 'str'; };\n"
+        + "/** @const */ var s = ns.f();\n"
+        + "function f() {\n"
+        + "  s - 1;\n"
+        + "}",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+  }
+
   public void testInferConstTypeFromGenerics() {
     typeCheck(
         "/**\n"
@@ -7040,6 +7161,14 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
     typeCheck("(/** @type {(number|string)} */ (1));");
 
     typeCheck("(/** @type {number} */ (/** @type {?} */ ('asdf')))");
+
+    // Ignore null when checking whether we are casting to a subtype
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Parent() {}\n"
+        + "/** @constructor @extends {Parent} */\n"
+        + "function Child() {}\n"
+        + "/** @type {Child|null} */ (new Parent);\n");
   }
 
   public void testOverride() {
@@ -7629,6 +7758,11 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "/** @constructor @extends {Grandparent} */\n"
         + "var Parent = function(){};\n"
         + "/** @constructor @extends {Parent} */ function Child(){}");
+  }
+
+  public void testDirectPrototypeAssignmentDoesntCrash() {
+    typeCheck("function UndeclaredCtor(parent) {}\n"
+            + "UndeclaredCtor.prototype = {__proto__: Object.prototype};");
   }
 
   public void testDebuggerStatementDoesntCrash() {
@@ -8247,7 +8381,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     typeCheck("/** @final */ var x;", GlobalTypeInfo.CONST_WITHOUT_INITIALIZER);
 
-    typeCheckCustomExterns("/** @const {number} */ var x;", "");
+    typeCheckCustomExterns(DEFAULT_EXTERNS + "/** @const {number} */ var x;", "");
 
     // TODO(dimvar): must fix externs initialization
     // typeCheck("/** @const {number} */ var x;", "x - 5;");
@@ -8330,7 +8464,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "function f() { x = 2; }",
         NewTypeInference.CONST_REASSIGNED);
 
-    typeCheckCustomExterns("/** @const {number} */ var x;", "x = 2;",
+    typeCheckCustomExterns(
+        DEFAULT_EXTERNS + "/** @const {number} */ var x;", "x = 2;",
         NewTypeInference.CONST_REASSIGNED);
 
     typeCheck(
@@ -8512,7 +8647,9 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "}",
         NewTypeInference.INVALID_OPERAND_TYPE);
 
-    typeCheck("/** @const */\n"
+    typeCheck(
+        "/** @constructor */ function RegExp(){}\n"
+        + "/** @const */\n"
         + "var r = /find/;");
 
     typeCheck(
@@ -9283,6 +9420,32 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "function f(x) { return x; }\n"
         + "var /** (E2|string) */ x = f('str');",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "/** @enum */\n"
+        + "var E = { A: 1 };\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {number|!Array<T>} x\n"
+        + " */\n"
+        + "function f(x) {}\n"
+        + "f(E.A);\n"
+        + "f(123);\n");
+
+    typeCheck(
+        "/** @enum {string} */\n"
+        + "var e1 = { A: '' };\n"
+        + "/** @enum {string} */\n"
+        + "var e2 = { B: '' };\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {T|e1} x\n"
+        + " * @return {T}\n"
+        + " */\n"
+        + "function f(x) { return /** @type {T} */ (x); }\n"
+        + "/** @param {number|e2} x */\n"
+        + "function g(x) { f(x) - 5; }",
+        NewTypeInference.INVALID_OPERAND_TYPE);
   }
 
   public void testEnumJoinSpecializeMeet() {
@@ -10167,7 +10330,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
     // types, then we can also fix this.
     // Currently, the type checker doesn't know what !Foo is.
     typeCheckCustomExterns(
-        "var Bar;",
+        DEFAULT_EXTERNS + "var Bar;",
         "/**\n"
         + " * @constructor\n"
         + " * @final\n"
@@ -10727,5 +10890,258 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "function f(/** number */ x, w) {\n"
         + "  function h() { return (w + 2) - 5; }\n"
         + "}\n");
+  }
+
+  public void testPlus() {
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "/** @param {!Foo} x */\n"
+        + "function f(x, i) {\n"
+        + "  var /** string */ s = x[i];\n"
+        + "  var /** number */ y = x[i] + 123;\n"
+        + "}");
+
+    typeCheck(
+        "function f(/** ? */ x) {\n"
+        + "  var /** string */ s = '' + x;\n"
+        + "}");
+
+    typeCheck(
+        "function f(/** ? */ x) {\n"
+        + "  var /** number */ s = '' + x;\n"
+        + "}",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "function f(/** ? */ x, /** ? */ y) {\n"
+        + "  var /** number */ s = x + y;\n"
+        + "}");
+
+    typeCheck(
+        "function f(/** * */ x) {\n"
+        + "  var /** number */ n = x + 1;\n"
+        + "  var /** string */ s = 1 + x;\n"
+        + "}",
+        NewTypeInference.INVALID_OPERAND_TYPE,
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(
+        "var /** number */ n = 1 + null;\n"
+        + "var /** string */ s = 1 + null;",
+        NewTypeInference.INVALID_OPERAND_TYPE,
+        NewTypeInference.INVALID_OPERAND_TYPE,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "var /** number */ n = undefined + 2;\n"
+        + "var /** string */ s = undefined + 2;",
+        NewTypeInference.INVALID_OPERAND_TYPE,
+        NewTypeInference.INVALID_OPERAND_TYPE,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "var /** number */ n = 3 + true;\n"
+        + "var /** string */ s = 3 + true;",
+        NewTypeInference.INVALID_OPERAND_TYPE,
+        NewTypeInference.INVALID_OPERAND_TYPE,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheckCustomExterns(
+        DEFAULT_EXTERNS + "/** @type {number} */ var NaN;",
+        "var /** number */ n = NaN + 1;\n"
+        + "var /** string */ s = NaN + 1;",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testUndefinedFunctionCtorNoCrash() {
+    typeCheckCustomExterns("", "function f(x) {}",
+        GlobalTypeInfo.FUNCTION_CONSTRUCTOR_NOT_DEFINED);
+
+    // Test that NTI is not run
+    typeCheckCustomExterns("", "function f(x) { 1 - 'asdf'; }",
+        GlobalTypeInfo.FUNCTION_CONSTRUCTOR_NOT_DEFINED);
+  }
+
+  public void testTrickyPropertyJoins() {
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "/** @type {number} */\n"
+        + "Foo.prototype.length;\n"
+        + "/** @param {{length:number}|!Foo} x */\n"
+        + "function f(x) {\n"
+        + "  return x.length - 123;\n"
+        + "}");
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "/** @type {number} */\n"
+        + "Foo.prototype.length;\n"
+        + "/** @param {null|{length:number}|!Foo} x */\n"
+        + "function f(x) {\n"
+        + "  return x.length - 123;\n"
+        + "}",
+        NewTypeInference.NULLABLE_DEREFERENCE);
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() {}\n"
+        + "/** @type {number} */\n"
+        + "Foo.prototype.length;\n"
+        + "/** @param {null|!Foo|{length:number}} x */\n"
+        + "function f(x) {\n"
+        + "  return x.length - 123;\n"
+        + "}",
+        NewTypeInference.NULLABLE_DEREFERENCE);
+  }
+
+  public void testJoinOfClassyAndLooseObject() {
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo(){}\n"
+        + "/** @type {number} */\n"
+        + "Foo.prototype.p = 5;\n"
+        + "function f(o) {\n"
+        + "  if (o.p == 5) {\n"
+        + "    (function(/** !Foo */ x){})(o);\n"
+        + "  }\n"
+        + "}");
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Foo() { this.p = 123; }\n"
+        + "function f(x) {\n"
+        + "  var y;\n"
+        + "  if (x.p) {\n"
+        + "    y = x;\n"
+        + "  } else {\n"
+        + "    y = new Foo;\n"
+        + "    y.prop = 'asdf';\n"
+        + "  }\n"
+        + "  y.p -123;\n"
+        + "}");
+  }
+
+  public void testUnificationWithSubtyping() {
+    typeCheck(
+        "/** @constructor */ function Foo() {}\n"
+        + "/** @constructor @extends {Foo} */ function Bar() {}\n"
+        + "/** @constructor @extends {Foo} */ function Baz() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {T|!Foo} x\n"
+        + " * @param {T} y\n"
+        + " * @return {T}\n"
+        + " */\n"
+        + "function f(x, y) { return y; }\n"
+        + "/** @param {!Bar|!Baz} x */\n"
+        + "function g(x) {\n"
+        + "  f(x, 123) - 123;\n"
+        + "}");
+
+    typeCheck(
+        "/** @constructor */\n"
+        + "function Parent() {}\n"
+        + "/** @constructor @extends {Parent} */\n"
+        + "function Child() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {T|!Parent} x\n"
+        + " * @return {T}\n"
+        + " */\n"
+        + "function f(x) { return /** @type {?} */ (x); }\n"
+        + "function g(/** (number|!Child) */ x) {\n"
+        + "  f(x) - 5;\n"
+        + "}");
+
+    typeCheck(
+        "/**\n"
+        + " * @constructor\n"
+        + " * @template T\n"
+        + " */\n"
+        + "function Parent() {}\n"
+        + "/**\n"
+        + " * @constructor\n"
+        + " * @extends {Parent<number>}\n"
+        + " */\n"
+        + "function Child() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {!Parent<T>} x\n"
+        + " */\n"
+        + "function f(x) {}\n"
+        + "/**\n"
+        + " * @param {!Child} x\n"
+        + " */\n"
+        + "function g(x) { f(x); }");
+
+    typeCheck(
+        "/**\n"
+        + " * @constructor\n"
+        + " * @template T\n"
+        + " */\n"
+        + "function Parent() {}\n"
+        + "/**\n"
+        + " * @constructor\n"
+        + " * @template U\n"
+        + " * @extends {Parent<U>}\n"
+        + " */\n"
+        + "function Child() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {!Child<T>} x\n"
+        + " */\n"
+        + "function f(x) {}\n"
+        + "/**\n"
+        + " * @param {!Parent<number>} x\n"
+        + " */\n"
+        + "function g(x) { f(x); }",
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck(
+        "/**\n"
+        + " * @template T\n"
+        + " * @constructor\n"
+        + " */\n"
+        + "function High() {}\n"
+        + "/** @constructor @extends {High<number>} */\n"
+        + "function Low() {}\n"
+        + "/**\n"
+        + " * @template T\n"
+        + " * @param {!High<T>} x\n"
+        + " * @return {T}\n"
+        + " */\n"
+        + "function f(x) { return /** @type {?} */ (null); }\n"
+        + "var /** string */ s = f(new Low);",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "/**\n"
+        + " * @constructor\n"
+        + " * @template T\n"
+        + " */\n"
+        + "function High() {}\n"
+        + "/** @return {T} */\n"
+        + "High.prototype.get = function() { return /** @type {?} */ (null); };\n"
+        + "/**\n"
+        + " * @constructor\n"
+        + " * @template U\n"
+        + " * @extends {High<U>}\n"
+        + " */\n"
+        + "function Low() {}\n"
+        + "/**\n"
+        + " * @template V\n"
+        + " * @param {!High<V>} x\n"
+        + " * @return {V}\n"
+        + " */\n"
+        + "function f(x) { return x.get(); }\n"
+        + "/** @param {!Low<number>} x */\n"
+        + "function g(x) {\n"
+        + "  var /** number */ n = f(x);\n"
+        + "  var /** string */ s = f(x);\n"
+        + "}",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
   }
 }

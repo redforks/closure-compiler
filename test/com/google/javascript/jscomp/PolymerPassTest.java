@@ -19,6 +19,7 @@ import static com.google.javascript.jscomp.PolymerPass.POLYMER_DESCRIPTOR_NOT_VA
 import static com.google.javascript.jscomp.PolymerPass.POLYMER_INVALID_PROPERTY;
 import static com.google.javascript.jscomp.PolymerPass.POLYMER_MISSING_IS;
 import static com.google.javascript.jscomp.PolymerPass.POLYMER_UNEXPECTED_PARAMS;
+import static com.google.javascript.jscomp.PolymerPass.POLYMER_UNQUALIFIED_BEHAVIOR;
 import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
 
 import com.google.common.base.Joiner;
@@ -111,7 +112,21 @@ public class PolymerPassTest extends CompilerTestCase {
       " * @return {!function()}",
       " */",
       "var Polymer = function(a) {};",
-      "var alert = function(msg) {};");
+      "var alert = function(msg) {};",
+      "/** @interface */",
+      "var PolymerXInputElementInterface = function() {};");
+
+  private static final String READONLY_EXTERNS = EXTERNS + Joiner.on("\n").join(
+      "/** @interface */",
+      "var Polymera_BInterface = function() {};",
+      "/** @param {!Array} pets **/",
+      "Polymera_BInterface.prototype._setPets;");
+
+  private static final String BEHAVIOR_READONLY_EXTERNS = EXTERNS + Joiner.on("\n").join(
+      "/** @interface */",
+      "var PolymerAInterface = function() {};",
+      "/** @param {boolean} isFun **/",
+      "PolymerAInterface.prototype._setIsFun;");
 
   public PolymerPassTest() {
     super(EXTERNS);
@@ -144,7 +159,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerXInterface} */",
         "var X = function() {};",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
@@ -158,7 +173,11 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/**",
+        " * @implements {PolymerXElementInterface}",
+        " * @constructor @extends {PolymerElement}",
+        " * @export",
+        " */",
         "var XElement = function() {};",
         "Polymer(/** @lends {XElement.prototype} */ {",
         "  is: 'x',",
@@ -174,7 +193,7 @@ public class PolymerPassTest extends CompilerTestCase {
 
         Joiner.on("\n").join(
         "var x = {};",
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/** @constructor @extends {PolymerElement} @export @implements {Polymerx_ZInterface} */",
         "x.Z = function() {};",
         "x.Z = Polymer(/** @lends {x.Z.prototype} */ {",
         "  is: 'x-element',",
@@ -199,7 +218,7 @@ public class PolymerPassTest extends CompilerTestCase {
         Joiner.on("\n").join(
         "var x = {};",
         "(function() {",
-        "  /** @constructor @extends {PolymerElement} @export */",
+        "  /** @constructor @extends {PolymerElement} @export @implements {Polymerx_ZInterface}*/",
         "  x.Z = function() {};",
         "  x.Z = Polymer(/** @lends {x.Z.prototype} */ {",
         "    is: 'x-element',",
@@ -224,7 +243,11 @@ public class PolymerPassTest extends CompilerTestCase {
         "})()"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/**",
+        " * @constructor @extends {PolymerElement}",
+        " * @export",
+        " * @implements {PolymerXElementInterface}",
+        " */",
         "var XElement = function() {};",
         "(function() {",
         "  Polymer(/** @lends {XElement.prototype} */ {",
@@ -250,7 +273,11 @@ public class PolymerPassTest extends CompilerTestCase {
         "})()"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/**",
+        " * @constructor @extends {PolymerElement}",
+        " * @export",
+        " * @implements {PolymerFooThingInterface}",
+        " */",
         "var FooThing = function() {};",
         "(function() {",
         "  FooThing = Polymer(/** @lends {FooThing.prototype} */ {",
@@ -268,19 +295,20 @@ public class PolymerPassTest extends CompilerTestCase {
         "  /**",
         "   * @param {string} name",
         "   */",
-        "  constructor: function(name) { alert('hi, ' + name); },",
+        "  factoryImpl: function(name) { alert('hi, ' + name); },",
         "});"),
 
         Joiner.on("\n").join(
         "/**",
         " * @param {string} name",
         " * @constructor @extends {PolymerElement}",
-        " * @export ",
+        " * @export",
+        " * @implements {PolymerXInterface}",
         " */",
         "var X = function(name) { alert('hi, ' + name); };",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
-        "  constructor: function(name) { alert('hi, ' + name); },",
+        "  factoryImpl: function(name) { alert('hi, ' + name); },",
         "});"));
   }
 
@@ -298,7 +326,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerXInterface}*/",
         "var X = function() {};",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
@@ -322,7 +350,11 @@ public class PolymerPassTest extends CompilerTestCase {
 
     test(js,
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerInputElement} @export */",
+        "/**",
+        " * @constructor @extends {PolymerInputElement}",
+        " * @export",
+        " * @implements {PolymerXInputElementInterface}",
+        " */",
         "var XInputElement = function() {};",
         "Polymer(/** @lends {XInputElement.prototype} */ {",
         "  is: 'x-input',",
@@ -342,8 +374,11 @@ public class PolymerPassTest extends CompilerTestCase {
         "  is: 'y-input',",
         "  extends: 'input',",
         "});");
+    String newExterns = INPUT_EXTERNS + "\n" + Joiner.on("\n").join(
+        "/** @interface */",
+        "var PolymerYInputElementInterface = function() {};");
 
-    testExternChanges(EXTERNS, js, INPUT_EXTERNS);
+    testExternChanges(EXTERNS, js, newExterns);
   }
 
   public void testPropertiesAddedToPrototype() {
@@ -361,6 +396,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "      notify: true,",
         "    },",
         "    name: String,",
+        "    thingToDo: Function,",
         "  },",
         "});"),
 
@@ -368,7 +404,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "/** @constructor */",
         "var User = function() {};",
         "var a = {};",
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/** @constructor @extends {PolymerElement} @export @implements {Polymera_BInterface}*/",
         "a.B = function() {};",
         "/** @type {!User} @private @export */",
         "a.B.prototype.user_;",
@@ -376,6 +412,8 @@ public class PolymerPassTest extends CompilerTestCase {
         "a.B.prototype.pets;",
         "/** @type {string} @export */",
         "a.B.prototype.name;",
+        "/** @type {!Function} @export */",
+        "a.B.prototype.thingToDo;",
         "a.B = Polymer(/** @lends {a.B.prototype} */ {",
         "  is: 'x-element',",
         "  properties: {",
@@ -385,12 +423,13 @@ public class PolymerPassTest extends CompilerTestCase {
         "      notify: true,",
         "    },",
         "    name: String,",
+        "    thingToDo: Function,",
         "  },",
         "});"));
   }
 
   public void testReadOnlyPropertySetters() {
-    test(Joiner.on("\n").join(
+    String js = Joiner.on("\n").join(
         "var a = {};",
         "a.B = Polymer({",
         "  is: 'x-element',",
@@ -401,22 +440,19 @@ public class PolymerPassTest extends CompilerTestCase {
         "    },",
         "    name: String,",
         "  },",
-        "});"),
+        "});");
 
+    test(js,
         Joiner.on("\n").join(
         "var a = {};",
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/** @constructor @extends {PolymerElement} @implements {Polymera_BInterface} @export */",
         "a.B = function() {};",
         "/** @type {!Array} @export */",
         "a.B.prototype.pets;",
-        "/**",
-        " * @param {!Array} pets",
-        " * @private",
-        " * @export",
-        " */",
-        "a.B.prototype._setPets = function(pets) {};",
         "/** @type {string} @export */",
         "a.B.prototype.name;",
+        "/** @override */",
+        "a.B.prototype._setPets = function(pets) {};",
         "a.B = Polymer(/** @lends {a.B.prototype} */ {",
         "  is: 'x-element',",
         "  properties: {",
@@ -427,6 +463,8 @@ public class PolymerPassTest extends CompilerTestCase {
         "    name: String,",
         "  },",
         "});"));
+
+    testExternChanges(EXTERNS, js, READONLY_EXTERNS);
   }
 
   public void testThisTypeAddedToFunctions() {
@@ -451,7 +489,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "});"),
 
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerXInterface} */",
         "var X = function() {};",
         "X = Polymer(/** @lends {X.prototype} */ {",
         "  is: 'x-element',",
@@ -473,6 +511,379 @@ public class PolymerPassTest extends CompilerTestCase {
         "    alert('Hello, ' + name);",
         "  },",
         "});"));
+  }
+
+  public void testSimpleBehavior() {
+    test(Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: Boolean",
+        "  },",
+        "  /** @param {string} funAmount */",
+        "  doSomethingFun: function(funAmount) { alert('Something ' + funAmount + ' fun!'); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "var A = Polymer({",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ FunBehavior ],",
+        "});"),
+
+        Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: Boolean",
+        "  },",
+        "  /** @param {string} funAmount */",
+        "  doSomethingFun: function(funAmount) { alert('Something ' + funAmount + ' fun!'); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerAInterface}*/",
+        "var A = function() {};",
+        "/** @type {!Array} @export */",
+        "A.prototype.pets;",
+        "/** @type {string} @export */",
+        "A.prototype.name;",
+        "/** @type {boolean} @export */",
+        "A.prototype.isFun;",
+        "/** @param {string} funAmount */",
+        "A.prototype.doSomethingFun = function(funAmount) {",
+        "  alert('Something ' + funAmount + ' fun!');",
+        "};",
+        "A = Polymer(/** @lends {A.prototype} */ {",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ FunBehavior ],",
+        "});"));
+  }
+
+  public void testArrayBehavior() {
+    test(Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: Boolean",
+        "  },",
+        "  /** @param {string} funAmount */",
+        "  doSomethingFun: function(funAmount) { alert('Something ' + funAmount + ' fun!'); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "var RadBehavior = {",
+        "  properties: {",
+        "    howRad: Number",
+        "  },",
+        "  /** @param {number} radAmount */",
+        "  doSomethingRad: function(radAmount) { alert('Something ' + radAmount + ' rad!'); },",
+        "  /** @override */",
+        "  ready: function() {}",
+        "};",
+        "var SuperCoolBehaviors = [FunBehavior, RadBehavior];",
+        "var BoringBehavior = {",
+        "  properties: {",
+        "    boringString: String",
+        "  },",
+        "  /** @param {boolean} boredYet */",
+        "  doSomething: function(boredYet) { alert(boredYet + ' ' + this.boringString); },",
+        "};",
+        "var A = Polymer({",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ SuperCoolBehaviors, BoringBehavior ],",
+        "});"),
+
+        Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: Boolean",
+        "  },",
+        "  /** @param {string} funAmount */",
+        "  doSomethingFun: function(funAmount) { alert('Something ' + funAmount + ' fun!'); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "var RadBehavior = {",
+        "  properties: {",
+        "    howRad: Number",
+        "  },",
+        "  /** @param {number} radAmount */",
+        "  doSomethingRad: function(radAmount) { alert('Something ' + radAmount + ' rad!'); },",
+        "  /** @override */",
+        "  ready: function() {}",
+        "};",
+        "var SuperCoolBehaviors = [FunBehavior, RadBehavior];",
+        "var BoringBehavior = {",
+        "  properties: {",
+        "    boringString: String",
+        "  },",
+        "  /** @param {boolean} boredYet */",
+        "  doSomething: function(boredYet) { alert(boredYet + ' ' + this.boringString); },",
+        "};",
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerAInterface}*/",
+        "var A = function() {};",
+        "/** @type {!Array} @export */",
+        "A.prototype.pets;",
+        "/** @type {string} @export */",
+        "A.prototype.name;",
+        "/** @type {boolean} @export */",
+        "A.prototype.isFun;",
+        "/** @type {number} @export */",
+        "A.prototype.howRad;",
+        "/** @type {string} @export */",
+        "A.prototype.boringString;",
+        "/** @param {string} funAmount */",
+        "A.prototype.doSomethingFun = function(funAmount) {",
+        "  alert('Something ' + funAmount + ' fun!');",
+        "};",
+        "/** @param {number} radAmount */",
+        "A.prototype.doSomethingRad = function(radAmount) {",
+        "  alert('Something ' + radAmount + ' rad!');",
+        "};",
+        "/** @param {boolean} boredYet */",
+        "A.prototype.doSomething = function(boredYet) {",
+        "  alert(boredYet + ' ' + this.boringString);",
+        "};",
+        "A = Polymer(/** @lends {A.prototype} */ {",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ SuperCoolBehaviors, BoringBehavior ],",
+        "});"));
+  }
+
+  public void testInlineLiteralBehavior() {
+    String behaviors = Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: Boolean",
+        "  },",
+        "  /** @param {string} funAmount */",
+        "  doSomethingFun: function(funAmount) { alert('Something ' + funAmount + ' fun!'); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "var SuperCoolBehaviors = [FunBehavior, {",
+        "  properties: {",
+        "    howRad: Number",
+        "  },",
+        "  /** @param {number} radAmount */",
+        "  doSomethingRad: function(radAmount) { alert('Something ' + radAmount + ' rad!'); },",
+        "  /** @override */",
+        "  ready: function() {}",
+        "}];");
+
+    test(behaviors + Joiner.on("\n").join(
+        "var A = Polymer({",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ SuperCoolBehaviors ],",
+        "});"),
+
+        behaviors + Joiner.on("\n").join(
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerAInterface}*/",
+        "var A = function() {};",
+        "/** @type {!Array} @export */",
+        "A.prototype.pets;",
+        "/** @type {string} @export */",
+        "A.prototype.name;",
+        "/** @type {boolean} @export */",
+        "A.prototype.isFun;",
+        "/** @type {number} @export */",
+        "A.prototype.howRad;",
+        "/** @param {string} funAmount */",
+        "A.prototype.doSomethingFun = function(funAmount) {",
+        "  alert('Something ' + funAmount + ' fun!');",
+        "};",
+        "/** @param {number} radAmount */",
+        "A.prototype.doSomethingRad = function(radAmount) {",
+        "  alert('Something ' + radAmount + ' rad!');",
+        "};",
+        "A = Polymer(/** @lends {A.prototype} */ {",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ SuperCoolBehaviors ],",
+        "});"));
+  }
+
+  /**
+   * If an element has two or more behaviors which define the same function, only the last
+   * behavior's function should be copied over to the element's prototype.
+   */
+  public void testBehaviorFunctionOverriding() {
+    String behaviors = Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: Boolean",
+        "  },",
+        "  /** @param {boolean} boredYet */",
+        "  doSomething: function(boredYet) { alert(boredYet + ' ' + this.isFun); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "var RadBehavior = {",
+        "  properties: {",
+        "    howRad: Number",
+        "  },",
+        "  /** @param {boolean} boredYet */",
+        "  doSomething: function(boredYet) { alert(boredYet + ' ' + this.howRad); },",
+        "  /** @override */",
+        "  ready: function() {}",
+        "};",
+        "var SuperCoolBehaviors = [FunBehavior, RadBehavior];",
+        "var BoringBehavior = {",
+        "  properties: {",
+        "    boringString: String",
+        "  },",
+        "  /** @param {boolean} boredYet */",
+        "  doSomething: function(boredYet) { alert(boredYet + ' ' + this.boringString); },",
+        "};");
+
+    test(behaviors + Joiner.on("\n").join(
+        "var A = Polymer({",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ SuperCoolBehaviors, BoringBehavior ],",
+        "});"),
+
+        behaviors + Joiner.on("\n").join(
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerAInterface}*/",
+        "var A = function() {};",
+        "/** @type {!Array} @export */",
+        "A.prototype.pets;",
+        "/** @type {string} @export */",
+        "A.prototype.name;",
+        "/** @type {boolean} @export */",
+        "A.prototype.isFun;",
+        "/** @type {number} @export */",
+        "A.prototype.howRad;",
+        "/** @type {string} @export */",
+        "A.prototype.boringString;",
+        "/** @param {boolean} boredYet */",
+        "A.prototype.doSomething = function(boredYet) {",
+        "  alert(boredYet + ' ' + this.boringString);",
+        "};",
+        "A = Polymer(/** @lends {A.prototype} */ {",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ SuperCoolBehaviors, BoringBehavior ],",
+        "});"));
+  }
+
+  public void testBehaviorReadOnlyProp() {
+    String js = Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: {",
+        "      type: Boolean,",
+        "      readOnly: true,",
+        "    },",
+        "  },",
+        "  /** @param {string} funAmount */",
+        "  doSomethingFun: function(funAmount) { alert('Something ' + funAmount + ' fun!'); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "var A = Polymer({",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ FunBehavior ],",
+        "});");
+
+    test(js,
+        Joiner.on("\n").join(
+        "var FunBehavior = {",
+        "  properties: {",
+        "    isFun: {",
+        "      type: Boolean,",
+        "      readOnly: true,",
+        "    },",
+        "  },",
+        "  /** @param {string} funAmount */",
+        "  doSomethingFun: function(funAmount) { alert('Something ' + funAmount + ' fun!'); },",
+        "  /** @override */",
+        "  created: function() {}",
+        "};",
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerAInterface}*/",
+        "var A = function() {};",
+        "/** @type {!Array} @export */",
+        "A.prototype.pets;",
+        "/** @type {string} @export */",
+        "A.prototype.name;",
+        "/** @type {boolean} @export */",
+        "A.prototype.isFun;",
+        "/** @param {string} funAmount */",
+        "A.prototype.doSomethingFun = function(funAmount) {",
+        "  alert('Something ' + funAmount + ' fun!');",
+        "};",
+        "/** @override */",
+        "A.prototype._setIsFun = function(isFun) {};",
+        "A = Polymer(/** @lends {A.prototype} */ {",
+        "  is: 'x-element',",
+        "  properties: {",
+        "    pets: {",
+        "      type: Array,",
+        "      notify: true,",
+        "    },",
+        "    name: String,",
+        "  },",
+        "  behaviors: [ FunBehavior ],",
+        "});"));
+
+    testExternChanges(EXTERNS, js, BEHAVIOR_READONLY_EXTERNS);
   }
 
   public void testInvalid1() {
@@ -511,6 +922,31 @@ public class PolymerPassTest extends CompilerTestCase {
         POLYMER_INVALID_PROPERTY, true);
   }
 
+  public void testInvalidBehavior() {
+    testSame(
+        Joiner.on("\n").join(
+        "(function() {",
+        "  var isNotGloabl = {};",
+        "  Polymer({",
+        "    is: 'x-element',",
+        "    behaviors: [",
+        "      isNotGlobal",
+        "    ],",
+        "  });",
+        "})();"),
+        POLYMER_UNQUALIFIED_BEHAVIOR, true);
+
+    testSame(
+        Joiner.on("\n").join(
+        "Polymer({",
+        "  is: 'x-element',",
+        "  behaviors: [",
+        "    DoesNotExist",
+        "  ],",
+        "});"),
+        POLYMER_UNQUALIFIED_BEHAVIOR, true);
+  }
+
   public void testInvalidTypeAssignment() {
     test(
         Joiner.on("\n").join(
@@ -525,7 +961,7 @@ public class PolymerPassTest extends CompilerTestCase {
         "  },",
         "});"),
         Joiner.on("\n").join(
-        "/** @constructor @extends {PolymerElement} @export */",
+        "/** @constructor @extends {PolymerElement} @export @implements {PolymerXInterface} */",
         "var X = function() {};",
         "/** @type {boolean} @export */",
         "X.prototype.isHappy;",

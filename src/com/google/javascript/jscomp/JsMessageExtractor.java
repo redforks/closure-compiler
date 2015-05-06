@@ -17,10 +17,9 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-
 import java.io.IOException;
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -78,7 +77,7 @@ public final class JsMessageExtractor {
     // Take into account that messages with the same id could be present in the
     // result list. Message could have the same id only in case if they are
     // unnamed and have the same text but located in different source files.
-    private final List<JsMessage> messages = Lists.newLinkedList();
+    private final List<JsMessage> messages = new LinkedList<>();
 
     private ExtractMessagesVisitor(AbstractCompiler compiler) {
       super(compiler, true, style, idGenerator);
@@ -124,7 +123,7 @@ public final class JsMessageExtractor {
     Compiler compiler = new Compiler();
     compiler.init(
         ImmutableList.<SourceFile>of(),
-        Lists.newArrayList(inputs),
+        ImmutableList.copyOf(inputs),
         options);
     compiler.parseInputs();
 

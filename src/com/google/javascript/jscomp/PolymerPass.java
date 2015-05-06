@@ -18,6 +18,8 @@ package com.google.javascript.jscomp;
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.GlobalNamespace.Name;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
@@ -28,6 +30,7 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +39,8 @@ import java.util.Set;
 /**
  * Rewrites "Polymer({})" calls into a form that is suitable for type checking and dead code
  * elimination. Also ensures proper format and types.
+ *
+ * <p>Only works with Polymer version: 0.8
  *
  * @author jlklein@google.com (Jeremy Klein)
  */
@@ -57,6 +62,14 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
   static final DiagnosticType POLYMER_INVALID_PROPERTY = DiagnosticType.error(
       "JSC_POLYMER_INVALID_PROPERTY", "Polymer property has an invalid or missing type.");
 
+  static final DiagnosticType POLYMER_INVALID_BEHAVIOR_ARRAY = DiagnosticType.error(
+      "JSC_POLYMER_INVALID_BEHAVIOR_ARRAY", "The behaviors property must be an array literal.");
+
+  static final DiagnosticType POLYMER_UNQUALIFIED_BEHAVIOR = DiagnosticType.error(
+      "JSC_POLYMER_UNQUALIFIED_BEHAVIOR",
+      "Behaviors must be global, fully qualified names which are declared as object literals or "
+      + "array literals of other valid Behaviors.");
+
   static final String VIRTUAL_FILE = "<PolymerPass.java>";
 
   private final AbstractCompiler compiler;
@@ -64,12 +77,16 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
   private Set<String> nativeExternsAdded;
   private final Map<String, String> tagNameMap;
   private List<Node> polymerElementProps;
+  private Set<String> lifecycleCallbacks;
+  private GlobalNamespace globalNames;
 
   public PolymerPass(AbstractCompiler compiler) {
     this.compiler = compiler;
     tagNameMap = TagNameToType.getMap();
     polymerElementProps = new ArrayList<>();
     nativeExternsAdded = new HashSet<>();
+    lifecycleCallbacks = ImmutableSet.of(
+        "created", "attached", "detached", "attributeChanged", "configure", "ready");
   }
 
   @Override
@@ -83,6 +100,8 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       compiler.report(JSError.make(externs, POLYMER_MISSING_EXTERNS));
       return;
     }
+
+    globalNames = new GlobalNamespace(compiler, externs, root);
 
     hotSwapScript(root, null);
   }
@@ -167,20 +186,31 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     }
   }
 
+  private static final class BehaviorDefinition {
+    final List<MemberDefinition> props;
+    final List<MemberDefinition> functionsToCopy;
+
+    BehaviorDefinition(List<MemberDefinition> props, List<MemberDefinition> functionsToCopy) {
+      this.props = props;
+      this.functionsToCopy = functionsToCopy;
+    }
+  }
+
   private static final class ClassDefinition {
     final Node target;
-    final JSDocInfo classInfo;
     final MemberDefinition constructor;
     final String nativeBaseElement;
     final List<MemberDefinition> props;
+    final List<BehaviorDefinition> behaviors;
 
     ClassDefinition(Node target, JSDocInfo classInfo, MemberDefinition constructor,
-        String nativeBaseElement, List<MemberDefinition> props) {
+        String nativeBaseElement, List<MemberDefinition> props,
+        List<BehaviorDefinition> behaviors) {
       this.target = target;
-      this.classInfo = classInfo;
       this.constructor = constructor;
       this.nativeBaseElement = nativeBaseElement;
       this.props = props;
+      this.behaviors = behaviors;
     }
   }
 
@@ -224,7 +254,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     JSDocInfo classInfo = NodeUtil.getBestJSDocInfo(target);
 
     JSDocInfo ctorInfo = null;
-    Node constructor = NodeUtil.getFirstPropMatchingKey(descriptor, "constructor");
+    Node constructor = NodeUtil.getFirstPropMatchingKey(descriptor, "factoryImpl");
     if (constructor == null) {
       constructor = IR.function(IR.name(""), IR.paramList(), IR.block());
       constructor.useSourceInfoFromForTree(callNode);
@@ -235,10 +265,89 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     Node baseClass = NodeUtil.getFirstPropMatchingKey(descriptor, "extends");
     String nativeBaseElement = baseClass == null ? null : baseClass.getString();
 
+    Node behaviorArray = NodeUtil.getFirstPropMatchingKey(descriptor, "behaviors");
+    List<BehaviorDefinition> behaviors = extractBehaviors(behaviorArray);
+    ImmutableList.Builder<MemberDefinition> allProperties = ImmutableList.builder();
+    allProperties.addAll(extractProperties(descriptor));
+    for (BehaviorDefinition behavior : behaviors) {
+      allProperties.addAll(behavior.props);
+    }
+
     ClassDefinition def = new ClassDefinition(target, classInfo,
-        new MemberDefinition(ctorInfo, null, constructor), nativeBaseElement,
-        extractProperties(descriptor));
+        new MemberDefinition(ctorInfo, null, constructor), nativeBaseElement, allProperties.build(),
+        behaviors);
     return def;
+  }
+
+  /**
+   * Extracts all Behaviors from an array recursively. The array must be an array
+   * literal whose value is known at compile-time. Entries in the array can be
+   * object literals or array literals (of other behaviors). Behavior names must be
+   * global, fully qualified names.
+   * @see https://github.com/Polymer/polymer/blob/0.8-preview/PRIMER.md#behaviors
+   * @return A list of all {@code BehaviorDefinitions} in the array.
+   */
+  private List<BehaviorDefinition> extractBehaviors(Node behaviorArray) {
+    if (behaviorArray == null) {
+      return ImmutableList.of();
+    }
+
+    if (!behaviorArray.isArrayLit()) {
+      compiler.report(JSError.make(behaviorArray, POLYMER_INVALID_BEHAVIOR_ARRAY));
+      return ImmutableList.of();
+    }
+
+    ImmutableList.Builder<BehaviorDefinition> behaviors = ImmutableList.builder();
+    for (Node behaviorName : behaviorArray.children()) {
+      if (behaviorName.isObjectLit()) {
+        behaviors.add(new BehaviorDefinition(
+            extractProperties(behaviorName), getBehaviorFunctionsToCopy(behaviorName)));
+        continue;
+      }
+
+      Name behaviorGlobalName = globalNames.getSlot(behaviorName.getQualifiedName());
+      if (behaviorGlobalName == null) {
+        compiler.report(JSError.make(behaviorName, POLYMER_UNQUALIFIED_BEHAVIOR));
+        continue;
+      }
+
+      Node behaviorDeclaration = behaviorGlobalName.getDeclaration().getNode();
+      Node behaviorValue = NodeUtil.getRValueOfLValue(behaviorDeclaration);
+
+      // Individual behaviors can also be arrays of behaviors. Parse them recursively.
+      if (behaviorValue.isArrayLit()) {
+        behaviors.addAll(extractBehaviors(behaviorValue));
+        continue;
+      }
+
+      if (behaviorValue == null || !behaviorValue.isObjectLit()) {
+        compiler.report(JSError.make(behaviorName, POLYMER_UNQUALIFIED_BEHAVIOR));
+        continue;
+      }
+
+      behaviors.add(new BehaviorDefinition(
+          extractProperties(behaviorValue), getBehaviorFunctionsToCopy(behaviorValue)));
+    }
+
+    return behaviors.build();
+  }
+
+  /**
+   * @return A list of functions from a behavior which should be copied to the element prototype.
+   */
+  private List<MemberDefinition> getBehaviorFunctionsToCopy(Node behaviorObjLit) {
+    Preconditions.checkState(behaviorObjLit.isObjectLit());
+    ImmutableList.Builder<MemberDefinition> functionsToCopy = ImmutableList.builder();
+
+    for (Node keyNode : behaviorObjLit.children()) {
+      if (keyNode.isStringKey() && keyNode.getFirstChild().isFunction()
+          && !lifecycleCallbacks.contains(keyNode.getString())) {
+        functionsToCopy.add(new MemberDefinition(NodeUtil.getBestJSDocInfo(keyNode), keyNode,
+          keyNode.getFirstChild()));
+      }
+    }
+
+    return functionsToCopy.build();
   }
 
   private static List<MemberDefinition> extractProperties(Node descriptor) {
@@ -301,6 +410,9 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     }
 
     appendPropertiesToBlock(cls, block);
+    appendBehaviorFunctionsToBlock(cls, block);
+    List<MemberDefinition> readOnlyProps = parseReadOnlyProperties(cls, block);
+    addInterfaceExterns(cls, readOnlyProps);
 
     block.useSourceInfoFromForTree(exprRoot);
     Node stmts = block.removeChildren();
@@ -375,15 +487,55 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
 
       propertyNode.getFirstChild().setJSDocInfo(info.build());
       block.addChildToBack(propertyNode);
+    }
+  }
 
+  /**
+   * Appends all required behavior functions to the given block.
+   */
+  private void appendBehaviorFunctionsToBlock(final ClassDefinition cls, Node block) {
+    String qualifiedPath = cls.target.getQualifiedName() + ".prototype.";
+    Map<String, Node> nameToExprResult = new HashMap<>();
+    for (BehaviorDefinition behavior : cls.behaviors) {
+      for (MemberDefinition behaviorFunction : behavior.functionsToCopy) {
+        String fnName = behaviorFunction.name.getString();
+        // Avoid copying over the same function twice. The last definition always wins.
+        if (nameToExprResult.containsKey(fnName)) {
+          block.removeChild(nameToExprResult.get(fnName));
+        }
+
+        Node exprResult = IR.exprResult(IR.assign(
+            NodeUtil.newQName(compiler, qualifiedPath + fnName),
+            behaviorFunction.value.cloneTree()));
+        JSDocInfoBuilder info = JSDocInfoBuilder.maybeCopyFrom(behaviorFunction.info);
+
+        exprResult.getFirstChild().setJSDocInfo(info.build());
+        block.addChildToBack(exprResult);
+        nameToExprResult.put(fnName, exprResult);
+      }
+    }
+  }
+
+  /**
+   * Generates the _set* setters for readonly properties and appends them to the given block.
+   * @return A List of all readonly properties.
+   */
+  private List<MemberDefinition> parseReadOnlyProperties(final ClassDefinition cls, Node block) {
+    String qualifiedPath = cls.target.getQualifiedName() + ".prototype.";
+    ImmutableList.Builder<MemberDefinition> readOnlyProps = ImmutableList.builder();
+
+    for (MemberDefinition prop : cls.props) {
       // Generate the setter for readOnly properties.
       if (prop.value.isObjectLit()) {
         Node readOnlyValue = NodeUtil.getFirstPropMatchingKey(prop.value, "readOnly");
         if (readOnlyValue != null && readOnlyValue.isTrue()) {
-          block.addChildToBack(makeReadOnlySetter(prop.name.getString(), propType, qualifiedPath));
+          block.addChildToBack(makeReadOnlySetter(prop.name.getString(), qualifiedPath));
+          readOnlyProps.add(prop);
         }
       }
     }
+
+    return readOnlyProps.build();
   }
 
   /**
@@ -408,10 +560,10 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       case "Boolean":
       case "String":
       case "Number":
-      case "Function":
         typeNode = IR.string(typeString.toLowerCase());
         break;
       case "Array":
+      case "Function":
       case "Object":
       case "Date":
         typeNode = new Node(Token.BANG, IR.string(typeString));
@@ -428,17 +580,16 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
    * Adds the generated setter for a readonly property.
    * @see https://www.polymer-project.org/0.8/docs/devguide/properties.html#read-only
    */
-  private Node makeReadOnlySetter(String propName, JSTypeExpression propType,
-      String qualifiedPath) {
+  private Node makeReadOnlySetter(String propName, String qualifiedPath) {
     String setterName = "_set" + propName.substring(0, 1).toUpperCase() + propName.substring(1);
     Node fnNode = IR.function(IR.name(""), IR.paramList(IR.name(propName)), IR.block());
     Node exprResNode = IR.exprResult(
         IR.assign(NodeUtil.newQName(compiler, qualifiedPath + setterName), fnNode));
 
     JSDocInfoBuilder info = new JSDocInfoBuilder(true);
-    info.recordVisibility(Visibility.PRIVATE);
-    info.recordExport();
-    info.recordParameter(propName, propType);
+    // This is overriding a generated function which was added to the interface in
+    // {@code addInterfaceExterns}.
+    info.recordOverride();
     exprResNode.getFirstChild().setJSDocInfo(info.build());
 
     return exprResNode;
@@ -484,6 +635,53 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
   }
 
   /**
+   * Adds an interface for the given ClassDefinition to externs. This allows generated setter
+   * functions for read-only properties to avoid renaming altogether.
+   * @see https://www.polymer-project.org/0.8/docs/devguide/properties.html#read-only
+   */
+  private void addInterfaceExterns(final ClassDefinition cls,
+      List<MemberDefinition> readOnlyProps) {
+    Node block = IR.block();
+
+    String interfaceName = getInterfaceName(cls);
+    Node fnNode = IR.function(IR.name(""), IR.paramList(), IR.block());
+    Node varNode = IR.var(NodeUtil.newQName(compiler, interfaceName), fnNode);
+
+    JSDocInfoBuilder info = new JSDocInfoBuilder(true);
+    info.recordInterface();
+    varNode.setJSDocInfo(info.build());
+    block.addChildToBack(varNode);
+
+    for (MemberDefinition prop : readOnlyProps) {
+      // Add all _set* functions to avoid renaming.
+      String propName = prop.name.getString();
+      String setterName = "_set" + propName.substring(0, 1).toUpperCase() + propName.substring(1);
+      Node setterExprNode = IR.exprResult(
+          NodeUtil.newQName(compiler, interfaceName + ".prototype." + setterName));
+
+      JSDocInfoBuilder setterInfo = new JSDocInfoBuilder(true);
+      JSTypeExpression propType = getTypeFromProperty(prop);
+      setterInfo.recordParameter(propName, propType);
+      setterExprNode.getFirstChild().setJSDocInfo(setterInfo.build());
+
+      block.addChildToBack(setterExprNode);
+    }
+
+    Node parent = polymerElementExterns.getParent();
+    Node stmts = block.removeChildren();
+    parent.addChildrenToBack(stmts);
+
+    compiler.reportCodeChange();
+  }
+
+  /**
+   * @return The name of the generated extern interface which the element implements.
+   */
+  private String getInterfaceName(final ClassDefinition cls) {
+    return "Polymer" + cls.target.getQualifiedName().replaceAll("\\.", "_") + "Interface";
+  }
+
+  /**
    * @return The proper constructor doc for the Polymer call.
    */
   private JSDocInfoBuilder getConstructorDoc(final ClassDefinition cls) {
@@ -492,8 +690,12 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
 
     JSTypeExpression baseType = new JSTypeExpression(
         new Node(Token.BANG, IR.string(getPolymerElementType(cls))), VIRTUAL_FILE);
-
     constructorDoc.recordBaseType(baseType);
+
+    String interfaceName = getInterfaceName(cls);
+    JSTypeExpression interfaceType = new JSTypeExpression(
+        new Node(Token.BANG, IR.string(interfaceName)), VIRTUAL_FILE);
+    constructorDoc.recordImplementedInterface(interfaceType);
 
     // TODO(jlklein): Remove this when the renamer is fully feature complete, catching all
     // rename issues listed in http://goo.gl/L4mdQA.

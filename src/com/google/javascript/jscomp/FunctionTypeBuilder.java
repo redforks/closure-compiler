@@ -28,9 +28,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multiset;
-import com.google.common.collect.Sets;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
@@ -43,6 +41,7 @@ import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.TemplateType;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -370,7 +369,7 @@ final class FunctionTypeBuilder {
       // Implemented interfaces (for constructors only).
       if (info.getImplementedInterfaceCount() > 0) {
         if (isConstructor) {
-          implementedInterfaces = Lists.newArrayList();
+          implementedInterfaces = new ArrayList<>();
           Set<JSType> baseInterfaces = new HashSet<>();
           for (JSTypeExpression t : info.getImplementedInterfaces()) {
             JSType maybeInterType = t.evaluate(scope, typeRegistry);
@@ -402,7 +401,7 @@ final class FunctionTypeBuilder {
       // extended interfaces (for interfaces only)
       // We've already emitted a warning if this is not an interface.
       if (isInterface) {
-        extendedInterfaces = Lists.newArrayList();
+        extendedInterfaces = new ArrayList<>();
         for (JSTypeExpression t : info.getExtendedInterfaces()) {
           JSType maybeInterfaceType = t.evaluate(scope, typeRegistry);
           if (maybeInterfaceType != null &&
@@ -490,8 +489,8 @@ final class FunctionTypeBuilder {
     FunctionParamBuilder builder = new FunctionParamBuilder(typeRegistry);
     boolean warnedAboutArgList = false;
     Set<String> allJsDocParams = (info == null) ?
-        Sets.<String>newHashSet() :
-        Sets.newHashSet(info.getParameterNames());
+         new HashSet<String>() :
+         new HashSet<>(info.getParameterNames());
     boolean isVarArgs = false;
     for (Node arg : argsParent.children()) {
       String argumentName = arg.getString();
@@ -967,7 +966,7 @@ final class FunctionTypeBuilder {
 
     void recordEscapedVarName(String name) {
       if (escapedVarNames == null) {
-        escapedVarNames = Sets.newHashSet();
+        escapedVarNames = new HashSet<>();
       }
       escapedVarNames.add(name);
     }
@@ -980,7 +979,7 @@ final class FunctionTypeBuilder {
 
     void recordEscapedQualifiedName(String name) {
       if (escapedQualifiedNames == null) {
-        escapedQualifiedNames = Sets.newHashSet();
+        escapedQualifiedNames = new HashSet<>();
       }
       escapedQualifiedNames.add(name);
     }

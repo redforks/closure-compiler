@@ -17,7 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
@@ -110,8 +110,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     final CompilerOptions options = compiler.getOptions();
     options.setClosurePass(true);
     compiler.init(
-        Lists.newArrayList(SourceFile.fromCode("[externs]", externs)),
-        Lists.newArrayList(SourceFile.fromCode("[testcode]", js)),
+        ImmutableList.of(SourceFile.fromCode("[externs]", externs)),
+        ImmutableList.of(SourceFile.fromCode("[testcode]", js)),
         options);
 
     Node externsRoot = IR.block();
@@ -152,14 +152,11 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     typeCheck(externs, js, warningKinds);
   }
 
-  protected final void typeCheck(
+  private final void typeCheck(
       String externs, String js, DiagnosticType... warningKinds) {
     parseAndTypeCheck(externs, js);
-    if (compiler.getErrors().length > 0) {
-      fail("Expected no errors, but found: "
-          + Arrays.toString(compiler.getErrors()));
-    }
     JSError[] warnings = compiler.getWarnings();
+    JSError[] errors = compiler.getErrors();
     String errorMessage =
         "Expected warning of type:\n"
         + "================================================================\n"
@@ -170,11 +167,16 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         + Arrays.toString(warnings) + "\n"
         + "----------------------------------------------------------------\n";
     assertEquals(
-        errorMessage + "Warning count", warningKinds.length, warnings.length);
+        errorMessage + "Warning count", warningKinds.length, warnings.length + errors.length);
     for (JSError warning : warnings) {
       assertTrue(
           "Wrong warning type\n" + errorMessage,
           Arrays.asList(warningKinds).contains(warning.getType()));
+    }
+    for (JSError error : errors) {
+      assertTrue(
+          "Wrong warning type\n" + errorMessage,
+          Arrays.asList(warningKinds).contains(error.getType()));
     }
   }
 }

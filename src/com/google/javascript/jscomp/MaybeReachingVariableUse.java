@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphEdge;
 import com.google.javascript.jscomp.graph.GraphNode;
@@ -28,6 +27,7 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -51,7 +51,7 @@ class MaybeReachingVariableUse extends
       ControlFlowGraph<Node> cfg, Scope jsScope, AbstractCompiler compiler) {
     super(cfg, new ReachingUsesJoinOp());
     this.jsScope = jsScope;
-    this.escaped = Sets.newHashSet();
+    this.escaped = new HashSet<>();
 
     // TODO(user): Maybe compute it somewhere else and re-use the escape
     // local set here.

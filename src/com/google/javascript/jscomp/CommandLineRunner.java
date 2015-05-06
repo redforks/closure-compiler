@@ -25,7 +25,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.SourceMap.LocationMapping;
@@ -299,13 +298,13 @@ public class CommandLineRunner extends
         hidden = true,
         usage = "Source map location mapping separated by a '|' " +
         "(i.e. filesystem-path|webserver-path)")
-    private List<String> sourceMapLocationMapping = Lists.newArrayList();
+    private List<String> sourceMapLocationMapping = new ArrayList<>();
 
     @Option(name = "--source_map_input",
         hidden = true,
         usage = "Source map locations for input files, separated by a '|', " +
         "(i.e. input-file-path|input-source-map)")
-    private List<String> sourceMapInputs = Lists.newArrayList();
+    private List<String> sourceMapInputs = new ArrayList<>();
 
     // Used to define the flag, values are stored by the handler.
     @SuppressWarnings("unused")
@@ -1021,7 +1020,7 @@ public class CommandLineRunner extends
       if (flags.commonJsEntryModule == null) {
         reportError("Please specify --common_js_entry_module.");
       }
-      flags.closureEntryPoint = Lists.newArrayList(
+      flags.closureEntryPoint = ImmutableList.of(
           ProcessCommonJSModules.toModuleName(flags.commonJsEntryModule));
     }
 
@@ -1291,6 +1290,7 @@ public class CommandLineRunner extends
     "v8.js",
     "webstorage.js",
     "w3c_anim_timing.js",
+    "w3c_audio.js",
     "w3c_batterystatus.js",
     "w3c_encoding.js",
     "w3c_css3d.js",
@@ -1301,6 +1301,7 @@ public class CommandLineRunner extends
     "w3c_range.js",
     "w3c_rtc.js",
     "w3c_selectors.js",
+    "w3c_webcrypto.js",
     "w3c_xml.js",
     "window.js",
     "webkit_notifications.js",
