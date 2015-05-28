@@ -17,13 +17,13 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.GlobalNamespace.Name;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
-import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
@@ -69,6 +69,10 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       "JSC_POLYMER_UNQUALIFIED_BEHAVIOR",
       "Behaviors must be global, fully qualified names which are declared as object literals or "
       + "array literals of other valid Behaviors.");
+
+  static final DiagnosticType POLYMER_UNANNOTATED_BEHAVIOR = DiagnosticType.error(
+      "JSC_POLYMER_UNANNOTATED_BEHAVIOR",
+      "Behavior declarations must be annotated with @polymerBehavior.");
 
   static final String VIRTUAL_FILE = "<PolymerPass.java>";
 
@@ -151,9 +155,84 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     }
   }
 
+  /**
+   * For every Polymer Behavior, strip property type annotations and add suppress checktypes on
+   * functions.
+   */
+  private static class SuppressBehaviors extends AbstractPostOrderCallback {
+    private final AbstractCompiler compiler;
+
+    public SuppressBehaviors(AbstractCompiler compiler) {
+      this.compiler = compiler;
+    }
+
+    @Override
+    public void visit(NodeTraversal t, Node n, Node parent) {
+      if (isBehavior(n)) {
+        if (!n.isVar() && !n.isAssign()) {
+          compiler.report(JSError.make(n, POLYMER_UNQUALIFIED_BEHAVIOR));
+          return;
+        }
+
+        Node behaviorValue = n.getChildAtIndex(1);
+        if (n.isVar()) {
+          behaviorValue = n.getFirstChild().getFirstChild();
+        }
+        suppressBehavior(behaviorValue);
+      }
+    }
+
+    /**
+     * @return Whether the node is the declaration of a Behavior.
+     */
+    private boolean isBehavior(Node value) {
+      return value.getJSDocInfo() != null && value.getJSDocInfo().isPolymerBehavior();
+    }
+
+    /**
+     * Strip property type annotations and add suppress checkTypes and globalThis on functions.
+     */
+    private void suppressBehavior(Node behaviorValue) {
+      if (behaviorValue == null) {
+        compiler.report(JSError.make(behaviorValue, POLYMER_UNQUALIFIED_BEHAVIOR));
+        return;
+      }
+
+      if (behaviorValue.isArrayLit()) {
+        for (Node child : behaviorValue.children()) {
+          suppressBehavior(child);
+        }
+      } else if (behaviorValue.isObjectLit()) {
+        stripPropertyTypes(behaviorValue);
+        addBehaviorSuppressions(behaviorValue);
+      }
+    }
+
+    private void stripPropertyTypes(Node behaviorValue) {
+      List<MemberDefinition> properties = extractProperties(behaviorValue);
+      for (MemberDefinition property : properties) {
+        property.name.removeProp(Node.JSDOC_INFO_PROP);
+      }
+    }
+
+    private void addBehaviorSuppressions(Node behaviorValue) {
+      for (Node keyNode : behaviorValue.children()) {
+        if (keyNode.getFirstChild().isFunction()) {
+          keyNode.removeProp(Node.JSDOC_INFO_PROP);
+          JSDocInfoBuilder suppressDoc = new JSDocInfoBuilder(true);
+          suppressDoc.addSuppression("checkTypes");
+          suppressDoc.addSuppression("globalThis");
+          keyNode.setJSDocInfo(suppressDoc.build());
+        }
+      }
+    }
+  }
+
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     NodeTraversal.traverse(compiler, scriptRoot, this);
+    SuppressBehaviors suppressBehaviorsCallback = new SuppressBehaviors(compiler);
+    NodeTraversal.traverse(compiler, scriptRoot, suppressBehaviorsCallback);
   }
 
   @Override
@@ -306,12 +385,16 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       }
 
       Name behaviorGlobalName = globalNames.getSlot(behaviorName.getQualifiedName());
-      if (behaviorGlobalName == null) {
+      if (behaviorGlobalName == null || behaviorGlobalName.getDeclaration() == null) {
         compiler.report(JSError.make(behaviorName, POLYMER_UNQUALIFIED_BEHAVIOR));
         continue;
       }
 
       Node behaviorDeclaration = behaviorGlobalName.getDeclaration().getNode();
+      JSDocInfo behaviorInfo = NodeUtil.getBestJSDocInfo(behaviorDeclaration);
+      if (behaviorInfo == null || !behaviorInfo.isPolymerBehavior()) {
+        compiler.report(JSError.make(behaviorDeclaration, POLYMER_UNANNOTATED_BEHAVIOR));
+      }
       Node behaviorValue = NodeUtil.getRValueOfLValue(behaviorDeclaration);
 
       // Individual behaviors can also be arrays of behaviors. Parse them recursively.
@@ -379,6 +462,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     objLit.setJSDocInfo(objLitDoc.build());
 
     this.addThisTypeToFunctions(objLit, cls.target.getQualifiedName());
+    this.switchDollarSignPropsToBrackets(objLit);
 
     // For simplicity add everything into a block, before adding it to the AST.
     Node block = IR.block();
@@ -409,10 +493,11 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
       block.addChildToBack(var);
     }
 
-    appendPropertiesToBlock(cls, block);
+    appendPropertiesToBlock(cls, block, cls.target.getQualifiedName() + ".prototype.");
     appendBehaviorFunctionsToBlock(cls, block);
     List<MemberDefinition> readOnlyProps = parseReadOnlyProperties(cls, block);
     addInterfaceExterns(cls, readOnlyProps);
+    removePropertyDocs(cls);
 
     block.useSourceInfoFromForTree(exprRoot);
     Node stmts = block.removeChildren();
@@ -462,15 +547,39 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
   }
 
   /**
+   * Switches all "this.$.foo" to "this.$['foo']".
+   */
+  private void switchDollarSignPropsToBrackets(Node objLit) {
+    Preconditions.checkState(objLit.isObjectLit());
+    for (Node keyNode : objLit.children()) {
+      Node value = keyNode.getFirstChild();
+      if (value != null && value.isFunction()) {
+        NodeUtil.visitPostOrder(
+            value.getLastChild(),
+            new NodeUtil.Visitor() {
+              @Override
+              public void visit(Node n) {
+                if (n.isString() && n.getString().equals("$") && n.getParent().isGetProp()
+                    && n.getParent().getParent().isGetProp()) {
+                  Node dollarChildProp = n.getParent().getParent();
+                  dollarChildProp.setType(Token.GETELEM);
+                  compiler.reportCodeChange();
+                }
+              }
+            },
+            Predicates.<Node>alwaysTrue());
+      }
+    }
+  }
+
+  /**
    * Appends all properties in the ClassDefinition to the prototype of the custom element.
    */
-  private void appendPropertiesToBlock(final ClassDefinition cls, Node block) {
-    String qualifiedPath = cls.target.getQualifiedName() + ".prototype.";
+  private void appendPropertiesToBlock(final ClassDefinition cls, Node block, String basePath) {
     for (MemberDefinition prop : cls.props) {
       Node propertyNode = IR.exprResult(
-          NodeUtil.newQName(compiler, qualifiedPath + prop.name.getString()));
+          NodeUtil.newQName(compiler, basePath + prop.name.getString()));
       JSDocInfoBuilder info = JSDocInfoBuilder.maybeCopyFrom(prop.info);
-      prop.name.removeProp(Node.JSDOC_INFO_PROP);
 
       // Note that if the JSDoc already has a type, the type inferred from the Polymer syntax is
       // ignored.
@@ -479,14 +588,18 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
         return;
       }
       info.recordType(propType);
-
-      // TODO(jlklein): Remove this when the renamer is fully feature complete, catching all
-      // rename issues listed in http://goo.gl/L4mdQA.
-      Preconditions.checkState(info.recordExport());
-      info.recordVisibility(Visibility.PUBLIC);
-
       propertyNode.getFirstChild().setJSDocInfo(info.build());
+
       block.addChildToBack(propertyNode);
+    }
+  }
+
+  /**
+   * Remove all JSDocs from properties of a class definition
+   */
+  private void removePropertyDocs(final ClassDefinition cls) {
+    for (MemberDefinition prop : cls.props) {
+      prop.name.removeProp(Node.JSDOC_INFO_PROP);
     }
   }
 
@@ -652,6 +765,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     varNode.setJSDocInfo(info.build());
     block.addChildToBack(varNode);
 
+    appendPropertiesToBlock(cls, block, interfaceName + ".prototype.");
     for (MemberDefinition prop : readOnlyProps) {
       // Add all _set* functions to avoid renaming.
       String propName = prop.name.getString();
@@ -697,10 +811,6 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
         new Node(Token.BANG, IR.string(interfaceName)), VIRTUAL_FILE);
     constructorDoc.recordImplementedInterface(interfaceType);
 
-    // TODO(jlklein): Remove this when the renamer is fully feature complete, catching all
-    // rename issues listed in http://goo.gl/L4mdQA.
-    Preconditions.checkState(constructorDoc.recordExport());
-    constructorDoc.recordVisibility(Visibility.PUBLIC);
     return constructorDoc;
   }
 

@@ -50,10 +50,11 @@ public final class JSTypes {
   private JSType stringOrString;
   private JSType anyNumOrStr;
 
-  private JSType regexpType;
+  private JSType regexpInstance;
   private RawNominalType arrayType;
   private RawNominalType builtinObject;
   private RawNominalType builtinFunction;
+  private RawNominalType arguments;
 
   private JSTypes() {}
 
@@ -110,7 +111,7 @@ public final class JSTypes {
   }
 
   public JSType getRegexpType() {
-    return regexpType != null ? regexpType : JSType.UNKNOWN;
+    return regexpInstance != null ? regexpInstance : JSType.UNKNOWN;
   }
 
   JSType getNumberInstance() {
@@ -140,6 +141,14 @@ public final class JSTypes {
         ? stringInstanceObjtype : ObjectType.TOP_OBJECT;
   }
 
+  public JSType getArgumentsArrayType() {
+    return this.arguments.getInstanceAsJSType();
+  }
+
+  public void setArgumentsType(RawNominalType arguments) {
+    this.arguments = arguments;
+  }
+
   public void setFunctionType(RawNominalType builtinFunction) {
     this.builtinFunction = builtinFunction;
   }
@@ -152,8 +161,8 @@ public final class JSTypes {
     this.arrayType = arrayType;
   }
 
-  public void setRegexpInstance(JSType regexpType) {
-    this.regexpType = regexpType;
+  public void setRegexpInstance(JSType regexpInstance) {
+    this.regexpInstance = regexpInstance;
   }
 
   public void setNumberInstance(JSType t) {

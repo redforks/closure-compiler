@@ -2458,7 +2458,7 @@ public final class NodeUtil {
     }
     return (NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == n)
         || (NodeUtil.isForIn(parent) && parent.getFirstChild() == n)
-        || parent.isVar()
+        || parent.isVar() || parent.isLet() || parent.isConst()
         || (parent.isFunction() && parent.getFirstChild() == n)
         || parent.isDec()
         || parent.isInc()
@@ -2710,7 +2710,7 @@ public final class NodeUtil {
    * Creates a node representing a qualified name.
    *
    * @param name A qualified name (e.g. "foo" or "foo.bar.baz")
-   * @return A NAME or GETPROP node
+   * @return A VAR node, or an EXPR_RESULT node containing an ASSIGN or NAME node.
    */
   public static Node newQNameDeclaration(
       AbstractCompiler compiler, String name, Node value, JSDocInfo info) {
@@ -3639,6 +3639,8 @@ public final class NodeUtil {
       case Token.ASSIGN:
         return n.getNext();
       case Token.VAR:
+      case Token.LET:
+      case Token.CONST:
         return n.getFirstChild();
       case Token.FUNCTION:
         return parent;

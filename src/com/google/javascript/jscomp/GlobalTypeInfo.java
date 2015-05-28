@@ -169,6 +169,11 @@ class GlobalTypeInfo implements CompilerPass {
           "JSC_FUNCTION_CONSTRUCTOR_NOT_DEFINED",
           "You must provide externs that define the built-in Function constructor.");
 
+  static final DiagnosticType INVALID_INTERFACE_PROP_INITIALIZER =
+      DiagnosticType.warning(
+          "JSC_INVALID_INTERFACE_PROP_INITIALIZER",
+          "Invalid initialization of interface property.");
+
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
       ANONYMOUS_NOMINAL_TYPE,
       CANNOT_INIT_TYPEDEF,
@@ -182,6 +187,7 @@ class GlobalTypeInfo implements CompilerPass {
       EXPECTED_INTERFACE,
       FUNCTION_CONSTRUCTOR_NOT_DEFINED,
       INEXISTENT_PARAM,
+      INVALID_INTERFACE_PROP_INITIALIZER,
       INVALID_PROP_OVERRIDE,
       LENDS_ON_BAD_TYPE,
       MALFORMED_ENUM,
@@ -449,7 +455,8 @@ class GlobalTypeInfo implements CompilerPass {
         DeclaredFunctionType superMethodType =
             DeclaredFunctionType.meet(methodTypes);
         DeclaredFunctionType updatedMethodType =
-            localPropDef.methodType.withTypeInfoFromSuper(superMethodType);
+            localPropDef.methodType.withTypeInfoFromSuper(
+                superMethodType, getsTypeInfoFromParentMethod(localPropDef));
         localPropDef.updateMethodType(updatedMethodType);
         propTypesToProcess.put(pname,
             commonTypes.fromFunctionType(updatedMethodType.toFunctionType()));
@@ -534,7 +541,8 @@ class GlobalTypeInfo implements CompilerPass {
     if (localPropType == null) {
       // Add property from interface to class
       propTypesToProcess.put(pname, inheritedPropType);
-    } else if (!localPropType.isSubtypeOf(inheritedPropType)) {
+    } else if (!getsTypeInfoFromParentMethod(localPropDef)
+        && !localPropType.isSubtypeOf(inheritedPropType)) {
       warnings.add(JSError.make(
           localPropDef.defSite, INVALID_PROP_OVERRIDE, pname,
           inheritedPropType.toString(), localPropType.toString()));
@@ -547,6 +555,14 @@ class GlobalTypeInfo implements CompilerPass {
         }
       }
     }
+  }
+
+  private static boolean getsTypeInfoFromParentMethod(PropertyDef pd) {
+    if (pd == null || pd.methodType == null) {
+      return false;
+    }
+    JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(pd.defSite);
+    return jsdoc == null || jsdoc.isOverride();
   }
 
   /**
@@ -649,7 +665,7 @@ class GlobalTypeInfo implements CompilerPass {
         Preconditions.checkState(qnameNode.getParent().isAssign());
         qnameNode.getParent().putBooleanProp(Node.ANALYZED_DURING_GTI, true);
       }
-      currentScope.addNamespace(qnameNode);
+      currentScope.addNamespace(qnameNode, qnameNode.isFromExterns());
     }
 
     private void visitTypedef(Node qnameNode) {
@@ -850,6 +866,9 @@ class GlobalTypeInfo implements CompilerPass {
    private void maybeRecordBuiltinType(
        String name, RawNominalType rawNominalType) {
      switch (name) {
+       case "Arguments":
+         commonTypes.setArgumentsType(rawNominalType);
+         break;
        case "Function":
          commonTypes.setFunctionType(rawNominalType);
          break;
@@ -902,17 +921,17 @@ class GlobalTypeInfo implements CompilerPass {
 
   private class ProcessScope extends AbstractShallowCallback {
     private final Scope currentScope;
-    /**
-     * Keep track of undeclared vars as they are crawled to warn about
-     * use before declaration and undeclared variables.
-     * We use a multimap so we can give all warnings rather than just the first.
-     */
-    private final Multimap<String, Node> undeclaredVars;
+    // /**
+    //  * Keep track of undeclared vars as they are crawled to warn about
+    //  * use before declaration and undeclared variables.
+    //  * We use a multimap so we can give all warnings rather than just the first.
+    //  */
+    // private final Multimap<String, Node> undeclaredVars;
     private Set<Node> lendsObjlits = new LinkedHashSet<>();
 
     ProcessScope(Scope currentScope) {
       this.currentScope = currentScope;
-      this.undeclaredVars = LinkedHashMultimap.create();
+      // this.undeclaredVars = LinkedHashMultimap.create();
     }
 
     void finishProcessingScope() {
@@ -1035,23 +1054,22 @@ class GlobalTypeInfo implements CompilerPass {
             } else if (currentScope.isDefinedLocally(name, false)) {
               // warnings.add(JSError.make(
               //     n, VariableReferenceCheck.REDECLARED_VARIABLE, name));
+              break;
             } else {
               // for (Node useBeforeDeclNode : undeclaredVars.get(name)) {
               //   warnings.add(JSError.make(useBeforeDeclNode,
               //       VariableReferenceCheck.EARLY_REFERENCE, name));
               // }
-              undeclaredVars.removeAll(name);
+              // undeclaredVars.removeAll(name);
               if (parent.isCatch()) {
-                currentScope.addLocal(
-                    name, JSType.UNKNOWN, false, n.isFromExterns());
+                currentScope.addLocal(name, JSType.UNKNOWN, false, false);
               } else {
                 boolean isConst = isConst(parent);
                 JSType declType = getVarTypeFromAnnotation(n);
                 if (isConst && !mayWarnAboutNoInit(n) && declType == null) {
                   declType = inferConstTypeFromRhs(n);
                 }
-                currentScope.addLocal(
-                    name, declType, isConst, n.isFromExterns());
+                currentScope.addLocal(name, declType, isConst, n.isFromExterns());
               }
             }
           } else if (currentScope.isOuterVarEarly(name)) {
@@ -1060,7 +1078,7 @@ class GlobalTypeInfo implements CompilerPass {
               currentScope.getTypedef(name) != null ||
               !name.equals(currentScope.getName()) &&
               !currentScope.isDefinedLocally(name, false)) {
-            undeclaredVars.put(name, n);
+            // undeclaredVars.put(name, n);
           }
           break;
         }
@@ -1161,10 +1179,10 @@ class GlobalTypeInfo implements CompilerPass {
     /** Returns the newly created scope for this function */
     private Scope visitFunctionLate(Node fn, RawNominalType ownerType) {
       Preconditions.checkArgument(fn.isFunction());
-      String fnName = NodeUtil.getFunctionName(fn);
-      if (fnName != null && !fnName.contains(".")) {
-        undeclaredVars.removeAll(fnName);
-      }
+      // String fnName = NodeUtil.getFunctionName(fn);
+      // if (fnName != null && !fnName.contains(".")) {
+      //   undeclaredVars.removeAll(fnName);
+      // }
       String internalName = getFunInternalName(fn);
       Scope fnScope = currentScope.getScope(internalName);
       updateFnScope(fnScope, ownerType);
@@ -1186,6 +1204,9 @@ class GlobalTypeInfo implements CompilerPass {
         // We don't look at assignments to prototypes of non-constructors.
         return;
       }
+      if (initializer != null && initializer.isFunction()) {
+        parent.putBooleanProp(Node.ANALYZED_DURING_GTI, true);
+      }
       // We only add properties to the prototype of a class if the
       // property creations are in the same scope as the constructor
       // TODO(blickly): Rethink this
@@ -1196,8 +1217,22 @@ class GlobalTypeInfo implements CompilerPass {
         }
         return;
       }
+      mayWarnAboutInterfacePropInit(rawType, initializer);
       String pname = NodeUtil.getPrototypePropertyName(getProp);
       mayAddPropToPrototype(rawType, pname, getProp, initializer);
+    }
+
+    private void mayWarnAboutInterfacePropInit(RawNominalType rawType, Node initializer) {
+      if (rawType.isInterface() && initializer != null) {
+        String abstractMethodName = convention.getAbstractMethodName();
+        if (initializer.isFunction()
+            && !NodeUtil.isEmptyFunctionExpression(initializer)) {
+          warnings.add(JSError.make(initializer, TypeCheck.INTERFACE_METHOD_NOT_EMPTY));
+        } else if (!initializer.isFunction()
+            && !initializer.matchesQualifiedName(abstractMethodName)) {
+          warnings.add(JSError.make(initializer, INVALID_INTERFACE_PROP_INITIALIZER));
+        }
+      }
     }
 
     private void visitPrototypeAssignment(Node getProp) {
@@ -1689,11 +1724,6 @@ class GlobalTypeInfo implements CompilerPass {
 
       // Find the declared type of the property.
       if (initializer != null && initializer.isFunction()) {
-        if (initializer.getLastChild().hasChildren() && rawType.isInterface()) {
-          warnings.add(JSError.make(initializer.getLastChild(),
-                  TypeCheck.INTERFACE_METHOD_NOT_EMPTY));
-        }
-
         // TODO(dimvar): we must do this for any function "defined" as the rhs
         // of an assignment to a property, not just when the property is a
         // prototype property.
@@ -1841,6 +1871,7 @@ class GlobalTypeInfo implements CompilerPass {
 
     PropertyDef(
         Node defSite, DeclaredFunctionType methodType, Scope methodScope) {
+      Preconditions.checkNotNull(defSite);
       Preconditions.checkArgument(
           defSite.isGetProp() || NodeUtil.isObjectLitKey(defSite));
       this.defSite = defSite;
@@ -2196,10 +2227,16 @@ class GlobalTypeInfo implements CompilerPass {
       }
     }
 
-    private void addNamespace(Node qnameNode) {
+    private void addNamespace(Node qnameNode, boolean isFromExterns) {
       Preconditions.checkArgument(!isNamespace(qnameNode));
       if (qnameNode.isName()) {
         localNamespaces.put(qnameNode.getString(), new NamespaceLit());
+        if (isFromExterns) {
+          // We don't know the full type of a namespace until after we see all
+          // its properties. But we want to add it to the externs, otherwise it
+          // is treated as a local and initialized to the wrong thing in NTI.
+          externs.put(qnameNode.getString(), null);
+        }
       } else {
         QualifiedName qname = QualifiedName.fromNode(qnameNode);
         Namespace ns = getNamespace(qname.getLeftmostName());
@@ -2386,7 +2423,13 @@ class GlobalTypeInfo implements CompilerPass {
       // For now, we put types of namespaces directly into the locals.
       // Alternatively, we could move this into NewTypeInference.initEdgeEnvs
       for (Map.Entry<String, NamespaceLit> entry : localNamespaces.entrySet()) {
-        locals.put(entry.getKey(), entry.getValue().toJSType());
+        String name = entry.getKey();
+        JSType t = entry.getValue().toJSType();
+        if (externs.containsKey(name)) {
+          externs.put(name, t);
+        } else {
+          locals.put(name, t);
+        }
       }
       for (Map.Entry<String, EnumType> entry : localEnums.entrySet()) {
         locals.put(entry.getKey(), entry.getValue().toJSType());

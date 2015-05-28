@@ -97,6 +97,16 @@ public final class MissingRequireTest extends CompilerTestCase {
     testSame(js);
   }
 
+  public void testPassWithInnerClassInExtends() {
+    String js = Joiner.on('\n').join(
+        "var goog = {};",
+        "goog.require('goog.foo.Bar');",
+        "",
+        "/** @constructor @extends {goog.foo.Bar.Inner} */",
+        "function SubClass() {}");
+    testSame(js);
+  }
+
   public void testFailWithNestedNewNodes() {
     String[] js =
         new String[] {"var goog = {}; goog.require('goog.foo.Bar'); "
@@ -113,6 +123,18 @@ public final class MissingRequireTest extends CompilerTestCase {
       "/** @constructor @implements {example.Foo} */ var Ctor = function() {};"
     };
     String warning = "'example.Foo' used but not goog.require'd";
+    test(js, js, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testInterfaceExtends() {
+    String js = Joiner.on('\n').join(
+      "/**",
+      " * @interface",
+      " * @extends {some.other.Interface}",
+      " */",
+      "function AnInterface() {}");
+
+    String warning = "'some.other.Interface' used but not goog.require'd";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 

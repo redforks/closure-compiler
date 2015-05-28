@@ -1298,6 +1298,8 @@ angular.$filterProvider.register = function(name, fn) {};
  *   get: function(string, angular.$http.Config=):!angular.$http.HttpPromise,
  *   head: function(string, angular.$http.Config=):!angular.$http.HttpPromise,
  *   jsonp: function(string, angular.$http.Config=):!angular.$http.HttpPromise,
+ *   patch: function(string, *, angular.$http.Config=):
+ *       !angular.$http.HttpPromise,
  *   post: function(string, *, angular.$http.Config=):
  *       !angular.$http.HttpPromise,
  *   put: function(string, *, angular.$http.Config=):!angular.$http.HttpPromise,
@@ -1364,6 +1366,14 @@ angular.$http.head = function(url, opt_config) {};
  * @return {!angular.$http.HttpPromise}
  */
 angular.$http.jsonp = function(url, opt_config) {};
+
+/**
+ * @param {string} url
+ * @param {*} data
+ * @param {angular.$http.Config=} opt_config
+ * @return {!angular.$http.HttpPromise}
+ */
+angular.$http.patch = function(url, data, opt_config) {};
 
 /**
  * @param {string} url
@@ -1537,7 +1547,7 @@ angular.$interval_.cancel = function(promise) {};
  *   protocol: function():string,
  *   replace: function(),
  *   search: function((string|Object.<string, string>)=,
- *       ?(string|Array.<string>|boolean)=): (!Object|angular.$location),
+ *       ?(string|Array.<string>|boolean|number)=): (!Object|angular.$location),
  *   url: function(string=):string
  *   }}
  */
@@ -1582,7 +1592,7 @@ angular.$location.replace = function() {};
 
 /**
  * @param {(string|Object.<string, string>)=} opt_search
- * @param {?(string|Array.<string>|boolean)=} opt_paramValue
+ * @param {?(string|Array.<string>|boolean|number)=} opt_paramValue
  * @return {(!Object|angular.$location)}
  */
 angular.$location.search = function(opt_search, opt_paramValue) {};
@@ -1933,6 +1943,9 @@ angular.$parse_.assign = function(scope, newValue) {};
  */
 angular.$provide;
 
+/** @typedef {{$get: (!Array.<string|!Function>|!Function)}} */
+angular.$provide.Provider;
+
 /**
  * @param {string} name
  * @param {*} object
@@ -1955,7 +1968,8 @@ angular.$provide.factory = function(name, providerFunction) {};
 
 /**
  * @param {string} name
- * @param {Function|Array.<string|Function>} providerType
+ * @param {Function|Array.<string|Function>|angular.$provide.Provider}
+ *     providerType
  * @return {Object}
  */
 angular.$provide.provider = function(name, providerType) {};
