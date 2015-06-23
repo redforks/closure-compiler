@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Externs for the Google Maps v3.20 API.
+ * @fileoverview Externs for the Google Maps v3.21 API.
  * @see http://code.google.com/apis/maps/documentation/javascript/reference.html
  * @externs
  */
@@ -1925,6 +1925,11 @@ google.maps.GeocoderRequest.prototype.location;
 /**
  * @type {string}
  */
+google.maps.GeocoderRequest.prototype.placeId;
+
+/**
+ * @type {string}
+ */
 google.maps.GeocoderRequest.prototype.region;
 
 /**
@@ -1956,6 +1961,11 @@ google.maps.GeocoderResult.prototype.partial_match;
  * @type {Array<string>}
  */
 google.maps.GeocoderResult.prototype.postcode_localities;
+
+/**
+ * @type {string}
+ */
+google.maps.GeocoderResult.prototype.place_id;
 
 /**
  * @type {Array<string>}
@@ -5604,7 +5614,7 @@ google.maps.event = {};
 /**
  * @param {Object} instance
  * @param {string} eventName
- * @param {function(?)|null} handler
+ * @param {?function(?)} handler
  * @param {boolean=} opt_capture
  * @return {google.maps.MapsEventListener}
  */
@@ -5622,7 +5632,7 @@ google.maps.event.addDomListenerOnce = function(instance, eventName, handler, op
 /**
  * @param {Object} instance
  * @param {string} eventName
- * @param {function(?)|null} handler
+ * @param {?function(?)} handler
  * @return {google.maps.MapsEventListener}
  */
 google.maps.event.addListener = function(instance, eventName, handler) {};
@@ -5630,7 +5640,7 @@ google.maps.event.addListener = function(instance, eventName, handler) {};
 /**
  * @param {Object} instance
  * @param {string} eventName
- * @param {function(?)|null} handler
+ * @param {?function(?)} handler
  * @return {google.maps.MapsEventListener}
  */
 google.maps.event.addListenerOnce = function(instance, eventName, handler) {};
@@ -7337,4 +7347,3 @@ google.maps.weather.WindSpeedUnit = {
   METERS_PER_SECOND: '',
   MILES_PER_HOUR: ''
 };
-

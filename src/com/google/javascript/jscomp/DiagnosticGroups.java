@@ -215,10 +215,12 @@ public class DiagnosticGroups {
           GlobalTypeInfo.ALL_DIAGNOSTICS,
           NewTypeInference.ALL_DIAGNOSTICS);
 
-  static {
-      DiagnosticGroups.registerGroup("newCheckTypesWarningsOverload",
+  public static final DiagnosticGroup NEW_CHECK_TYPES_ALL_CHECKS =
+      DiagnosticGroups.registerGroup("newCheckTypesAllChecks",
+          JSTypeCreatorFromJSDoc.CONFLICTING_SHAPE_TYPE,
           NewTypeInference.NULLABLE_DEREFERENCE);
 
+  static {
       // Warnings that are absent in closure library
       DiagnosticGroups.registerGroup("newCheckTypesClosureClean",
 //           JSTypeCreatorFromJSDoc.BAD_JSDOC_ANNOTATION,
@@ -230,6 +232,7 @@ public class DiagnosticGroups {
           JSTypeCreatorFromJSDoc.EXTENDS_NOT_ON_CTOR_OR_INTERF,
           JSTypeCreatorFromJSDoc.IMPLEMENTS_WITHOUT_CONSTRUCTOR,
           JSTypeCreatorFromJSDoc.INHERITANCE_CYCLE,
+//          JSTypeCreatorFromJSDoc.UNION_IS_UNINHABITABLE,
           GlobalTypeInfo.ANONYMOUS_NOMINAL_TYPE,
           GlobalTypeInfo.CANNOT_INIT_TYPEDEF,
           GlobalTypeInfo.CANNOT_OVERRIDE_FINAL_METHOD,
@@ -256,7 +259,6 @@ public class DiagnosticGroups {
           TypeCheck.UNKNOWN_OVERRIDE,
           TypeValidator.INTERFACE_METHOD_NOT_IMPLEMENTED,
           NewTypeInference.ASSERT_FALSE,
-          NewTypeInference.CALL_FUNCTION_WITH_BOTTOM_FORMAL,
           NewTypeInference.CANNOT_BIND_CTOR,
 //           NewTypeInference.CONST_REASSIGNED,
           NewTypeInference.CROSS_SCOPE_GOTCHA,

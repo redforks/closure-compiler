@@ -74,13 +74,16 @@ PushSubscription.prototype.unsubscribe = function() {};
 //};
 
 /**
- * @see https://w3c.github.io/push-api/
+ * @see https://w3c.github.io/push-api/#idl-def-PushManager
  * @constructor
  */
 function PushManager() {}
 
-/** @return {!Promise<PushSubscription>} */
-PushManager.prototype.subscribe = function() {};
+/**
+ * @param {PushSubscriptionOptions=} opt_options
+ * @return {!Promise<PushSubscription>}
+ */
+PushManager.prototype.subscribe = function(opt_options) {};
 
 /** @return {!Promise<PushSubscription>} */
 PushManager.prototype.getSubscription = function() {};
@@ -90,6 +93,11 @@ PushManager.prototype.getSubscription = function() {};
 // Uncomment once it is available.
 // PushManager.prototype.hasPermission = function() {};
 
+/**
+ * @typedef {{userVisibleOnly: (boolean|undefined)}}
+ * @see https://w3c.github.io/push-api/#idl-def-PushSubscriptionOptions
+ */
+var PushSubscriptionOptions;
 
 /**
  * @see http://www.w3.org/TR/push-api/#idl-def-PushMessageData
@@ -249,19 +257,22 @@ ServiceWorkerGlobalScope.prototype.onactivate;
 ServiceWorkerGlobalScope.prototype.onfetch;
 
 /**
- * TODO(user): This handler should get a custom event in the future.
+ * TODO(mtragut): This handler should get a custom event in the future.
  * @type {?function(!Event)}
  */
 ServiceWorkerGlobalScope.prototype.onbeforeevicted;
 
 /**
- * TODO(user): This handler should get a custom event in the future.
+ * TODO(mtragut): This handler should get a custom event in the future.
  * @type {?function(!Event)}
  */
 ServiceWorkerGlobalScope.prototype.onevicted;
 
 /** @type {?function(!MessageEvent)} */
 ServiceWorkerGlobalScope.prototype.onmessage;
+
+/** @type {IDBFactory} */
+ServiceWorkerGlobalScope.prototype.indexedDB;
 
 /**
  * @see http://www.w3.org/TR/service-workers/#service-worker-client-interface
@@ -285,7 +296,7 @@ ServiceWorkerClient.prototype.visibilityState;
 ServiceWorkerClient.prototype.url;
 
 /**
- * // TODO(user): Possibly replace the type with enum ContextFrameType once
+ * // TODO(mtragut): Possibly replace the type with enum ContextFrameType once
  * the enum is defined.
  * @type {string}
  */
@@ -309,7 +320,7 @@ function ServiceWorkerClients() {}
 /**
  * Deprecated in Chrome M43+, use matchAll instead. Reference:
  * https://github.com/slightlyoff/ServiceWorker/issues/610.
- * TODO(user): Remove when getAll is fully deprecated.
+ * TODO(joeltine): Remove when getAll is fully deprecated.
  * @param {ServiceWorkerClientQueryOptions=} opt_options
  * @return {!Promise<!Array<!ServiceWorkerClient>>}
  */

@@ -45,6 +45,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
 
   private CheckLevel reportMissingOverrides = CheckLevel.WARNING;
 
+  private static final Joiner lineJoiner = Joiner.on("\n");
   private static final String SUGGESTION_CLASS =
       "/** @constructor\n */\n" +
       "function Suggest() {}\n" +
@@ -13398,6 +13399,443 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         });
   }
 
+  public void testTemplateMap1() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "function f() {\n"
+        + "  /** @type {Int8Array} */\n"
+        + "  var x = new Int8Array(10);\n"
+        + "  /** @type {IArrayLike<string>} */\n"
+        + "  var y;\n"
+        + "  y = x;\n"
+        + "}",
+        "assignment\n"
+        + "found   : (Int8Array|null)\n"
+        + "required: (IArrayLike<string>|null)");
+  }
+
+  public void testTemplateMap2() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "function f() {\n"
+        + "  /** @type {Int8Array} */\n"
+        + "  var x = new Int8Array(10);\n"
+        + "\n"
+        + "  /** @type {IObject<number, string>} */\n"
+        + "  var z;\n"
+        + "  z = x;\n"
+        + "}",
+        "assignment\n"
+        + "found   : (Int8Array|null)\n"
+        + "required: (IObject<number,string>|null)");
+  }
+
+  public void testTemplateMap3() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "function f() {\n"
+        + "  var x = new Int8Array(10);\n"
+        + "\n"
+        + "  /** @type {IArrayLike<string>} */\n"
+        + "  var y;\n"
+        + "  y = x;\n"
+        + "}",
+        "assignment\n"
+        + "found   : Int8Array\n"
+        + "required: (IArrayLike<string>|null)");
+  }
+
+  public void testTemplateMap4() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "function f() {\n"
+        + "  var x = new Int8Array(10);\n"
+        + "\n"
+        + "  /** @type {IObject<number, string>} */\n"
+        + "  var z;\n"
+        + "  z = x;\n"
+        + "}",
+        "assignment\n"
+        + "found   : Int8Array\n"
+        + "required: (IObject<number,string>|null)");
+  }
+
+  public void testTemplateMap5() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "function f() {\n"
+        + "  var x = new Int8Array(10);\n"
+        + "  /** @type {IArrayLike<number>} */\n"
+        + "  var y;\n"
+        + "  y = x;\n"
+        + "}");
+  }
+
+  public void testTemplateMap6() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "function f() {\n"
+        + "  var x = new Int8Array(10);\n"
+        + "  /** @type {IObject<number, number>} */\n"
+        + "  var z;\n"
+        + "  z = x;\n"
+        + "}");
+  }
+
+  private static final String EXTERNS_WITH_IARRAYLIKE_DECLS =
+      "/**\n"
+      + " * @constructor @implements IArrayLike<number>\n"
+      + " */\n"
+      + "function Int8Array(length, opt_byteOffset, opt_length) {}\n"
+      + "/** @type {number} */\n"
+      + "Int8Array.prototype.length;\n"
+      + "/**\n"
+      + "* @constructor\n"
+      + "* @extends {Int8Array}\n"
+      + "*/\n"
+      + "function Int8Array2(len) {};\n"
+      + "/**\n"
+      + " * @interface\n"
+      + " * @extends {IArrayLike<number>}\n"
+      + " */\n"
+      + "function IArrayLike2(){}\n"
+      + "\n"
+      + "/**\n"
+      + " * @constructor\n"
+      + " * @implements {IArrayLike2}\n"
+      + " */\n"
+      + "function Int8Array3(len) {};\n"
+      + "/** @type {number} */\n"
+      + "Int8Array3.prototype.length;\n"
+      + "/**\n" + " * @interface\n"
+      + " * @extends {IArrayLike<VALUE3>}\n"
+      + " * @template VALUE3\n"
+      + " */\n"
+      + "function IArrayLike3(){}\n"
+      + "/**\n"
+      + " * @constructor\n"
+      + " * @implements {IArrayLike3<number>}\n"
+      + " */\n"
+      + "function Int8Array4(length) {};\n"
+      + "/** @type {number} */\n"
+      + "Int8Array4.prototype.length;\n"
+      + "/**\n"
+      + " * @interface\n"
+      + " * @extends {IArrayLike<VALUE2>}\n"
+      + " * @template VALUE2\n"
+      + " */\n"
+      + "function IArrayLike4(){}\n"
+      + "/**\n"
+      + " * @interface\n"
+      + " * @extends {IArrayLike4<boolean>}\n"
+      + " */\n"
+      + "function IArrayLike5(){}\n"
+      + "/**\n"
+      + " * @constructor\n"
+      + " * @implements {IArrayLike5}\n"
+      + " */\n"
+      + "function BooleanArray5(length) {};\n"
+      + "/** @type {number} */\n"
+      + "BooleanArray5.prototype.length;";
+
+  public void testIArrayLike1() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "var arr = new Int8Array(7);\n"
+        + "// no warning\n"
+        + "arr[0] = 1;\n"
+        + "arr[1] = 2;\n");
+  }
+
+  public void testIArrayLike2() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "var arr = new Int8Array(7);\n"
+        + "// have warnings\n"
+        + "arr[3] = false;\n",
+        "assignment\n"
+        + "found   : boolean\n"
+        + "required: number");
+  }
+
+  public void testIArrayLike3() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "var arr = new Int8Array2(10);\n"
+        + "// have warnings\n"
+        + "arr[3] = false;\n",
+        "assignment\n"
+        + "found   : boolean\n"
+        + "required: number");
+  }
+
+  public void testIArrayLike4() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "var arr = new Int8Array2(10);\n"
+        + "// have warnings\n"
+        + "arr[3] = false;\n",
+        "assignment\n"
+        + "found   : boolean\n"
+        + "required: number");
+  }
+
+  public void testIArrayLike5() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "var arr = new Int8Array3(10);\n"
+        + "// have warnings\n"
+        + "arr[3] = false;\n",
+        "assignment\n"
+        + "found   : boolean\n"
+        + "required: number");
+  }
+
+  public void testIArrayLike6() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "var arr = new Int8Array4(10);\n"
+        + "// have warnings\n"
+        + "arr[3] = false;\n",
+        "assignment\n"
+        + "found   : boolean\n"
+        + "required: number");
+  }
+
+  public void testIArrayLike7() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        "var arr5 = new BooleanArray5(10);\n"
+        + "arr5[2] = true;\n"
+        + "arr5[3] = \"\";",
+        "assignment\n"
+        + "found   : string\n"
+        + "required: boolean");
+  }
+
+  public void testIArrayLike8() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Int8Array(10);",
+            "arr2[true] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : boolean",
+            "required: number"));
+  }
+
+  public void testIArrayLike9() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Int8Array2(10);",
+            "arr2[true] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : boolean",
+            "required: number"));
+  }
+
+  public void testIArrayLike10() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Int8Array3(10);",
+            "arr2[true] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : boolean",
+            "required: number"));
+  }
+
+  public void testIArrayLike11() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Int8Array4(10);",
+            "arr2[true] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : boolean",
+            "required: number"));
+  }
+
+  public void testIArrayLike12() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        lineJoiner.join(
+            "var arr2 = new BooleanArray5(10);",
+            "arr2['prop'] = true;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : string",
+            "required: number"));
+  }
+
+  public void testIArrayLike13() throws Exception {
+    testTypesWithExtraExterns(EXTERNS_WITH_IARRAYLIKE_DECLS,
+        lineJoiner.join(
+            "var numOrStr = null ? 0 : 'prop';",
+            "var arr2 = new BooleanArray5(10);",
+            "arr2[numOrStr] = true;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : (number|string)",
+            "required: number"));
+  }
+
+  private static final String EXTERNS_WITH_IOBJECT_DECLS = lineJoiner.join(
+      "/**",
+      " * @constructor",
+      " * @implements IObject<(string|number), number>",
+      " */",
+      "function Object2() {}",
+      "/**",
+      " * @constructor",
+      " * @implements IObject<number, number>",
+      " */",
+      "function Object3() {}");
+
+  public void testIObject1() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Object2();",
+            "arr2[0] = 1;"));
+  }
+
+  public void testIObject2() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Object2();",
+            "arr2['str'] = 1;"));
+  }
+
+  public void testIObject3() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Object2();",
+            "arr2[true] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : boolean",
+            "required: (number|string)"));
+  }
+
+  public void testIObject4() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Object2();",
+            "arr2[function (){}] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : function (): undefined",
+            "required: (number|string)"));
+  }
+
+  public void testIObject5() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Object2();",
+            "arr2[{}] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : {}",
+            "required: (number|string)"));
+  }
+
+  public void testIObject6() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Object2();",
+            "arr2[undefined] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : undefined",
+            "required: (number|string)"));
+  }
+
+  public void testIObject7() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr2 = new Object2();",
+            "arr2[null] = 1;"),
+        lineJoiner.join(
+            "restricted index type",
+            "found   : null",
+            "required: (number|string)"));
+  }
+
+  public void testIObject8() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr = new Object2();",
+            "/** @type {boolean} */",
+            "var x = arr[3];"),
+        lineJoiner.join(
+            "initializing variable",
+            "found   : number",
+            "required: boolean"));
+  }
+
+  public void testIObject9() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr = new Object2();",
+            "/** @type {(number|string)} */",
+            "var x = arr[3];"));
+  }
+
+  public void testIObject10() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr = new Object3();",
+            "/** @type {number} */",
+            "var x = arr[3];"));
+  }
+
+  public void testIObject11() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr = new Object3();",
+            "/** @type {boolean} */",
+            "var x = arr[3];"),
+        lineJoiner.join(
+            "initializing variable",
+            "found   : number",
+            "required: boolean"));
+  }
+
+  public void testIObject12() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr = new Object3();",
+            "/** @type {string} */",
+            "var x = arr[3];"),
+        lineJoiner.join(
+            "initializing variable",
+            "found   : number",
+            "required: string"));
+  }
+
+  public void testIObject13() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr = new Object3();",
+            "arr[3] = false;"),
+        lineJoiner.join(
+            "assignment",
+            "found   : boolean",
+            "required: number"));
+  }
+
+  public void testIObject14() throws Exception {
+    testTypesWithExtraExterns(
+        EXTERNS_WITH_IOBJECT_DECLS,
+        lineJoiner.join(
+            "var arr = new Object3();",
+            "arr[3] = 'value';"),
+        lineJoiner.join(
+            "assignment",
+            "found   : string",
+            "required: number"));
+  }
+
   private void testTypes(String js) throws Exception {
     testTypes(js, (String) null);
   }
@@ -13502,6 +13940,15 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
 
   void testTypesWithExterns(String externs, String js) throws Exception {
     testTypes(externs, js, (String) null, false);
+  }
+
+  void testTypesWithExtraExterns(String externs, String js) throws Exception {
+    testTypes(DEFAULT_EXTERNS + "\n" + externs, js, (String) null, false);
+  }
+
+  void testTypesWithExtraExterns(String externs,
+      String js, String description) throws Exception {
+    testTypes(DEFAULT_EXTERNS + "\n" + externs, js, description, false);
   }
 
   void testTypes(

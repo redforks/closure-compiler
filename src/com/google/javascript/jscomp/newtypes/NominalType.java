@@ -58,8 +58,8 @@ public final class NominalType {
 
   // This should only be called during GlobalTypeInfo.
   public RawNominalType getRawNominalType() {
-    Preconditions.checkState(typeMap.isEmpty());
-    return rawType;
+    Preconditions.checkState(!isFinalized());
+    return this.rawType;
   }
 
   public JSType getInstanceAsJSType() {
@@ -181,13 +181,6 @@ public final class NominalType {
 
   public ImmutableSet<String> getAllPropsOfClass() {
     return rawType.getAllPropsOfClass();
-  }
-
-  public ImmutableSet<String> getAllOwnProps() {
-    ImmutableSet.Builder<String> builder = ImmutableSet.builder();
-    builder.addAll(rawType.classProps.keySet());
-    builder.addAll(rawType.protoProps.keySet());
-    return builder.build();
   }
 
   public NominalType getInstantiatedSuperclass() {
@@ -447,6 +440,10 @@ public final class NominalType {
     // The object pointed to by the prototype property of the constructor of
     // this class has these properties
     private PersistentMap<String, Property> protoProps = PersistentMap.create();
+    // For @unrestricted, we are less strict about inexistent-prop warnings than
+    // for @struct. We use this map to remember the names of props added outside
+    // the constructor and the prototype methods.
+    private PersistentMap<String, Property> randomProps = PersistentMap.create();
     // The "static" properties of the constructor are stored in the namespace.
     boolean isFinalized = false;
     // Consider a generic type A<T> which inherits from a generic type B<T>.
@@ -457,6 +454,7 @@ public final class NominalType {
     private NominalType superClass = null;
     private ImmutableSet<NominalType> interfaces = null;
     private final boolean isInterface;
+    // Used in GlobalTypeInfo to find type mismatches in the inheritance chain.
     private ImmutableSet<String> allProps = null;
     // In GlobalTypeInfo, we request (wrapped) RawNominalTypes in various
     // places. Create them here and cache them to save mem.
@@ -483,15 +481,22 @@ public final class NominalType {
       this.typeParameters = typeParameters;
       this.isInterface = isInterface;
       this.objectKind = objectKind;
-      this.wrappedAsNominal =
-          new NominalType(ImmutableMap.<String, JSType>of(), this);
-      ObjectType objInstance = "Function".equals(name)
-          ? ObjectType.fromFunction(
-              FunctionType.TOP_FUNCTION, this.wrappedAsNominal)
-          : ObjectType.fromNominalType(this.wrappedAsNominal);
+      this.wrappedAsNominal = new NominalType(ImmutableMap.<String, JSType>of(), this);
+      ObjectType objInstance;
+      switch (name) {
+        case "Function":
+          objInstance = ObjectType.fromFunction(FunctionType.TOP_FUNCTION, this.wrappedAsNominal);
+          break;
+        case "Object":
+          // We do this to avoid having two instances of ObjectType that both
+          // represent the top JS object.
+          objInstance = ObjectType.TOP_OBJECT;
+          break;
+        default:
+          objInstance = ObjectType.fromNominalType(this.wrappedAsNominal);
+      }
       this.wrappedAsJSType = JSType.fromObjectType(objInstance);
-      this.wrappedAsNullableJSType = JSType.join(JSType.NULL,
-          this.wrappedAsJSType);
+      this.wrappedAsNullableJSType = JSType.join(JSType.NULL, this.wrappedAsJSType);
     }
 
     public static RawNominalType makeUnrestrictedClass(
@@ -622,6 +627,10 @@ public final class NominalType {
       if (p != null) {
         return p;
       }
+      p = randomProps.get(pname);
+      if (p != null) {
+        return p;
+      }
       return protoProps.get(pname);
     }
 
@@ -642,7 +651,7 @@ public final class NominalType {
 
     private Property getPropFromInterface(String pname) {
       Preconditions.checkState(isInterface);
-      Property p = protoProps.get(pname);
+      Property p = getOwnProp(pname);
       if (p != null) {
         return p;
       }
@@ -713,10 +722,20 @@ public final class NominalType {
         if (superClass != null) {
           builder.addAll(superClass.rawType.getAllPropsOfClass());
         }
-        allProps = builder
-            .addAll(classProps.keySet()).addAll(protoProps.keySet()).build();
+        allProps = builder.addAll(classProps.keySet()).addAll(protoProps.keySet()).build();
       }
       return allProps;
+    }
+
+    public void addPropertyWhichMayNotBeOnAllInstances(String pname, JSType type) {
+      Preconditions.checkState(!isFinalized);
+      if (this.classProps.containsKey(pname) || this.protoProps.containsKey(pname)) {
+        return;
+      }
+      if (this.objectKind == ObjectKind.UNRESTRICTED) {
+        this.randomProps = this.randomProps.with(
+            pname, Property.make(type == null ? JSType.UNKNOWN : type, type));
+      }
     }
 
     //////////// Class Properties
@@ -727,12 +746,15 @@ public final class NominalType {
       if (type == null && isConstant) {
         type = JSType.UNKNOWN;
       }
-      classProps = classProps.with(pname, isConstant
+      this.classProps = this.classProps.with(pname, isConstant
           ? Property.makeConstant(defSite, type, type)
           : Property.makeWithDefsite(defSite, type, type));
       // Upgrade any proto props to declared, if present
-      if (protoProps.containsKey(pname)) {
+      if (this.protoProps.containsKey(pname)) {
         addProtoProperty(pname, defSite, type, isConstant);
+      }
+      if (this.randomProps.containsKey(pname)) {
+        this.randomProps = this.randomProps.without(pname);
       }
     }
 
@@ -754,11 +776,14 @@ public final class NominalType {
       if (type == null && isConstant) {
         type = JSType.UNKNOWN;
       }
-      if (classProps.containsKey(pname) &&
-          classProps.get(pname).getDeclaredType() == null) {
-        classProps = classProps.without(pname);
+      if (this.classProps.containsKey(pname) &&
+          this.classProps.get(pname).getDeclaredType() == null) {
+        this.classProps = this.classProps.without(pname);
       }
-      protoProps = protoProps.with(pname, isConstant
+      if (this.randomProps.containsKey(pname)) {
+        this.randomProps = this.randomProps.without(pname);
+      }
+      this.protoProps = this.protoProps.with(pname, isConstant
           ? Property.makeConstant(defSite, type, type)
           : Property.makeWithDefsite(defSite, type, type));
     }
@@ -766,10 +791,13 @@ public final class NominalType {
     /** Add a new undeclared prototype property to this class */
     public void addUndeclaredProtoProperty(String pname, Node defSite) {
       Preconditions.checkState(!isFinalized);
-      if (!protoProps.containsKey(pname) ||
-          protoProps.get(pname).getDeclaredType() == null) {
-        protoProps = protoProps.with(pname,
+      if (!this.protoProps.containsKey(pname) ||
+          this.protoProps.get(pname).getDeclaredType() == null) {
+        this.protoProps = this.protoProps.with(pname,
             Property.makeWithDefsite(defSite, JSType.UNKNOWN, null));
+        if (this.randomProps.containsKey(pname)) {
+          this.randomProps = this.randomProps.without(pname);
+        }
       }
     }
 

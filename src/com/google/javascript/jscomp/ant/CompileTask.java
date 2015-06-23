@@ -80,9 +80,11 @@ public final class CompileTask
   private boolean manageDependencies;
   private boolean prettyPrint;
   private boolean printInputDelimiter;
+  private boolean preferSingleQuotes;
   private boolean generateExports;
   private boolean replaceProperties;
   private boolean forceRecompile;
+  private boolean angularPass;
   private String replacePropertiesPrefix;
   private File outputFile;
   private String outputWrapper;
@@ -106,9 +108,11 @@ public final class CompileTask
     this.manageDependencies = false;
     this.prettyPrint = false;
     this.printInputDelimiter = false;
+    this.preferSingleQuotes = false;
     this.generateExports = false;
     this.replaceProperties = false;
     this.forceRecompile = false;
+    this.angularPass = false;
     this.replacePropertiesPrefix = "closure.define.";
     this.defineParams = new LinkedList();
     this.entryPointParams = new LinkedList();
@@ -269,10 +273,23 @@ public final class CompileTask
   }
 
   /**
+   * Normally, when there are an equal number of single and double quotes
+   * in a string, the compiler will use double quotes. Set this to true
+   * to prefer single quotes.
+   */
+  public void setPreferSingleQuotes(boolean singlequotes) {
+    this.preferSingleQuotes = singlequotes;
+  }
+
+  /**
    * Set force recompile option
    */
   public void setForceRecompile(boolean forceRecompile) {
     this.forceRecompile = forceRecompile;
+  }
+
+  public void setAngularPass(boolean angularPass) {
+    this.angularPass = angularPass;
   }
 
   /**
@@ -375,7 +392,7 @@ public final class CompileTask
         if (result.sourceMap != null) {
           flushSourceMap(result.sourceMap);
           source.append(System.getProperty("line.separator"));
-          source.append("//@ sourceMappingURL=" + sourceMapOutputFile.getName());
+          source.append("//# sourceMappingURL=" + sourceMapOutputFile.getName());
         }
         writeResult(source.toString());
       } else {
@@ -406,6 +423,7 @@ public final class CompileTask
 
     options.setPrettyPrint(this.prettyPrint);
     options.setPrintInputDelimiter(this.printInputDelimiter);
+    options.setPreferSingleQuotes(this.preferSingleQuotes);
     options.setGenerateExports(this.generateExports);
 
     options.setLanguageIn(this.languageIn);
@@ -415,6 +433,7 @@ public final class CompileTask
     options.setManageClosureDependencies(manageDependencies);
     convertEntryPointParameters(options);
     options.setTrustedStrings(true);
+    options.setAngularPass(angularPass);
 
     if (replaceProperties) {
       convertPropertiesMap(options);

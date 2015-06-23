@@ -37,6 +37,11 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
   protected static final String CLOSURE_BASE = "var goog;";
   protected static final String DEFAULT_EXTERNS =
       CompilerTypeTestCase.DEFAULT_EXTERNS + Joiner.on('\n').join(
+          "/**",
+          " * @param {*} propertyName",
+          " * @return {boolean}",
+          " */",
+          "Object.prototype.hasOwnProperty = function(propertyName) {};",
           "/** @return {string} */",
           "String.prototype.toString = function() { return '' };",
           "/**",
@@ -117,8 +122,6 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
             new Es6SplitVariableDeclarations(compiler)));
     passes.add(makePassFactory("es6ConvertSuper",
             new Es6ConvertSuper(compiler)));
-    passes.add(makePassFactory("convertEs6TypedToEs6",
-            new Es6TypedToEs6Converter(compiler)));
     passes.add(makePassFactory("convertEs6",
             new Es6ToEs3Converter(compiler)));
     passes.add(makePassFactory("Es6RewriteLetConst",
@@ -135,6 +138,7 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     setUp();
     final CompilerOptions options = compiler.getOptions();
     options.setClosurePass(true);
+    options.setWarningLevel(DiagnosticGroups.NEW_CHECK_TYPES_ALL_CHECKS, CheckLevel.WARNING);
     compiler.init(
         ImmutableList.of(SourceFile.fromCode("[externs]", externs)),
         ImmutableList.of(SourceFile.fromCode("[testcode]", js)),
@@ -155,8 +159,13 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         "parsing warning: " + Joiner.on(", ").join(compiler.getWarnings()), 0,
         compiler.getWarningCount());
 
+
     // Create common parent of externs and ast; needed by Es6RewriteLetConst.
-    IR.block(externsRoot, astRoot).setIsSyntheticBlock(true);
+    Node block = IR.block(externsRoot, astRoot);
+    block.setIsSyntheticBlock(true);
+
+    // Run ASTValidator
+    (new AstValidator(compiler)).validateRoot(block);
 
     GlobalTypeInfo symbolTable = new GlobalTypeInfo(compiler);
     passes.add(makePassFactory("GlobalTypeInfo", symbolTable));

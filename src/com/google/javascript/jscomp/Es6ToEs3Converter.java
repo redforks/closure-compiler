@@ -33,7 +33,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Converts ES6 code to valid ES3 code.
+ * Converts ES6 code to valid ES5 code. This class does most of the transpilation, and
+ * https://github.com/google/closure-compiler/wiki/ECMAScript6 lists which ES6 features are
+ * supported. Other classes that start with "Es6" do other parts of the transpilation.
+ *
+ * <p>In most cases, the output is valid as ES3 (hence the class name) but in some cases, if
+ * the output language is set to ES5, we rely on ES5 features such as getters, setters,
+ * and Object.defineProperties.
  *
  * @author tbreisacher@google.com (Tyler Breisacher)
  */
@@ -44,10 +50,11 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
       "JSC_CANNOT_CONVERT",
       "This code cannot be converted from ES6. {0}");
 
-  // TODO(tbreisacher): Remove this once all ES6 features are transpilable.
+  // TODO(tbreisacher): Remove this once we have implemented transpilation for all the features
+  // we intend to support.
   static final DiagnosticType CANNOT_CONVERT_YET = DiagnosticType.error(
       "JSC_CANNOT_CONVERT_YET",
-      "ES6-to-ES3 conversion of ''{0}'' is not yet implemented.");
+      "ES6 transpilation of ''{0}'' is not yet implemented.");
 
   static final DiagnosticType DYNAMIC_EXTENDS_TYPE = DiagnosticType.error(
       "JSC_DYNAMIC_EXTENDS_TYPE",
@@ -79,8 +86,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
   private static final String ITER_RESULT = "$jscomp$key$";
 
   // These functions are defined in js/es6_runtime.js
-  public static final String COPY_PROP = "$jscomp.copyProperties";
-  private static final String INHERITS = "$jscomp.inherits";
+  static final String INHERITS = "$jscomp.inherits";
   static final String MAKE_ITER = "$jscomp.makeIterator";
 
   public Es6ToEs3Converter(AbstractCompiler compiler) {
@@ -718,7 +724,8 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     JSDocInfo ctorJSDocInfo = null;
     // Process all members of the class
     Node classMembers = classNode.getLastChild();
-    Map<String, JSTypeExpression> membersToDeclare = new LinkedHashMap<>();
+    Map<String, JSTypeExpression> prototypeMembersToDeclare = new LinkedHashMap<>();
+    Map<String, JSTypeExpression> classMembersToDeclare = new LinkedHashMap<>();
     for (Node member : classMembers.children()) {
       if (member.isEmpty()) {
         continue;
@@ -729,15 +736,14 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
           "Member variables should have been transpiled earlier: ", member);
 
       if (member.isGetterDef() || member.isSetterDef()) {
-        if (member.isStaticMember()) {
-          compiler.report(JSError.make(member, CANNOT_CONVERT_YET, "static getters/setters"));
-        }
         JSTypeExpression typeExpr = getTypeFromGetterOrSetter(member).clone();
         addToDefinePropertiesObject(metadata, member);
 
+        Map<String, JSTypeExpression> membersToDeclare =
+            member.isStaticMember() ? classMembersToDeclare : prototypeMembersToDeclare;
         JSTypeExpression existingType = membersToDeclare.get(member.getString());
         if (existingType != null && !existingType.equals(typeExpr)) {
-          compiler.report(JSError.make(member, CONFLICTING_GETTER_SETTER_TYPE));
+          compiler.report(JSError.make(member, CONFLICTING_GETTER_SETTER_TYPE, member.getString()));
         } else {
           membersToDeclare.put(member.getString(), typeExpr);
         }
@@ -771,7 +777,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
         }
 
         Node newNode = NodeUtil.newExpr(assign);
-        metadata.insertStaticMember(newNode);
+        metadata.insertNodeAndAdvance(newNode);
       }
     }
 
@@ -779,26 +785,47 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     // so that the typechecker knows those properties exist on the class.
     // This is a temporary solution. Eventually, the type checker should understand
     // Object.defineProperties calls directly.
-    for (Map.Entry<String, JSTypeExpression> entry : membersToDeclare.entrySet()) {
+    for (Map.Entry<String, JSTypeExpression> entry : prototypeMembersToDeclare.entrySet()) {
       String declaredMember = entry.getKey();
-      Node declaration = IR.getprop(
-          prototypeAccess.cloneTree(),
-          IR.string(declaredMember));
+      Node declaration = IR.getprop(prototypeAccess.cloneTree(), IR.string(declaredMember));
       JSDocInfoBuilder declInfo = new JSDocInfoBuilder(true);
 
       declInfo.recordType(entry.getValue());
       declaration.setJSDocInfo(declInfo.build());
-      metadata.insertStaticMember(
+      metadata.insertNodeAndAdvance(
+          IR.exprResult(declaration).useSourceInfoIfMissingFromForTree(classNode));
+    }
+    for (Map.Entry<String, JSTypeExpression> entry : classMembersToDeclare.entrySet()) {
+      String declaredMember = entry.getKey();
+      Node declaration = IR.getprop(classNameAccess.cloneTree(), IR.string(declaredMember));
+      JSDocInfoBuilder declInfo = new JSDocInfoBuilder(true);
+
+      declInfo.recordType(entry.getValue());
+      declaration.setJSDocInfo(declInfo.build());
+      metadata.insertNodeAndAdvance(
           IR.exprResult(declaration).useSourceInfoIfMissingFromForTree(classNode));
     }
 
-    if (metadata.defineProperties.hasChildren()) {
-      Node definePropsCall = IR.exprResult(IR.call(
-          NodeUtil.newQName(compiler, "Object.defineProperties"),
-          prototypeAccess.cloneTree(),
-          metadata.defineProperties));
+    if (metadata.definePropertiesObjForPrototype.hasChildren()) {
+      Node definePropsCall =
+          IR.exprResult(
+              IR.call(
+                  NodeUtil.newQName(compiler, "Object.defineProperties"),
+                  prototypeAccess.cloneTree(),
+                  metadata.definePropertiesObjForPrototype));
       definePropsCall.useSourceInfoIfMissingFromForTree(classNode);
-      metadata.insertStaticMember(definePropsCall);
+      metadata.insertNodeAndAdvance(definePropsCall);
+    }
+
+    if (metadata.definePropertiesObjForClass.hasChildren()) {
+      Node definePropsCall =
+          IR.exprResult(
+              IR.call(
+                  NodeUtil.newQName(compiler, "Object.defineProperties"),
+                  classNameAccess.cloneTree(),
+                  metadata.definePropertiesObjForClass));
+      definePropsCall.useSourceInfoIfMissingFromForTree(classNode);
+      metadata.insertNodeAndAdvance(definePropsCall);
     }
 
     Preconditions.checkNotNull(constructor);
@@ -828,16 +855,6 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
         newInfo.recordBaseType(new JSTypeExpression(new Node(Token.BANG,
             IR.string(superClassString)),
             metadata.superClassNameNode.getSourceFileName()));
-
-        Node copyProps = IR.call(
-            NodeUtil.newQName(compiler, COPY_PROP),
-            NodeUtil.newQName(compiler, metadata.fullClassName),
-            NodeUtil.newQName(compiler, superClassString));
-        compiler.needsEs6Runtime = true;
-
-        copyProps.useSourceInfoIfMissingFromForTree(classNode);
-        enclosingStatement.getParent().addChildAfter(
-            IR.exprResult(copyProps).srcref(classNode), enclosingStatement);
       }
     }
 
@@ -857,7 +874,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
 
     if (NodeUtil.isStatement(classNode)) {
       constructor.getFirstChild().setString("");
-      Node ctorVar = IR.var(IR.name(metadata.fullClassName), constructor);
+      Node ctorVar = IR.var(metadata.classNameNode.cloneNode(), constructor);
       ctorVar.useSourceInfoIfMissingFromForTree(classNode);
       parent.replaceChild(classNode, ctorVar);
     } else {
@@ -907,10 +924,17 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
   }
 
   private void addToDefinePropertiesObject(ClassDeclarationMetadata metadata, Node member) {
-    Node prop = NodeUtil.getFirstPropMatchingKey(metadata.defineProperties, member.getString());
+    Node obj =
+        member.isStaticMember()
+            ? metadata.definePropertiesObjForClass
+            : metadata.definePropertiesObjForPrototype;
+    Node prop = NodeUtil.getFirstPropMatchingKey(obj, member.getString());
     if (prop == null) {
-      prop = IR.objectlit();
-      metadata.defineProperties.addChildToBack(IR.stringKey(member.getString(), prop));
+      prop =
+          IR.objectlit(
+              IR.stringKey("configurable", IR.trueNode()),
+              IR.stringKey("enumerable", IR.trueNode()));
+      obj.addChildToBack(IR.stringKey(member.getString(), prop));
     }
 
     Node function = member.getLastChild();
@@ -1083,10 +1107,16 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     private Node insertionPoint;
 
     /**
-     * An object literal node that will be used in a call to Object.defineProperties. Used for
-     * transpilation of getters and setters.
+     * An object literal node that will be used in a call to Object.defineProperties, to add getters
+     * and setters to the prototype.
      */
-    private final Node defineProperties;
+    private final Node definePropertiesObjForPrototype;
+
+    /**
+     * An object literal node that will be used in a call to Object.defineProperties, to add getters
+     * and setters to the class.
+     */
+    private final Node definePropertiesObjForClass;
 
     /**
      * The fully qualified name of the class, which will be used in the output. May come from the
@@ -1101,7 +1131,8 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     private ClassDeclarationMetadata(Node insertionPoint, String fullClassName,
         boolean anonymous, Node classNameNode, Node superClassNameNode) {
       this.insertionPoint = insertionPoint;
-      this.defineProperties = IR.objectlit();
+      this.definePropertiesObjForClass = IR.objectlit();
+      this.definePropertiesObjForPrototype = IR.objectlit();
       this.fullClassName = fullClassName;
       this.anonymous = anonymous;
       this.classNameNode = classNameNode;
@@ -1138,7 +1169,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
       }
     }
 
-    void insertStaticMember(Node newNode) {
+    void insertNodeAndAdvance(Node newNode) {
       insertionPoint.getParent().addChildAfter(newNode, insertionPoint);
       insertionPoint = newNode;
     }

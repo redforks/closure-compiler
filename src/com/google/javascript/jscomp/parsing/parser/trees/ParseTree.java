@@ -128,8 +128,12 @@ public class ParseTree {
   public TryStatementTree asTryStatement() { return (TryStatementTree) this; }
   public TypeNameTree asTypeName() { return (TypeNameTree) this; }
   public TypedParameterTree asTypedParameter() { return (TypedParameterTree) this; }
+  public OptionalParameterTree asOptionalParameter() { return (OptionalParameterTree) this; }
   public ParameterizedTypeTree asParameterizedType() { return (ParameterizedTypeTree) this; }
   public ArrayTypeTree asArrayType() { return (ArrayTypeTree) this; }
+  public UnionTypeTree asUnionType() { return (UnionTypeTree) this; }
+  public FunctionTypeTree asFunctionType() { return (FunctionTypeTree) this; }
+  public GenericTypeListTree asGenericTypeList() { return (GenericTypeListTree) this; }
   public UnaryExpressionTree asUnaryExpression() { return (UnaryExpressionTree) this; }
   public VariableDeclarationListTree asVariableDeclarationList() {
     return (VariableDeclarationListTree) this; }
@@ -139,6 +143,12 @@ public class ParseTree {
   public WhileStatementTree asWhileStatement() { return (WhileStatementTree) this; }
   public WithStatementTree asWithStatement() { return (WithStatementTree) this; }
   public YieldExpressionTree asYieldStatement() { return (YieldExpressionTree) this; }
+  public InterfaceDeclarationTree asInterfaceDeclaration() {
+    return (InterfaceDeclarationTree) this;
+  }
+  public EnumDeclarationTree asEnumDeclaration() {
+    return (EnumDeclarationTree) this;
+  }
 
   public boolean isPattern() {
     ParseTree parseTree = this;

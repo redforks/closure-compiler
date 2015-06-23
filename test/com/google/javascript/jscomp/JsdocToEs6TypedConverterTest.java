@@ -14,19 +14,9 @@
  * limitations under the License.
  */
 
-package com.google.javascript.jscomp.parsing;
+package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.THROW_ASSERTION_ERROR;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.anyType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.arrayType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.booleanType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.namedType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.numberType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.optionalParameter;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.parameterizedType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.recordType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.stringType;
-import static com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactory.unionType;
 import static com.google.javascript.jscomp.testing.NodeSubject.assertNode;
 import static com.google.javascript.rhino.Token.ANY_TYPE;
 import static com.google.javascript.rhino.Token.ARRAY_TYPE;
@@ -36,29 +26,102 @@ import static com.google.javascript.rhino.Token.NAMED_TYPE;
 import static com.google.javascript.rhino.Token.NUMBER_TYPE;
 import static com.google.javascript.rhino.Token.PARAMETERIZED_TYPE;
 import static com.google.javascript.rhino.Token.RECORD_TYPE;
-import static com.google.javascript.rhino.Token.REST_PARAMETER_TYPE;
 import static com.google.javascript.rhino.Token.STRING_TYPE;
+import static com.google.javascript.rhino.TypeDeclarationsIR.anyType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.arrayType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.booleanType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.functionType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.namedType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.numberType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.parameterizedType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.recordType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.stringType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.unionType;
 import static java.util.Arrays.asList;
 
-import com.google.javascript.jscomp.parsing.Config.LanguageMode;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+import com.google.javascript.jscomp.JsdocToEs6TypedConverter.TypeDeclarationsIRFactory;
+import com.google.javascript.jscomp.parsing.JsDocInfoParser;
 import com.google.javascript.jscomp.testing.NodeSubject;
 import com.google.javascript.rhino.IR;
-import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Node.TypeDeclarationNode;
 
-import junit.framework.TestCase;
-
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 
 /**
- * Tests the conversion of type ASTs from the awkward format inside a
- * jstypeexpression to the better format of native type declarations.
- *
- * @author alexeagle@google.com (Alex Eagle)
+ * Tests the conversion of closure-style type declarations in JSDoc
+ * to inline type declarations, by running both syntaxes through the parser
+ * and verifying the resulting AST is the same.
  */
-public final class TypeDeclarationsIRFactoryTest extends TestCase {
+public final class JsdocToEs6TypedConverterTest extends CompilerTestCase {
+
+  @Override
+  public void setUp() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6_TYPED);
+    enableAstValidation(true);
+    compareJsDoc = false;
+  }
+
+  @Override
+  protected CompilerOptions getOptions() {
+    CompilerOptions options = super.getOptions();
+    options.setLanguageOut(LanguageMode.ECMASCRIPT6_TYPED);
+    return options;
+  }
+
+  @Override
+  public CompilerPass getProcessor(Compiler compiler) {
+    return new JsdocToEs6TypedConverter(compiler);
+  }
+
+  @Override
+  protected int getNumRepetitions() {
+    return 1;
+  }
+
+  public void testVariableDeclaration() {
+    test("/** @type {string} */ var print;", "var print: string;");
+  }
+
+  public void testVariableDeclarationWithoutDeclaredType() throws Exception {
+    test("var print;", "var print;");
+  }
+
+  public void testFunctionReturnType() throws Exception {
+    test("/** @return {boolean} */ function b(){}", "function b(): boolean {}");
+  }
+
+  public void testFunctionParameterTypes() throws Exception {
+    test("/** @param {number} n @param {string} s */ function t(n,s){}",
+        "function t(n: number, s: string) {}");
+  }
+
+  public void testFunctionInsideAssignment() throws Exception {
+    test("/** @param {boolean} b @return {boolean} */ "
+            + "var f = function(b){return !b};",
+        "var f = function(b: boolean): boolean { return !b; };");
+  }
+
+  public void testNestedFunctions() throws Exception {
+    test("/**@param {boolean} b*/ "
+            + "var f = function(b){var t = function(l) {}; t();};",
+            "var f = function(b: boolean) {"
+            + "  var t = function(l) {"
+            + "  };"
+            + "  t();"
+            + "};");
+  }
+
+  public void testUnknownType() throws Exception {
+    test("/** @type {?} */ var n;", "var n: any;");
+  }
+
+  // TypeScript doesn't have a representation for the Undefined type,
+  // so our transpilation is lossy here.
+  public void testUndefinedType() throws Exception {
+    test("/** @type {undefined} */ var n;", "var n;");
+  }
 
   public void testConvertSimpleTypes() {
     assertParseTypeAndConvert("?").hasType(ANY_TYPE);
@@ -138,12 +201,12 @@ public final class TypeDeclarationsIRFactoryTest extends TestCase {
   }
 
   public void testConvertFunctionType() throws Exception {
-    Node stringKey = IR.stringKey("p1");
-    stringKey.addChildToFront(stringType());
-    Node stringKey1 = IR.stringKey("p2");
-    stringKey1.addChildToFront(booleanType());
+    Node p1 = IR.name("p1");
+    p1.setDeclaredTypeExpression(stringType());
+    Node p2 = IR.name("p2");
+    p2.setDeclaredTypeExpression(booleanType());
     assertParseTypeAndConvert("function(string, boolean)")
-        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, anyType(), stringKey, stringKey1));
+        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, anyType(), p1, p2));
   }
 
   public void testConvertFunctionReturnType() throws Exception {
@@ -152,75 +215,35 @@ public final class TypeDeclarationsIRFactoryTest extends TestCase {
   }
 
   public void testConvertFunctionThisType() throws Exception {
-    Node stringKey1 = IR.stringKey("p1");
-    stringKey1.addChildToFront(stringType());
+    Node p1 = IR.name("p1");
+    p1.setDeclaredTypeExpression(stringType());
     assertParseTypeAndConvert("function(this:goog.ui.Menu, string)")
-        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, anyType(), stringKey1));
+        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, anyType(), p1));
   }
 
   public void testConvertFunctionNewType() throws Exception {
-    Node stringKey1 = IR.stringKey("p1");
-    stringKey1.addChildToFront(stringType());
+    Node p1 = IR.name("p1");
+    p1.setDeclaredTypeExpression(stringType());
     assertParseTypeAndConvert("function(new:goog.ui.Menu, string)")
-        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, anyType(), stringKey1));
+        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, anyType(), p1));
   }
 
   public void testConvertVariableParameters() throws Exception {
-    Node stringKey1 = IR.stringKey("p1");
-    stringKey1.addChildToFront(stringType());
-    Node stringKey2 = IR.stringKey("p2");
-    stringKey2.addChildToFront(arrayType(numberType()));
+    Node p1 = IR.name("p1");
+    p1.setDeclaredTypeExpression(stringType());
+    Node p2 = IR.rest("p2");
+    p2.setDeclaredTypeExpression(arrayType(numberType()));
     assertParseTypeAndConvert("function(string, ...number): number")
-        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, numberType(),
-            stringKey1, new TypeDeclarationNode(REST_PARAMETER_TYPE, stringKey2)));
+        .isEqualTo(new TypeDeclarationNode(FUNCTION_TYPE, numberType(), p1, p2));
   }
 
   public void testConvertOptionalFunctionParameters() throws Exception {
-    LinkedHashMap<String, TypeDeclarationNode> parameters = new LinkedHashMap<>();
-    parameters.put("p1", optionalParameter(stringType()));
-    parameters.put("p2", optionalParameter(numberType()));
+    LinkedHashMap<String, TypeDeclarationNode> requiredParams = new LinkedHashMap<>();
+    LinkedHashMap<String, TypeDeclarationNode> optionalParams = new LinkedHashMap<>();
+    optionalParams.put("p1", stringType());
+    optionalParams.put("p2", numberType());
     assertParseTypeAndConvert("function(?string=, number=)")
-        .isEqualTo(TypeDeclarationsIRFactory
-            .functionType(anyType(), parameters, null, null));
-  }
-
-  public void testConvertVarArgs() throws Exception {
-    assertParseJsDocAndConvert("@param {...*} p", "p")
-        .isEqualTo(arrayType(anyType()));
-  }
-
-  // the JsDocInfoParser.parseTypeString helper doesn't understand an ELLIPSIS
-  // as the root token, so we need a whole separate fixture just for that case.
-  // This is basically inlining that helper and changing the entry point into
-  // the parser.
-  // TODO(alexeagle): perhaps we should fix the parseTypeString helper since
-  // this seems like a bug, but it's not easy.
-  private NodeSubject assertParseJsDocAndConvert(String jsDoc,
-      String parameter) {
-    // We need to tack a closing comment token on the end so the parser doesn't
-    // think it reached premature EOL
-    jsDoc = jsDoc + " */";
-    Config config = new Config(
-        new HashSet<String>(),
-         new HashSet<String>(),
-        false,
-        LanguageMode.ECMASCRIPT3,
-        false);
-    JsDocInfoParser parser = new JsDocInfoParser(
-        new JsDocTokenStream(jsDoc),
-        jsDoc,
-        0,
-        null,
-        config,
-        NullErrorReporter.forOldRhino());
-    assertTrue(parser.parse());
-    JSTypeExpression parameterType = parser.retrieveAndResetParsedJSDocInfo()
-        .getParameterType(parameter);
-    assertNotNull(parameterType);
-    Node oldAST = parameterType.getRoot();
-    assertNotNull(jsDoc + " did not produce a parsed AST", oldAST);
-    return new NodeSubject(THROW_ASSERTION_ERROR,
-        TypeDeclarationsIRFactory.convertTypeNodeAST(oldAST));
+        .isEqualTo(functionType(anyType(), requiredParams, optionalParams, null, null));
   }
 
   private NodeSubject assertParseTypeAndConvert(final String typeExpr) {

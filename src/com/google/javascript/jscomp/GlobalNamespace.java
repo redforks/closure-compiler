@@ -631,7 +631,6 @@ class GlobalNamespace
       if (parent != null) {
         switch (parent.getType()) {
           case Token.EXPR_RESULT:
-            break;
           case Token.IF:
           case Token.INSTANCEOF:
           case Token.TYPEOF:
@@ -652,9 +651,7 @@ class GlobalNamespace
             }
             break;
           case Token.NEW:
-            type = n == parent.getFirstChild()
-                   ? Ref.Type.DIRECT_GET
-                   : Ref.Type.ALIASING_GET;
+            type = n == parent.getFirstChild() ? Ref.Type.DIRECT_GET : Ref.Type.ALIASING_GET;
             break;
           case Token.OR:
           case Token.AND:
@@ -1077,11 +1074,6 @@ class GlobalNamespace
     }
 
     boolean isCollapsingExplicitlyDenied() {
-      // Enum keys are always collapsed. @nocollapse annotations are ignored
-      if (isDescendantOfEnum()) {
-        return false;
-      }
-
       if (docInfo == null) {
         Ref ref = getDeclaration();
         if (ref != null) {
@@ -1190,24 +1182,6 @@ class GlobalNamespace
      */
     boolean isSimpleName() {
       return parent == null;
-    }
-
-    /**
-     * Determines whether a node is a property of an enum.
-     * This is recursive because static properties can be added to enums after
-     * declaration.
-     */
-    boolean isDescendantOfEnum() {
-      if (parent == null) {
-        return false;
-      }
-
-      if (parent.type == Type.OBJECTLIT && parent.docInfo != null &&
-          parent.docInfo.hasEnumParameterType()) {
-        return true;
-      }
-
-      return parent.isDescendantOfEnum();
     }
 
     @Override public String toString() {

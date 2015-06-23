@@ -1538,8 +1538,8 @@ public final class IntegrationTest extends IntegrationTestCase {
         "function f() { return this.foo + this['bar'] + this.Baz; }" +
         "f.prototype.bar = 3; f.prototype.Baz = 3;";
     String all =
-        "function f() { return this.c + this['bar'] + this.a; }" +
-        "f.prototype.b = 3; f.prototype.a = 3;";
+        "function f() { return this.c + this['bar'] + this.a; }"
+            + "f.prototype.b = 3; f.prototype.a = 3;";
     testSame(options, code);
     options.setPropertyRenaming(PropertyRenamingPolicy.ALL_UNQUOTED);
     test(options, code, all);

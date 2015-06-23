@@ -16,6 +16,18 @@
 
 package com.google.javascript.jscomp.parsing;
 
+import static com.google.javascript.rhino.TypeDeclarationsIR.anyType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.arrayType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.booleanType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.functionType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.namedType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.numberType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.parameterizedType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.stringType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.undefinedType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.unionType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.voidType;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -53,6 +65,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.DefaultClauseTree;
 import com.google.javascript.jscomp.parsing.parser.trees.DefaultParameterTree;
 import com.google.javascript.jscomp.parsing.parser.trees.DoWhileStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.EmptyStatementTree;
+import com.google.javascript.jscomp.parsing.parser.trees.EnumDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ExportDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ExportSpecifierTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ExpressionStatementTree;
@@ -62,11 +75,14 @@ import com.google.javascript.jscomp.parsing.parser.trees.ForOfStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ForStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.FormalParameterListTree;
 import com.google.javascript.jscomp.parsing.parser.trees.FunctionDeclarationTree;
+import com.google.javascript.jscomp.parsing.parser.trees.FunctionTypeTree;
+import com.google.javascript.jscomp.parsing.parser.trees.GenericTypeListTree;
 import com.google.javascript.jscomp.parsing.parser.trees.GetAccessorTree;
 import com.google.javascript.jscomp.parsing.parser.trees.IdentifierExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.IfStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ImportDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ImportSpecifierTree;
+import com.google.javascript.jscomp.parsing.parser.trees.InterfaceDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.LabelledStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.LiteralExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.MemberExpressionTree;
@@ -78,6 +94,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.NewExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NullTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ObjectLiteralExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ObjectPatternTree;
+import com.google.javascript.jscomp.parsing.parser.trees.OptionalParameterTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ParameterizedTypeTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ParenExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ParseTree;
@@ -100,6 +117,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.TryStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypeNameTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypedParameterTree;
 import com.google.javascript.jscomp.parsing.parser.trees.UnaryExpressionTree;
+import com.google.javascript.jscomp.parsing.parser.trees.UnionTypeTree;
 import com.google.javascript.jscomp.parsing.parser.trees.VariableDeclarationListTree;
 import com.google.javascript.jscomp.parsing.parser.trees.VariableDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.VariableStatementTree;
@@ -120,7 +138,9 @@ import com.google.javascript.rhino.TokenStream;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -279,17 +299,11 @@ class IRFactory {
         reservedKeywords = null; // use TokenStream.isKeyword instead
         break;
       case ECMASCRIPT5:
-        reservedKeywords = ES5_RESERVED_KEYWORDS;
-        break;
-      case ECMASCRIPT5_STRICT:
-        reservedKeywords = ES5_STRICT_RESERVED_KEYWORDS;
-        break;
       case ECMASCRIPT6:
         reservedKeywords = ES5_RESERVED_KEYWORDS;
         break;
+      case ECMASCRIPT5_STRICT:
       case ECMASCRIPT6_STRICT:
-        reservedKeywords = ES5_STRICT_RESERVED_KEYWORDS;
-        break;
       case ECMASCRIPT6_TYPED:
         reservedKeywords = ES5_STRICT_RESERVED_KEYWORDS;
         break;
@@ -605,14 +619,6 @@ class IRFactory {
     if (info != null && info.hasType()) {
       boolean valid = false;
       switch (n.getType()) {
-        // Casts, variable declarations, and exports are valid.
-        case Token.CAST:
-        case Token.VAR:
-        case Token.LET:
-        case Token.CONST:
-        case Token.EXPORT:
-          valid = true;
-          break;
         // Function declarations are valid
         case Token.FUNCTION:
           valid = isFunctionDeclaration(n);
@@ -636,7 +642,12 @@ class IRFactory {
               break;
           }
           break;
-        // Object literal properties are valid
+        // Casts, variable declarations, exports, and object literal properties are all valid.
+        case Token.CAST:
+        case Token.VAR:
+        case Token.LET:
+        case Token.CONST:
+        case Token.EXPORT:
         case Token.STRING_KEY:
         case Token.GETTER_DEF:
         case Token.SETTER_DEF:
@@ -644,8 +655,9 @@ class IRFactory {
           break;
         // Property assignments are valid, if at the root of an expression.
         case Token.ASSIGN:
-          valid = n.getParent().isExprResult()
-            && (n.getFirstChild().isGetProp() || n.getFirstChild().isGetElem());
+          valid =
+              n.getParent().isExprResult()
+                  && (n.getFirstChild().isGetProp() || n.getFirstChild().isGetElem());
           break;
         case Token.GETPROP:
           valid = n.getParent().isExprResult() && n.isQualifiedName();
@@ -656,9 +668,7 @@ class IRFactory {
       }
 
       if (!valid) {
-        errorReporter.warning(MISPLACED_TYPE_ANNOTATION,
-            sourceName,
-            n.getLineno(), n.getCharno());
+        errorReporter.warning(MISPLACED_TYPE_ANNOTATION, sourceName, n.getLineno(), n.getCharno());
       }
     }
   }
@@ -797,7 +807,6 @@ class IRFactory {
   private boolean shouldAttachJSDocHere(ParseTree tree) {
     switch (tree.type) {
       case EXPRESSION_STATEMENT:
-        return false;
       case LABELLED_STATEMENT:
         return false;
       case CALL_EXPRESSION:
@@ -1365,6 +1374,13 @@ class IRFactory {
         setSourceInfo(emptyName, functionTree);
         node.addChildToBack(emptyName);
       }
+
+      if (functionTree.generics != null) {
+        maybeWarnTypeSyntax(functionTree, "generic function");
+        node.getFirstChild().putProp(Node.GENERIC_TYPE_LIST,
+            transform(functionTree.generics));
+      }
+
       node.addChildToBack(transform(functionTree.formalParameterList));
 
       if (functionTree.returnType != null) {
@@ -1402,14 +1418,16 @@ class IRFactory {
 
     Node processFormalParameterList(FormalParameterListTree tree) {
       Node params = newNode(Token.PARAM_LIST);
-      for (ParseTree param : tree.parameters) {
-        Node paramNode = transformNodeWithInlineJsDoc(param, false);
-        // Children must be simple names, default parameters, rest
-        // parameters, or destructuring patterns.
-        Preconditions.checkState(paramNode.isName() || paramNode.isRest()
-            || paramNode.isArrayPattern() || paramNode.isObjectPattern()
-            || paramNode.isDefaultValue());
-        params.addChildToBack(paramNode);
+      if (checkParameters(tree.parameters)) {
+        for (ParseTree param : tree.parameters) {
+          Node paramNode = transformNodeWithInlineJsDoc(param, false);
+          // Children must be simple names, default parameters, rest
+          // parameters, or destructuring patterns.
+          Preconditions.checkState(paramNode.isName() || paramNode.isRest()
+              || paramNode.isArrayPattern() || paramNode.isObjectPattern()
+              || paramNode.isDefaultValue());
+          params.addChildToBack(paramNode);
+        }
       }
       return params;
     }
@@ -1609,7 +1627,7 @@ class IRFactory {
 
     Node processComputedPropertyMemberVariable(ComputedPropertyMemberVariableTree tree) {
       maybeWarnEs6Feature(tree, "computed property");
-      maybeWarnTypeSyntax(tree);
+      maybeWarnTypeSyntax(tree, "computed property");
 
       Node n = newNode(Token.COMPUTED_PROP, transform(tree.property));
       maybeProcessType(n, tree.declaredType);
@@ -2071,6 +2089,10 @@ class IRFactory {
       maybeWarnEs6Feature(tree, "class");
 
       Node name = transformOrEmpty(tree.name, tree);
+      if (tree.generics != null) {
+        maybeWarnTypeSyntax(tree, "generic class");
+        name.putProp(Node.GENERIC_TYPE_LIST, transform(tree.generics));
+      }
       Node superClass = transformOrEmpty(tree.superClass, tree);
 
       Node body = newNode(Token.CLASS_MEMBERS);
@@ -2080,6 +2102,39 @@ class IRFactory {
       }
 
       return newNode(Token.CLASS, name, superClass, body);
+    }
+
+    Node processInterfaceDeclaration(InterfaceDeclarationTree tree) {
+      maybeWarnTypeSyntax(tree, "interface");
+
+      Node name = processName(tree.name);
+      if (tree.generics != null) {
+        maybeWarnTypeSyntax(tree, "generic interface");
+        name.putProp(Node.GENERIC_TYPE_LIST, transform(tree.generics));
+      }
+
+      Node superInterfaces = transformListOrEmpty(Token.INTERFACE_EXTENDS, tree.superInterfaces);
+
+      Node body = newNode(Token.INTERFACE_MEMBERS);
+      setSourceInfo(body, tree);
+      for (ParseTree child : tree.elements) {
+        body.addChildToBack(transform(child));
+      }
+
+      return newNode(Token.INTERFACE, name, superInterfaces, body);
+    }
+
+    Node processEnumDeclaration(EnumDeclarationTree tree) {
+      maybeWarnTypeSyntax(tree, "enum");
+
+      Node name = processName(tree.name);
+      Node body = newNode(Token.ENUM_MEMBERS);
+      setSourceInfo(body, tree);
+      for (ParseTree child : tree.members) {
+        body.addChildrenToBack(transform(child));
+      }
+
+      return newNode(Token.ENUM, name, body);
     }
 
     Node processSuper(SuperExpressionTree tree) {
@@ -2095,7 +2150,7 @@ class IRFactory {
     }
 
     Node processYield(YieldExpressionTree tree) {
-      Node yield = new Node(Token.YIELD);
+      Node yield = newNode(Token.YIELD);
       if (tree.expression != null) {
         yield.addChildToBack(transform(tree.expression));
       }
@@ -2175,38 +2230,44 @@ class IRFactory {
         String typeName = tree.segments.get(0);
         switch (typeName) {
           case "any":
-            typeNode = TypeDeclarationsIRFactory.anyType();
+            typeNode = anyType();
             break;
           case "number":
-            typeNode = TypeDeclarationsIRFactory.numberType();
+            typeNode = numberType();
             break;
           case "boolean":
-            typeNode = TypeDeclarationsIRFactory.booleanType();
+            typeNode = booleanType();
             break;
           case "string":
-            typeNode = TypeDeclarationsIRFactory.stringType();
+            typeNode = stringType();
             break;
           case "void":
-            typeNode = TypeDeclarationsIRFactory.voidType();
+            typeNode = voidType();
             break;
           case "undefined":
-            typeNode = TypeDeclarationsIRFactory.undefinedType();
+            typeNode = undefinedType();
             break;
           default:
-            typeNode = TypeDeclarationsIRFactory.namedType(tree.segments);
+            typeNode = namedType(tree.segments);
             break;
         }
       } else {
-        typeNode = TypeDeclarationsIRFactory.namedType(tree.segments);
+        typeNode = namedType(tree.segments);
       }
       setSourceInfo(typeNode, tree);
       return typeNode;
     }
 
     Node processTypedParameter(TypedParameterTree typeAnnotation) {
-      maybeWarnTypeSyntax(typeAnnotation);
       Node param = process(typeAnnotation.param);
       maybeProcessType(param, typeAnnotation.typeAnnotation);
+      return param;
+    }
+
+    Node processOptionalParameter(OptionalParameterTree optionalParam) {
+      maybeWarnTypeSyntax(optionalParam, "optional parameter");
+      Node param = process(optionalParam.param);
+      param.putBooleanProp(Node.OPT_PARAM_ES6_TYPED, true);
       return param;
     }
 
@@ -2230,11 +2291,121 @@ class IRFactory {
         arguments.add((TypeDeclarationNode) process(arg));
       }
       TypeDeclarationNode typeName = (TypeDeclarationNode) process(tree.typeName);
-      return TypeDeclarationsIRFactory.parameterizedType(typeName, arguments.build());
+      return parameterizedType(typeName, arguments.build());
     }
 
     Node processArrayType(ArrayTypeTree tree) {
-      return TypeDeclarationsIRFactory.arrayType(process(tree.elementType));
+      return arrayType(process(tree.elementType));
+    }
+
+    Node processUnionType(UnionTypeTree tree) {
+      ImmutableList.Builder<TypeDeclarationNode> options = ImmutableList.builder();
+      for (ParseTree option : tree.types) {
+        options.add((TypeDeclarationNode) process(option));
+      }
+      return unionType(options.build());
+    }
+
+    private boolean checkParameters(ImmutableList<ParseTree> params) {
+      boolean seenOptional = false;
+      boolean good = true;
+      for (int i = 0; i < params.size(); i++) {
+        ParseTree param = params.get(i);
+        TypeDeclarationNode type = null;
+        if (param.type == ParseTreeType.TYPED_PARAMETER) {
+          TypedParameterTree typedParam = param.asTypedParameter();
+          type = (TypeDeclarationNode) process(typedParam.typeAnnotation);
+          param = typedParam.param;
+        }
+        switch (param.type) {
+          case IDENTIFIER_EXPRESSION:
+            if (seenOptional) {
+              errorReporter.error(
+                  "A required parameter cannot follow an optional parameter.",
+                  sourceName,
+                  lineno(param),
+                  charno(param));
+              good = false;
+            }
+            break;
+          case OPTIONAL_PARAMETER:
+            seenOptional = true;
+            break;
+          case REST_PARAMETER:
+            if (i != params.size() - 1) {
+              errorReporter.error(
+                  "A rest parameter must be last in a parameter list.",
+                  sourceName,
+                  lineno(param),
+                  charno(param));
+              good = false;
+            }
+            if (type != null && type.getType() != Token.ARRAY_TYPE) {
+              errorReporter.error(
+                  "A rest parameter must be of an array type.",
+                  sourceName,
+                  lineno(param),
+                  charno(param));
+              good = false;
+            }
+            break;
+          default:
+        }
+      }
+      return good;
+    }
+
+    Node processFunctionType(FunctionTypeTree tree) {
+      LinkedHashMap<String, TypeDeclarationNode> requiredParams = new LinkedHashMap<>();
+      LinkedHashMap<String, TypeDeclarationNode> optionalParams = new LinkedHashMap<>();
+      String restName = null;
+      TypeDeclarationNode restType = null;
+      if (checkParameters(tree.formalParameterList.parameters)) {
+        for (ParseTree param : tree.formalParameterList.parameters) {
+          TypeDeclarationNode type = null;
+          if (param.type == ParseTreeType.TYPED_PARAMETER) {
+            TypedParameterTree typedParam = param.asTypedParameter();
+            type = (TypeDeclarationNode) process(typedParam.typeAnnotation);
+            param = typedParam.param;
+          }
+          switch (param.type) {
+            case IDENTIFIER_EXPRESSION:
+              requiredParams.put(
+                  param.asIdentifierExpression().identifierToken.toString(),
+                  type);
+              break;
+            case OPTIONAL_PARAMETER:
+              maybeWarnTypeSyntax(param, "optional parameter");
+              optionalParams.put(
+                  param.asOptionalParameter().param.asIdentifierExpression()
+                      .identifierToken.toString(),
+                  type);
+              break;
+            case REST_PARAMETER:
+              restName = param.asRestParameter().identifier.toString();
+              restType = type;
+              break;
+            default:
+              throw new IllegalStateException("Illegal parameter type: " + param.type);
+          }
+        }
+      }
+
+      return functionType(process(tree.returnType), requiredParams, optionalParams,
+          restName, restType);
+    }
+
+    Node processGenericTypeList(GenericTypeListTree tree) {
+      Node list = new Node(Token.GENERIC_TYPE_LIST);
+      for (Map.Entry<IdentifierToken, ParseTree> generic : tree.generics.entrySet()) {
+        Node type = newStringNode(Token.GENERIC_TYPE, generic.getKey().value);
+        ParseTree bound = generic.getValue();
+        if (bound != null) {
+          type.addChildToBack(transform(bound));
+        }
+        list.addChildToBack(type);
+      }
+      return list;
     }
 
     private Node transformList(
@@ -2248,10 +2419,10 @@ class IRFactory {
 
     private Node transformListOrEmpty(
         int type, ImmutableList<ParseTree> list) {
-      if (list != null) {
-        return transformList(type, list);
-      } else {
+      if (list == null || list.isEmpty()) {
         return newNode(Token.EMPTY);
+      } else {
+        return transformList(type, list);
       }
     }
 
@@ -2264,14 +2435,19 @@ class IRFactory {
       }
     }
 
-    void maybeWarnTypeSyntax(ParseTree node) {
+    void maybeWarnTypeSyntax(ParseTree node, String feature) {
       if (config.languageMode != LanguageMode.ECMASCRIPT6_TYPED) {
         errorReporter.warning(
-            "type syntax is only supported in ES6 typed mode",
+            "type syntax is only supported in ES6 typed mode: " + feature,
             sourceName,
-            lineno(node), charno(node));
+            lineno(node),
+            charno(node));
       }
       recordTypeSyntax(node.location);
+    }
+
+    void maybeWarnTypeSyntax(ParseTree node) {
+      maybeWarnTypeSyntax(node, "type annotation");
     }
 
     Node unsupportedLanguageFeature(ParseTree node, String feature) {
@@ -2401,7 +2577,7 @@ class IRFactory {
 
         case COMMA_EXPRESSION:
           return processCommaExpression(node.asCommaExpression());
-        case NULL:  // this is not the null literal
+        case NULL: // this is not the null literal
           return processNull(node.asNull());
         case FINALLY:
           return processFinally(node.asFinally());
@@ -2459,21 +2635,33 @@ class IRFactory {
         case SPREAD_EXPRESSION:
           return processSpreadExpression(node.asSpreadExpression());
 
-          // TODO(johnlenz): handle these or remove parser support
-        case ARGUMENT_LIST:
-          break;
-
+        // ES6 Typed
         case TYPE_NAME:
           return processTypeName(node.asTypeName());
-        case TYPE_ANNOTATION:
+        case TYPED_PARAMETER:
           return processTypedParameter(node.asTypedParameter());
+        case OPTIONAL_PARAMETER:
+          return processOptionalParameter(node.asOptionalParameter());
         case PARAMETERIZED_TYPE_TREE:
           return processParameterizedType(node.asParameterizedType());
         case ARRAY_TYPE:
           return processArrayType(node.asArrayType());
+        case UNION_TYPE:
+          return processUnionType(node.asUnionType());
+        case FUNCTION_TYPE:
+          return processFunctionType(node.asFunctionType());
+        case GENERIC_TYPE_LIST:
+          return processGenericTypeList(node.asGenericTypeList());
         case MEMBER_VARIABLE:
           return processMemberVariable(node.asMemberVariable());
 
+        case INTERFACE_DECLARATION:
+          return processInterfaceDeclaration(node.asInterfaceDeclaration());
+        case ENUM_DECLARATION:
+          return processEnumDeclaration(node.asEnumDeclaration());
+
+          // TODO(johnlenz): handle these or remove parser support
+        case ARGUMENT_LIST:
         default:
           break;
       }

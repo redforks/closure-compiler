@@ -218,20 +218,13 @@ public final class DefaultPassConfig extends PassConfig {
 
     if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
         && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
-      checks.add(convertDeclaredTypesToJSDoc);
+      checks.add(convertEs6TypedToEs6);
     }
 
     if (options.lowerFromEs6()) {
       checks.add(es6RenameVariablesInParamLists);
       checks.add(es6SplitVariableDeclarations);
       checks.add(es6ConvertSuper);
-    }
-    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
-        && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
-      // Needs ctor already created by es6ConvertSuper pass.
-      checks.add(convertEs6TypedToEs6);
-    }
-    if (options.lowerFromEs6()) {
       checks.add(convertEs6ToEs3);
       checks.add(rewriteLetConst);
       checks.add(rewriteGenerators);
@@ -1173,19 +1166,11 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
-  private final PassFactory convertDeclaredTypesToJSDoc =
-      new PassFactory("convertDeclaredTypesToJSDoc", true) {
-    @Override
-    CompilerPass create(AbstractCompiler compiler) {
-      return new ConvertDeclaredTypesToJSDoc(compiler);
-    }
-  };
-
   private final PassFactory convertToTypedES6 =
       new PassFactory("ConvertToTypedES6", true) {
     @Override
     CompilerPass create(AbstractCompiler compiler) {
-      return new ConvertToTypedES6(compiler);
+      return new JsdocToEs6TypedConverter(compiler);
     }
   };
 
@@ -1780,11 +1765,11 @@ public final class DefaultPassConfig extends PassConfig {
   /** Collapses names in the global scope. */
   private final PassFactory collapseProperties =
       new PassFactory("collapseProperties", true) {
-    @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
-      return new CollapseProperties(compiler);
-    }
-  };
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new CollapseProperties(compiler);
+        }
+      };
 
   /** Rewrite properties as variables. */
   private final PassFactory collapseObjectLiterals =
@@ -1898,19 +1883,19 @@ public final class DefaultPassConfig extends PassConfig {
   /** Inlines variables heuristically. */
   private final PassFactory inlineVariables =
       new PassFactory("inlineVariables", false) {
-    @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
-      InlineVariables.Mode mode;
-      if (options.inlineVariables) {
-        mode = InlineVariables.Mode.ALL;
-      } else if (options.inlineLocalVariables) {
-        mode = InlineVariables.Mode.LOCALS_ONLY;
-      } else {
-        throw new IllegalStateException("No variable inlining option set.");
-      }
-      return new InlineVariables(compiler, mode, true);
-    }
-  };
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          InlineVariables.Mode mode;
+          if (options.inlineVariables) {
+            mode = InlineVariables.Mode.ALL;
+          } else if (options.inlineLocalVariables) {
+            mode = InlineVariables.Mode.LOCALS_ONLY;
+          } else {
+            throw new IllegalStateException("No variable inlining option set.");
+          }
+          return new InlineVariables(compiler, mode, true);
+        }
+      };
 
   /** Inlines variables that are marked as constants. */
   private final PassFactory inlineConstants =
@@ -2047,20 +2032,20 @@ public final class DefaultPassConfig extends PassConfig {
   /** Inlines function calls. */
   private final PassFactory inlineFunctions =
       new PassFactory("inlineFunctions", false) {
-    @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
-      return new InlineFunctions(
-          compiler,
-          compiler.getUniqueNameIdSupplier(),
-          options.inlineFunctions,
-          options.inlineLocalFunctions,
-          true,
-          options.assumeStrictThis()
-              || options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT,
-          options.assumeClosuresOnlyCaptureReferences,
-          options.maxFunctionSizeAfterInlining);
-    }
-  };
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new InlineFunctions(
+              compiler,
+              compiler.getUniqueNameIdSupplier(),
+              options.inlineFunctions,
+              options.inlineLocalFunctions,
+              true,
+              options.assumeStrictThis()
+                  || options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT,
+              options.assumeClosuresOnlyCaptureReferences,
+              options.maxFunctionSizeAfterInlining);
+        }
+      };
 
   /** Inlines constant properties. */
   private final PassFactory inlineProperties =
@@ -2330,22 +2315,23 @@ public final class DefaultPassConfig extends PassConfig {
    */
   private final PassFactory renameProperties =
       new PassFactory("renameProperties", true) {
-    @Override
-    protected CompilerPass create(final AbstractCompiler compiler) {
-      Preconditions.checkState(options.propertyRenaming == PropertyRenamingPolicy.ALL_UNQUOTED);
-      final VariableMap prevPropertyMap = options.inputPropertyMap;
-      return new CompilerPass() {
-        @Override public void process(Node externs, Node root) {
-          char[] reservedChars = options.anonymousFunctionNaming.getReservedCharacters();
-          RenameProperties rprop = new RenameProperties(
-              compiler, options.generatePseudoNames,
-              prevPropertyMap, reservedChars);
-          rprop.process(externs, root);
-          propertyMap = rprop.getPropertyMap();
+        @Override
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          Preconditions.checkState(options.propertyRenaming == PropertyRenamingPolicy.ALL_UNQUOTED);
+          final VariableMap prevPropertyMap = options.inputPropertyMap;
+          return new CompilerPass() {
+            @Override
+            public void process(Node externs, Node root) {
+              char[] reservedChars = options.anonymousFunctionNaming.getReservedCharacters();
+              RenameProperties rprop =
+                  new RenameProperties(
+                      compiler, options.generatePseudoNames, prevPropertyMap, reservedChars);
+              rprop.process(externs, root);
+              propertyMap = rprop.getPropertyMap();
+            }
+          };
         }
       };
-    }
-  };
 
   /** Renames variables. */
   private final PassFactory renameVars = new PassFactory("renameVars", true) {
