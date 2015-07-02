@@ -26,10 +26,10 @@ import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
 
 /**
- * Checks for various JSDoc-related issues, such as function definitions without JsDoc, params
- * with no corresponding {@code @param} annotation, etc.
+ * Checks for various JSDoc-related style issues, such as function definitions without JsDoc, params
+ * with no corresponding {@code @param} annotation, coding conventions not being respected, etc.
  */
-public final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass {
+public final class CheckJSDocStyle extends AbstractPostOrderCallback implements CompilerPass {
   public static final DiagnosticType MISSING_PARAM_JSDOC =
       DiagnosticType.warning("JSC_MISSING_PARAM_JSDOC", "Missing JSDoc for param {0}");
 
@@ -44,13 +44,9 @@ public final class CheckJSDoc extends AbstractPostOrderCallback implements Compi
       DiagnosticType.warning("JSC_OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME",
           "Optional parameter name {0} must be prefixed with opt_");
 
-  public static final DiagnosticType DISALLOWED_MEMBER_JSDOC =
-      DiagnosticType.warning("JSC_DISALLOWED_MEMBER_JSDOC",
-          "Class level JSDocs (@interface, @extends, etc.) are not allowed on class members");
-
   private final AbstractCompiler compiler;
 
-  public CheckJSDoc(AbstractCompiler compiler) {
+  public CheckJSDocStyle(AbstractCompiler compiler) {
     this.compiler = compiler;
   }
 
@@ -85,14 +81,6 @@ public final class CheckJSDoc extends AbstractPostOrderCallback implements Compi
             && !jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
           t.report(n, MUST_BE_PRIVATE, name);
         }
-      }
-    } else if (n.isMemberFunctionDef()) {
-      JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(n);
-      if (jsDoc != null
-          && (jsDoc.isConstructor() || jsDoc.isInterface() || jsDoc.hasBaseType()
-              || jsDoc.getImplementedInterfaceCount() != 0
-              || jsDoc.getExtendedInterfacesCount() != 0)) {
-        t.report(n, DISALLOWED_MEMBER_JSDOC);
       }
     }
   }

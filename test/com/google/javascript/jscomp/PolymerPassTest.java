@@ -37,10 +37,9 @@ public class PolymerPassTest extends CompilerTestCase {
           "/** @constructor @extends {HTMLElement} */",
           "var HTMLInputElement = function() {};",
           "/** @constructor @extends {HTMLElement} */",
-          "var PolymerElement = function() {",
-          "  /** @type {Object} */",
-          "  this.$;",
-          "};",
+          "var PolymerElement = function() {};",
+          "/** @type {!Object} */",
+          "PolymerElement.prototype.$;",
           "PolymerElement.prototype.created = function() {};",
           "PolymerElement.prototype.ready = function() {};",
           "PolymerElement.prototype.attached = function() {};",
@@ -70,15 +69,11 @@ public class PolymerPassTest extends CompilerTestCase {
           "/** @constructor @extends {HTMLElement} */",
           "var HTMLInputElement = function() {};",
           "/** @constructor @extends {HTMLElement} */",
-          "var PolymerElement = function() {",
-          "  /** @type {Object} */",
-          "  this.$;",
-          "};",
+          "var PolymerElement = function() {};",
           "/** @constructor @extends {HTMLInputElement} */",
-          "var PolymerInputElement = function() {",
-          "  /** @type {Object} */",
-          "  this.$;",
-          "};",
+          "var PolymerInputElement = function() {};",
+          "/** @type {!Object} */",
+          "PolymerInputElement.prototype.$;",
           "PolymerInputElement.prototype.created = function() {};",
           "PolymerInputElement.prototype.ready = function() {};",
           "PolymerInputElement.prototype.attached = function() {};",
@@ -94,6 +89,8 @@ public class PolymerPassTest extends CompilerTestCase {
           " *     calling the callback.",
           " */",
           "PolymerInputElement.prototype.job = function(name, callback, timeoutMillis) {};",
+          "/** @type {!Object} */",
+          "PolymerElement.prototype.$;",
           "PolymerElement.prototype.created = function() {};",
           "PolymerElement.prototype.ready = function() {};",
           "PolymerElement.prototype.attached = function() {};",
@@ -1499,19 +1496,13 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testInvalid1() {
-    testSame(
-        "var x = Polymer();",
-        POLYMER_DESCRIPTOR_NOT_VALID, true);
-    testSame(
-        "var x = Polymer({},'blah');",
-        POLYMER_UNEXPECTED_PARAMS, true);
-    testSame(
-        "var x = Polymer({});",
-        POLYMER_MISSING_IS, true);
+    testError("var x = Polymer();", POLYMER_DESCRIPTOR_NOT_VALID);
+    testError("var x = Polymer({},'blah');", POLYMER_UNEXPECTED_PARAMS);
+    testError("var x = Polymer({});", POLYMER_MISSING_IS);
   }
 
   public void testInvalidProperties() {
-    testSame(
+    testError(
         LINE_JOINER.join(
             "Polymer({",
             "  is: 'x-element',",
@@ -1519,10 +1510,9 @@ public class PolymerPassTest extends CompilerTestCase {
             "    isHappy: true,",
             "  },",
             "});"),
-        POLYMER_INVALID_PROPERTY,
-        true);
+        POLYMER_INVALID_PROPERTY);
 
-    testSame(
+    testError(
         LINE_JOINER.join(
             "Polymer({",
             "  is: 'x-element',",
@@ -1532,12 +1522,26 @@ public class PolymerPassTest extends CompilerTestCase {
             "    },",
             "  },",
             "});"),
-        POLYMER_INVALID_PROPERTY,
-        true);
+        POLYMER_INVALID_PROPERTY);
+
+    testError(
+        LINE_JOINER.join(
+            "var foo = {};",
+            "foo.bar = {};",
+            "Polymer({",
+            "  is: 'x-element',",
+            "  properties: {",
+            "    isHappy: {",
+            "      type: foo.Bar,",
+            "      value: true,",
+            "    },",
+            "  },",
+            "});"),
+        POLYMER_INVALID_PROPERTY);
   }
 
   public void testInvalidBehavior() {
-    testSame(
+    testError(
         LINE_JOINER.join(
             "(function() {",
             "  var isNotGloabl = {};",
@@ -1548,10 +1552,9 @@ public class PolymerPassTest extends CompilerTestCase {
             "    ],",
             "  });",
             "})();"),
-        POLYMER_UNQUALIFIED_BEHAVIOR,
-        true);
+        POLYMER_UNQUALIFIED_BEHAVIOR);
 
-    testSame(
+    testError(
         LINE_JOINER.join(
             "var foo = {};",
             "(function() {",
@@ -1562,10 +1565,9 @@ public class PolymerPassTest extends CompilerTestCase {
             "    ],",
             "  });",
             "})();"),
-        POLYMER_UNQUALIFIED_BEHAVIOR,
-        true);
+        POLYMER_UNQUALIFIED_BEHAVIOR);
 
-    testSame(
+    testError(
         LINE_JOINER.join(
             "var foo = {};",
             "foo.Bar;",
@@ -1577,14 +1579,12 @@ public class PolymerPassTest extends CompilerTestCase {
             "    ],",
             "  });",
             "})();"),
-        POLYMER_UNQUALIFIED_BEHAVIOR,
-        true);
+        POLYMER_UNQUALIFIED_BEHAVIOR);
 
-    testSame(
+    testError(
         LINE_JOINER.join(
             "Polymer({", "  is: 'x-element',", "  behaviors: [", "    DoesNotExist", "  ],", "});"),
-        POLYMER_UNQUALIFIED_BEHAVIOR,
-        true);
+        POLYMER_UNQUALIFIED_BEHAVIOR);
   }
 
   public void testUnannotatedBehavior() {

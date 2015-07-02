@@ -846,19 +846,6 @@ public final class NodeUtil {
     return false;
   }
 
-  static Node getInitializer(Node n) {
-    Preconditions.checkArgument(n.isQualifiedName() || n.isStringKey());
-    switch (n.getParent().getType()) {
-      case Token.ASSIGN:
-        return n.getNext();
-      case Token.VAR:
-      case Token.OBJECTLIT:
-        return n.getFirstChild();
-      default:
-        return null;
-    }
-  }
-
   /**
    * Returns true iff this node defines a namespace, such as goog or goog.math.
    */
@@ -1435,6 +1422,7 @@ public final class NodeUtil {
       case Token.NULLABLE_TYPE:
       case Token.NAMED_TYPE:
       case Token.UNDEFINED_TYPE:
+      case Token.GENERIC_TYPE:
         return 18;
       case Token.CAST:
         return 19;
@@ -2121,7 +2109,7 @@ public final class NodeUtil {
   /**
    * @return Whether the node is used as a statement.
    */
-  static boolean isStatement(Node n) {
+  public static boolean isStatement(Node n) {
     return isStatementParent(n.getParent());
   }
 
@@ -3693,7 +3681,7 @@ public final class NodeUtil {
     return null;
   }
 
-  /** Gets the r-value of a node returned by getBestLValue. */
+  /** Gets the r-value (or intializer) of a node returned by getBestLValue. */
   static Node getRValueOfLValue(Node n) {
     Node parent = n.getParent();
     switch (parent.getType()) {
@@ -3702,8 +3690,10 @@ public final class NodeUtil {
       case Token.VAR:
       case Token.LET:
       case Token.CONST:
+      case Token.OBJECTLIT:
         return n.getFirstChild();
       case Token.FUNCTION:
+      case Token.CLASS:
         return parent;
     }
     return null;

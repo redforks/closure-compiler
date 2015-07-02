@@ -254,6 +254,110 @@ public final class ScopedAliasesTest extends CompilerTestCase {
          "goog.bar.newMethod2=function(goog$$1, b){return goog.bar + b};");
   }
 
+  public void testFunctionDeclarationInScope() {
+    testScoped("var foo = function() {};", SCOPE_NAMESPACE + "$jscomp.scope.foo = function() {};");
+  }
+
+  public void testFunctionDeclarationInScope_letConst() {
+    testScoped(
+        "var baz = goog.bar; let foo = function() {return baz;};",
+        SCOPE_NAMESPACE + "$jscomp.scope.foo = function() {return goog.bar;};",
+        LanguageMode.ECMASCRIPT6);
+    testScoped(
+        "var baz = goog.bar; const foo = function() {return baz;};",
+        SCOPE_NAMESPACE + "$jscomp.scope.foo = function() {return goog.bar;};",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testLetConstShadowing() {
+    testScoped(
+        "var foo = goog.bar; var f = function() {"
+            + "let foo = baz; return foo;};",
+        SCOPE_NAMESPACE + "$jscomp.scope.f = function() {"
+            + "let foo = baz; return foo;};",
+        LanguageMode.ECMASCRIPT6);
+    testScoped(
+        "var foo = goog.bar; var f = function() {"
+            + "const foo = baz; return foo;};",
+        SCOPE_NAMESPACE + "$jscomp.scope.f = function() {"
+            + "const foo = baz; return foo;};",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testYieldExpression() {
+    testScoped("var foo = goog.bar; var f = function*() {yield foo;};",
+        SCOPE_NAMESPACE + "$jscomp.scope.f = function*() {yield goog.bar;};",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testDestructuringError() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    testScopedError("var [x] = [1];",
+        ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
+  }
+
+  public void testObjectDescructuringError1() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    testScopedError("var {x} = {x: 1};",
+        ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
+  }
+
+  public void testObjectDescructuringError2() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    testScopedError("var {x: y} = {x: 1};",
+        ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
+  }
+
+  public void testNonTopLevelDestructuring() {
+    testScoped("var f = function() {var [x, y] = [1, 2];};",
+        SCOPE_NAMESPACE + "$jscomp.scope.f = function() {var [x, y] = [1, 2];};",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testArrowFunction() {
+    testScoped(
+        "var foo = goog.bar; var v = (x => x + foo);",
+        SCOPE_NAMESPACE + "$jscomp.scope.v = (x => x + goog.bar)",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testClassDefinition1() {
+    testScoped(
+        "class Foo {}", SCOPE_NAMESPACE + "$jscomp.scope.Foo=class{}", LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testClassDefinition2() {
+    testScoped(
+        "var bar = goog.bar;" + "class Foo { constructor() { this.x = bar; }}",
+        SCOPE_NAMESPACE + "$jscomp.scope.Foo = class { constructor() { this.x = goog.bar; } }",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testClassDefinition3() {
+    testScoped(
+        "var bar = {};" + "bar.Foo = class {};",
+        SCOPE_NAMESPACE + "$jscomp.scope.bar = {}; $jscomp.scope.bar.Foo = class {}",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testClassDefinition_letConst() {
+    testScoped(
+        "let bar = {};" + "bar.Foo = class {};",
+        SCOPE_NAMESPACE + "$jscomp.scope.bar = {}; $jscomp.scope.bar.Foo = class {}",
+        LanguageMode.ECMASCRIPT6);
+    testScoped(
+        "const bar = {};" + "bar.Foo = class {};",
+        SCOPE_NAMESPACE + "$jscomp.scope.bar = {}; $jscomp.scope.bar.Foo = class {}",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testDefaultParameter() {
+    testScoped(
+        "var foo = goog.bar; var f = function(y=foo) {};",
+        SCOPE_NAMESPACE + "$jscomp.scope.f = function(y=goog.bar) {};",
+        LanguageMode.ECMASCRIPT6);
+  }
+
   /**
    * Make sure we don't hit an IllegalStateException for this case.
    * @see https://github.com/google/closure-compiler/issues/400
@@ -285,7 +389,32 @@ public final class ScopedAliasesTest extends CompilerTestCase {
             "  /** @type {function(Foo)} */ (function(foo) {})",
             "};"),
         "goog.x = {y: /** @type {function(Foo)} */ (function(foo) {})};");
-  };
+  }
+
+  public void testObjectLiteralShorthand() {
+    testScoped(
+        "var bar = goog.bar; var Foo = {bar};",
+        SCOPE_NAMESPACE + "$jscomp.scope.Foo={bar: goog.bar};",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testObjectLiteralMethods() {
+    testScoped(
+        "var foo = goog.bar; var obj = {toString() {return foo}};",
+        SCOPE_NAMESPACE + "$jscomp.scope.obj = {toString() {return goog.bar}};",
+        LanguageMode.ECMASCRIPT6);
+  }
+
+  public void testObjectLiteralComputedPropertyNames() {
+    testScoped(
+        "var foo = goog.bar; var obj = {[(() => foo)()]: baz};",
+        SCOPE_NAMESPACE + "$jscomp.scope.obj = {[(() => goog.bar)()]:baz};",
+        LanguageMode.ECMASCRIPT6);
+    testScoped(
+        "var foo = goog.bar; var obj = {[x => x + foo]: baz};",
+        SCOPE_NAMESPACE + "$jscomp.scope.obj = {[x => x + goog.bar]:baz};",
+        LanguageMode.ECMASCRIPT6);
+  }
 
   public void testJsDocNotIgnored() {
     enableTypeCheck(CheckLevel.WARNING);
@@ -864,8 +993,7 @@ public final class ScopedAliasesTest extends CompilerTestCase {
   private static class TransformationHandlerSpy
       implements AliasTransformationHandler {
 
-    private final Map<String, List<SourcePosition<AliasTransformation>>>
-        observedPositions = 
+    private final Map<String, List<SourcePosition<AliasTransformation>>> observedPositions =
         new HashMap<>();
 
     public final List<AliasTransformation> constructedAliases =

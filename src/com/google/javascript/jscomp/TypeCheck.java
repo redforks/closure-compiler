@@ -577,12 +577,6 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         ensureTyped(t, n, NUMBER_TYPE);
         break;
 
-      case Token.TRUE:
-      case Token.FALSE:
-      case Token.NOT:
-        ensureTyped(t, n, BOOLEAN_TYPE);
-        break;
-
       case Token.VOID:
         ensureTyped(t, n, VOID_TYPE);
         break;
@@ -744,6 +738,9 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         visitBinaryOperator(n.getType(), t, n);
         break;
 
+      case Token.TRUE:
+      case Token.FALSE:
+      case Token.NOT:
       case Token.DELPROP:
         ensureTyped(t, n, BOOLEAN_TYPE);
         break;
@@ -2222,7 +2219,7 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       return toStringProperty.getType().isFunctionType();
     }
     ObjectType parent = type.getParentScope();
-    if (!parent.isNativeObjectType()) {
+    if (parent != null && !parent.isNativeObjectType()) {
       return classHasToString(parent);
     }
     return false;

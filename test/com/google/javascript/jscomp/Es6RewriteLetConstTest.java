@@ -711,11 +711,9 @@ public final class Es6RewriteLetConstTest extends CompilerTestCase {
   public void testDoWhileForOfCapturedLetAnnotated() {
     enableTypeCheck(CheckLevel.WARNING);
 
-    test("/** @type {number} */ let x = 5; x = 'str';",
-        null, null, TypeValidator.TYPE_MISMATCH_WARNING);
+    testWarning("/** @type {number} */ let x = 5; x = 'str';", TypeValidator.TYPE_MISMATCH_WARNING);
 
-    test("let /** number */ x = 5; x = 'str';",
-        null, null, TypeValidator.TYPE_MISMATCH_WARNING);
+    testWarning("let /** number */ x = 5; x = 'str';", TypeValidator.TYPE_MISMATCH_WARNING);
 
     test(
         LINE_JOINER.join(
@@ -803,5 +801,96 @@ public final class Es6RewriteLetConstTest extends CompilerTestCase {
             "  }",
             "  return x;",
             "}"));
+  }
+
+
+  public void testClass() {
+    test(LINE_JOINER.join(
+            "class C {}",
+            "var c1 = C;",
+            "{",
+            "  class C {}",
+            "  var c2 = C;",
+            "}",
+            "C === c1;"),
+        LINE_JOINER.join(
+            "class C {}",
+            "var c1 = C;",
+            "{",
+            "  class C$0 {}",
+            "  var c2 = C$0;",
+            "}",
+            "C === c1;"));
+  }
+
+  public void testRenameJsDoc() {
+    test(LINE_JOINER.join(
+        "function f() {",
+        "  let Foo = 4;",
+        "  if (Foo > 2) {",
+        "    /** @constructor */",
+        "    let Foo = function(){};",
+        "    let /** Foo */ f = new Foo;",
+        "    return f;",
+        "  }",
+        "}"),
+        LINE_JOINER.join(
+        "function f() {",
+        "  var Foo = 4;",
+        "  if (Foo > 2) {",
+        "    /** @constructor */",
+        "    var Foo$0 = function(){};",
+        "    var /** Foo$0 */ f$1 = new Foo$0;",
+        "    return f$1;",
+        "  }",
+        "}"));
+
+    test(LINE_JOINER.join(
+        "function f() {",
+        "  let Foo = 4;",
+        "  if (Foo > 2) {",
+        "    /** @constructor */",
+        "    let Foo = function(){};",
+        "    let f = /** @param {Foo} p1 @return {Foo} */ function(p1) {",
+        "        return new Foo;",
+        "    };",
+        "    return f;",
+        "  }",
+        "}"),
+        LINE_JOINER.join(
+        "function f() {",
+        "  var Foo = 4;",
+        "  if (Foo > 2) {",
+        "    /** @constructor */",
+        "    var Foo$0 = function(){};",
+        "    var f$1 = /** @param {Foo$0} p1 @return {Foo$0} */ function(p1) {",
+        "        return new Foo$0;",
+        "    };",
+        "    return f$1;",
+        "  }",
+        "}"));
+
+    test(LINE_JOINER.join(
+        "function f() {",
+        "  let Foo = 4;",
+        "  let Bar = 5;",
+        "  if (Foo > 2) {",
+        "    /** @constructor */ let Foo = function(){};",
+        "    /** @constructor */ let Bar = function(){};",
+        "    let /** Foo | Bar */ f = new Foo;",
+        "    return f;",
+        "  }",
+        "}"),
+        LINE_JOINER.join(
+        "function f() {",
+        "  var Foo = 4;",
+        "  var Bar = 5;",
+        "  if (Foo > 2) {",
+        "    /** @constructor */ var Foo$0 = function(){};",
+        "    /** @constructor */ var Bar$1 = function(){};",
+        "    var /** Foo$0 | Bar$1 */ f$2 = new Foo$0;",
+        "    return f$2;",
+        "  }",
+        "}"));
   }
 }

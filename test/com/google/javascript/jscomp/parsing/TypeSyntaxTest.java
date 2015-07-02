@@ -203,6 +203,13 @@ public final class TypeSyntaxTest extends TestCase {
     parse("var x: Foo[]<Bar>;");
   }
 
+  public void testRecordType() {
+    parse("var x: {p:string, q:string, r:string};");
+    parse("var x: {p:string, q:string}[];");
+    parse("var x: {p:string, q:string} | string;");
+    parse("var x: (o: {p:string, q:string}) => r;");
+  }
+
   public void testParameterizedType() {
     TypeDeclarationNode parameterizedType =
         parameterizedType(
@@ -281,6 +288,7 @@ public final class TypeSyntaxTest extends TestCase {
     parse("var n: (p1: string) => boolean;");
     parse("var n: (p1: string, p2: number) => boolean;");
     parse("var n: () => () => number;");
+    parse("var n: (p1: string) => {};");
     parse("(number): () => number => number;");
 
     Node ast = parse("var n: (p1: string, p2: number) => boolean[];");
@@ -316,7 +324,7 @@ public final class TypeSyntaxTest extends TestCase {
     parse("var n: (p1 : p2?) => number;");
     expectErrors("Parse error. ')' expected");
     parse("var n: (p1 : p2 = p3) => number;");
-    expectErrors("Parse error. Unexpected token '{' in type expression");
+    expectErrors("Parse error. ':' expected");
     parse("var n: ({x, y}, z) => number;");
     expectErrors("Parse error. Unexpected token '[' in type expression");
     parse("var n: ([x, y], z) => number;");
@@ -354,8 +362,6 @@ public final class TypeSyntaxTest extends TestCase {
   public void testFunctionType_incomplete() {
     expectErrors("Parse error. Unexpected token ';' in type expression");
     parse("var n: (p1:string) =>;");
-    expectErrors("Parse error. Unexpected token '{' in type expression");
-    parse("var n: (p1:string) => {};");
     expectErrors("Parse error. Unexpected token '=>' in type expression");
     parse("var n: => boolean;");
   }
@@ -375,7 +381,21 @@ public final class TypeSyntaxTest extends TestCase {
   }
 
   public void testInterface() {
+    parse("interface I {\n}");
+    parse("interface Foo extends Bar, Baz {\n}");
     parse("interface I {\n  foo: string;\n}");
+    parse("interface I {\n  foo(p: boolean): string;\n}");
+    parse("interface I {\n  foo<T>(p: boolean): string;\n}");
+
+    expectErrors("Parse error. ';' expected");
+    parse("interface I { foo(p: boolean): string {}}");
+    expectErrors("Parse error. '}' expected");
+    parse("if (true) { interface I {} }");
+
+    // TODO(moz): Enable these
+    //parse("interface I {\n  (p: boolean): string;\n}");
+    //parse("interface I {\n  new (p: boolean): string;\n}");
+    //parse("interface I {\n  [foo: string]: number;\n}");
   }
 
   public void testInterface_notEs6Typed() {
@@ -398,6 +418,9 @@ public final class TypeSyntaxTest extends TestCase {
 
   public void testEnum() {
     parse("enum E {\n  a,\n  b,\n  c\n}");
+
+    expectErrors("Parse error. '}' expected");
+    parse("if (true) { enum E {} }");
   }
 
   public void testEnum_notEs6Typed() {
@@ -474,6 +497,42 @@ public final class TypeSyntaxTest extends TestCase {
     parse("var x = <T>((p:T) => 3);");
 
     testNotEs6Typed("function foo<T>() {}", "generic function");
+  }
+
+  public void testImplements() {
+    parse("class Foo implements Bar, Baz {\n}");
+    parse("class Foo extends Bar implements Baz {\n}");
+
+    testNotEs6Typed("class Foo implements Bar {\n}", "implements");
+  }
+
+  public void testTypeAlias() {
+    parse("type Foo = number;");
+
+    expectErrors("Parse error. Semi-colon expected");
+    parse("if (true) { type Foo = number; }");
+
+    testNotEs6Typed("type Foo = number;", "type alias");
+  }
+
+  public void testAmbientDeclaration() {
+    parse("declare var x, y;");
+    parse("declare let x;");
+    parse("declare const x;");
+    parse("declare function foo();");
+    parse("declare class Foo {\n};");
+    parse("declare enum Foo {\n};");
+
+    expectErrors("Parse error. Ambient variable declaration may not have initializer");
+    parse("declare var x = 3;");
+    expectErrors("Parse error. Ambient variable declaration may not have initializer");
+    parse("declare const x = 3;");
+    expectErrors("Parse error. Semi-colon expected");
+    parse("declare function foo() {}");
+    expectErrors("Parse error. Semi-colon expected");
+    parse("if (true) { declare var x; }");
+
+    testNotEs6Typed("declare var x;", "ambient declaration");
   }
 
   private void assertVarType(String message, TypeDeclarationNode expectedType, String source) {

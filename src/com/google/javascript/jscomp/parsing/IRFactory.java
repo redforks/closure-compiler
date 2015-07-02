@@ -23,6 +23,7 @@ import static com.google.javascript.rhino.TypeDeclarationsIR.functionType;
 import static com.google.javascript.rhino.TypeDeclarationsIR.namedType;
 import static com.google.javascript.rhino.TypeDeclarationsIR.numberType;
 import static com.google.javascript.rhino.TypeDeclarationsIR.parameterizedType;
+import static com.google.javascript.rhino.TypeDeclarationsIR.recordType;
 import static com.google.javascript.rhino.TypeDeclarationsIR.stringType;
 import static com.google.javascript.rhino.TypeDeclarationsIR.undefinedType;
 import static com.google.javascript.rhino.TypeDeclarationsIR.unionType;
@@ -37,6 +38,7 @@ import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.parser.IdentifierToken;
 import com.google.javascript.jscomp.parsing.parser.LiteralToken;
 import com.google.javascript.jscomp.parsing.parser.TokenType;
+import com.google.javascript.jscomp.parsing.parser.trees.AmbientDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ArrayLiteralExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ArrayPatternTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ArrayTypeTree;
@@ -102,6 +104,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.ParseTreeType;
 import com.google.javascript.jscomp.parsing.parser.trees.PostfixExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ProgramTree;
 import com.google.javascript.jscomp.parsing.parser.trees.PropertyNameAssignmentTree;
+import com.google.javascript.jscomp.parsing.parser.trees.RecordTypeTree;
 import com.google.javascript.jscomp.parsing.parser.trees.RestParameterTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ReturnStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.SetAccessorTree;
@@ -114,6 +117,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.TemplateSubstitutionTre
 import com.google.javascript.jscomp.parsing.parser.trees.ThisExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ThrowStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TryStatementTree;
+import com.google.javascript.jscomp.parsing.parser.trees.TypeAliasTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypeNameTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypedParameterTree;
 import com.google.javascript.jscomp.parsing.parser.trees.UnaryExpressionTree;
@@ -163,15 +167,6 @@ class IRFactory {
       "Non-JSDoc comment has annotations. " +
       "Did you mean to start it with '/**'?";
 
-  static final String MISPLACED_TYPE_ANNOTATION =
-      "Type annotations are not allowed here. Are you missing parentheses?";
-
-  static final String MISPLACED_FUNCTION_ANNOTATION =
-      "This JSDoc is not attached to a function node. Are you missing parentheses?";
-
-  static final String MISPLACED_MSG_ANNOTATION =
-      "@desc, @hidden, and @meaning annotations should only be on message nodes.";
-
   static final String INVALID_ES3_PROP_NAME =
       "Keywords and reserved words are not allowed as unquoted property " +
       "names in older versions of JavaScript. " +
@@ -217,9 +212,6 @@ class IRFactory {
   static final String UNEXPECTED_RETURN = "return must be inside function";
 
   static final String UNDEFINED_LABEL = "undefined label \"%s\"";
-
-  static final String ANNOTATION_DEPRECATED =
-      "The %s annotation is deprecated.%s";
 
   private final String sourceString;
   private final List<Integer> newlines;
@@ -360,7 +352,6 @@ class IRFactory {
   }
 
   private void validate(Node n) {
-    validateJsDoc(n);
     validateParameters(n);
     validateBreakContinue(n);
     validateReturn(n);
@@ -485,68 +476,6 @@ class IRFactory {
     }
   }
 
-  private void validateJsDoc(Node n) {
-    validateTypeAnnotations(n);
-    validateFunctionJsDoc(n);
-    validateMsgJsDoc(n);
-    validateDeprecatedJsDoc(n);
-  }
-
-  /**
-   * Checks that deprecated annotations such as @expose are not present
-   */
-  private void validateDeprecatedJsDoc(Node n) {
-    JSDocInfo info = n.getJSDocInfo();
-    if (info == null) {
-      return;
-    }
-    if (info.isExpose()) {
-      errorReporter.warning(
-          String.format(ANNOTATION_DEPRECATED, "@expose",
-              " Use @nocollapse or @export instead."),
-          sourceName,
-          n.getLineno(), n.getCharno());
-    }
-  }
-
-  /**
-   * Checks that annotations for messages ({@code @desc}, {@code @hidden}, and {@code @meaning})
-   * are in the proper place, namely on names starting with MSG_ which indicates they should be
-   * extracted for translation. A later pass checks that the right side is a call to goog.getMsg.
-   */
-  private void validateMsgJsDoc(Node n) {
-    JSDocInfo info = n.getJSDocInfo();
-    if (info == null) {
-      return;
-    }
-    if (info.getDescription() != null || info.isHidden() || info.getMeaning() != null) {
-      boolean descOkay = false;
-      switch (n.getType()) {
-        case Token.ASSIGN: {
-          Node lhs = n.getFirstChild();
-          if (lhs.isName()) {
-            descOkay = lhs.getString().startsWith("MSG_");
-          } else if (lhs.isQualifiedName()) {
-            descOkay = lhs.getLastChild().getString().startsWith("MSG_");
-          }
-          break;
-        }
-        case Token.VAR:
-        case Token.LET:
-        case Token.CONST:
-          descOkay = n.getFirstChild().getString().startsWith("MSG_");
-          break;
-        case Token.STRING_KEY:
-          descOkay = n.getString().startsWith("MSG_");
-          break;
-      }
-      if (!descOkay) {
-        errorReporter.warning(MISPLACED_MSG_ANNOTATION,
-            sourceName, n.getLineno(), n.getCharno());
-      }
-    }
-  }
-
   private JSDocInfo recordJsDoc(SourceRange location, JSDocInfo info) {
     if (info != null && info.hasTypeInformation()) {
       hasJsDocTypeAnnotations = true;
@@ -565,111 +494,6 @@ class IRFactory {
       errorReporter.error("Bad type syntax"
           + " - can only have JSDoc or inline type annotations, not both",
           sourceName, lineno(location.start), charno(location.start));
-    }
-  }
-
-  /**
-   * Checks that JSDoc intended for a function is actually attached to a
-   * function.
-   */
-  private void validateFunctionJsDoc(Node n) {
-    JSDocInfo info = n.getJSDocInfo();
-    if (info == null) {
-      return;
-    }
-    if (info.containsFunctionDeclaration() && !info.hasType()) {
-      // This JSDoc should be attached to a FUNCTION node, or an assignment
-      // with a function as the RHS, etc.
-      switch (n.getType()) {
-        case Token.FUNCTION:
-        case Token.VAR:
-        case Token.LET:
-        case Token.CONST:
-        case Token.GETTER_DEF:
-        case Token.SETTER_DEF:
-        case Token.MEMBER_FUNCTION_DEF:
-        case Token.STRING_KEY:
-        case Token.EXPORT:
-          return;
-        case Token.GETELEM:
-        case Token.GETPROP:
-          if (n.getFirstChild().isQualifiedName()) {
-            return;
-          }
-          break;
-        case Token.ASSIGN: {
-          // TODO(tbreisacher): Check that the RHS of the assignment is a
-          // function. Note that it can be a FUNCTION node, but it can also be
-          // a call to goog.abstractMethod, goog.functions.constant, etc.
-          return;
-        }
-      }
-      errorReporter.warning(MISPLACED_FUNCTION_ANNOTATION,
-          sourceName,
-          n.getLineno(), n.getCharno());
-    }
-  }
-
-  /**
-   * Check that JSDoc with a {@code @type} annotation is in a valid place.
-   */
-  @SuppressWarnings("incomplete-switch")
-  private void validateTypeAnnotations(Node n) {
-    JSDocInfo info = n.getJSDocInfo();
-    if (info != null && info.hasType()) {
-      boolean valid = false;
-      switch (n.getType()) {
-        // Function declarations are valid
-        case Token.FUNCTION:
-          valid = isFunctionDeclaration(n);
-          break;
-        // Object literal properties, catch declarations and variable
-        // initializers are valid.
-        case Token.NAME:
-        case Token.DEFAULT_VALUE:
-          Node parent = n.getParent();
-          switch (parent.getType()) {
-            case Token.STRING_KEY:
-            case Token.GETTER_DEF:
-            case Token.SETTER_DEF:
-            case Token.CATCH:
-            case Token.FUNCTION:
-            case Token.VAR:
-            case Token.LET:
-            case Token.CONST:
-            case Token.PARAM_LIST:
-              valid = true;
-              break;
-          }
-          break;
-        // Casts, variable declarations, exports, and object literal properties are all valid.
-        case Token.CAST:
-        case Token.VAR:
-        case Token.LET:
-        case Token.CONST:
-        case Token.EXPORT:
-        case Token.STRING_KEY:
-        case Token.GETTER_DEF:
-        case Token.SETTER_DEF:
-          valid = true;
-          break;
-        // Property assignments are valid, if at the root of an expression.
-        case Token.ASSIGN:
-          valid =
-              n.getParent().isExprResult()
-                  && (n.getFirstChild().isGetProp() || n.getFirstChild().isGetElem());
-          break;
-        case Token.GETPROP:
-          valid = n.getParent().isExprResult() && n.isQualifiedName();
-          break;
-        case Token.CALL:
-          valid = info.isDefine();
-          break;
-      }
-
-      if (!valid) {
-        errorReporter.warning(MISPLACED_TYPE_ANNOTATION, sourceName, n.getLineno(), n.getCharno());
-      }
     }
   }
 
@@ -860,13 +684,7 @@ class IRFactory {
     return handleJsDoc(getJsDoc(token));
   }
 
-  private boolean isFunctionDeclaration(Node n) {
-    return n.isFunction() && isStmtContainer(n.getParent());
-  }
 
-  private static boolean isStmtContainer(Node n) {
-    return n.isBlock() || n.isScript();
-  }
 
   private Node transform(ParseTree tree) {
     JSDocInfo info = handleJsDoc(tree);
@@ -1329,6 +1147,7 @@ class IRFactory {
       boolean isMember = (functionTree.kind == FunctionDeclarationTree.Kind.MEMBER);
       boolean isArrow = (functionTree.kind == FunctionDeclarationTree.Kind.ARROW);
       boolean isGenerator = functionTree.isGenerator;
+      boolean isSignature = (functionTree.functionBody.type == ParseTreeType.EMPTY_STATEMENT);
 
       if (!isEs6Mode()) {
         if (isGenerator) {
@@ -1389,7 +1208,7 @@ class IRFactory {
       }
 
       Node bodyNode = transform(functionTree.functionBody);
-      if (!isArrow && !bodyNode.isBlock()) {
+      if (!isArrow && !isSignature && !bodyNode.isBlock()) {
         // When in ideMode the parser tries to parse some constructs the
         // compiler doesn't support, repair it here.
         Preconditions.checkState(config.isIdeMode);
@@ -1400,6 +1219,7 @@ class IRFactory {
 
       node.setIsGeneratorFunction(isGenerator);
       node.setIsArrowFunction(isArrow);
+      node.putBooleanProp(Node.METHOD_SIGNATURE, isSignature);
 
       Node result;
 
@@ -1408,6 +1228,7 @@ class IRFactory {
         Node member = newStringNode(Token.MEMBER_FUNCTION_DEF, name.value);
         member.addChildToBack(node);
         member.setStaticMember(functionTree.isStatic);
+        node.setDeclaredTypeExpression(node.getDeclaredTypeExpression());
         result = member;
       } else {
         result = node;
@@ -2094,6 +1915,7 @@ class IRFactory {
         name.putProp(Node.GENERIC_TYPE_LIST, transform(tree.generics));
       }
       Node superClass = transformOrEmpty(tree.superClass, tree);
+      Node interfaces = transformListOrEmpty(Token.IMPLEMENTS, tree.interfaces);
 
       Node body = newNode(Token.CLASS_MEMBERS);
       setSourceInfo(body, tree);
@@ -2101,7 +1923,12 @@ class IRFactory {
         body.addChildToBack(transform(child));
       }
 
-      return newNode(Token.CLASS, name, superClass, body);
+      Node classNode = newNode(Token.CLASS, name, superClass, body);
+      if (!interfaces.isEmpty()) {
+        maybeWarnTypeSyntax(tree, "implements");
+        classNode.putProp(Node.IMPLEMENTS, interfaces);
+      }
+      return classNode;
     }
 
     Node processInterfaceDeclaration(InterfaceDeclarationTree tree) {
@@ -2298,12 +2125,32 @@ class IRFactory {
       return arrayType(process(tree.elementType));
     }
 
+    Node processRecordType(RecordTypeTree tree) {
+      LinkedHashMap<String, TypeDeclarationNode> members = new LinkedHashMap<>();
+      for (Map.Entry<IdentifierToken, ParseTree> entry : tree.members.entrySet()) {
+        members.put(entry.getKey().value, (TypeDeclarationNode) process(entry.getValue()));
+      }
+      return recordType(members);
+    }
+
     Node processUnionType(UnionTypeTree tree) {
       ImmutableList.Builder<TypeDeclarationNode> options = ImmutableList.builder();
       for (ParseTree option : tree.types) {
         options.add((TypeDeclarationNode) process(option));
       }
       return unionType(options.build());
+    }
+
+    Node processTypeAlias(TypeAliasTree tree) {
+      maybeWarnTypeSyntax(tree, "type alias");
+      Node typeAlias = newStringNode(Token.TYPE_ALIAS, tree.alias.value);
+      typeAlias.addChildrenToFront(process(tree.original));
+      return typeAlias;
+    }
+
+    Node processAmbientDeclaration(AmbientDeclarationTree tree) {
+      maybeWarnTypeSyntax(tree, "ambient declaration");
+      return new Node(Token.DECLARE, process(tree.declaration));
     }
 
     private boolean checkParameters(ImmutableList<ParseTree> params) {
@@ -2646,6 +2493,8 @@ class IRFactory {
           return processParameterizedType(node.asParameterizedType());
         case ARRAY_TYPE:
           return processArrayType(node.asArrayType());
+        case RECORD_TYPE:
+          return processRecordType(node.asRecordType());
         case UNION_TYPE:
           return processUnionType(node.asUnionType());
         case FUNCTION_TYPE:
@@ -2660,7 +2509,12 @@ class IRFactory {
         case ENUM_DECLARATION:
           return processEnumDeclaration(node.asEnumDeclaration());
 
+        case TYPE_ALIAS:
+          return processTypeAlias(node.asTypeAlias());
           // TODO(johnlenz): handle these or remove parser support
+        case AMBIENT_DECLARATION:
+          return processAmbientDeclaration(node.asAmbientDeclaration());
+
         case ARGUMENT_LIST:
         default:
           break;

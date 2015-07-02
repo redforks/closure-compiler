@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 The Closure Compiler Authors.
+ * Copyright 2015 The Closure Compiler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-package com.google.javascript.jscomp.newtypes;
+package com.google.javascript.jscomp.parsing.parser.trees;
 
-/**
- *
- * @author blickly@google.com (Ben Lickly)
- * @author dimvar@google.com (Dimitris Vardoulakis)
- */
-public final class NamespaceLit extends Namespace {
-  public JSType toJSType(JSTypes commonTypes) {
-    ObjectType obj = ObjectType.makeObjectType(
-        null, otherProps, null, false, ObjectKind.UNRESTRICTED);
-    return withNamedTypes(commonTypes, obj);
+import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
+
+public class AmbientDeclarationTree extends ParseTree {
+  public final ParseTree declaration;
+
+  public AmbientDeclarationTree(SourceRange location, ParseTree declaration) {
+    super(ParseTreeType.AMBIENT_DECLARATION, location);
+    this.declaration = declaration;
   }
 }

@@ -19,7 +19,6 @@
  *
  * TODO: Mocks.
  * TODO: Remaining Services:
- *     $compileProvider
  *     $cookies
  *     $cookieStore
  *     $document
@@ -842,6 +841,11 @@ angular.Scope.prototype.$$phase;
 angular.Scope.prototype.$apply = function(opt_exp) {};
 
 /**
+ * @param {(string|function(!angular.Scope))=} opt_exp
+ */
+angular.Scope.prototype.$applyAsync = function(opt_exp) {};
+
+/**
  * @param {string} name
  * @param {...*} args
  */
@@ -1011,6 +1015,27 @@ angular.$animate.prototype.animate = function(
     element, from, to, opt_className, opt_options) {};
 
 /**
+ * @param {string} event
+ * @param {JQLiteSelector} container
+ * @param {function(JQLiteSelector, string)} callback
+ */
+angular.$animate.prototype.on = function(event, container, callback) {};
+
+/**
+ * @param {string} event
+ * @param {JQLiteSelector=} opt_container
+ * @param {function(JQLiteSelector, string)=} opt_callback
+ */
+angular.$animate.prototype.off = function(event, opt_container, opt_callback) {
+};
+
+/**
+ * @param {JQLiteSelector} element
+ * @param {JQLiteSelector} parentElement
+ */
+angular.$animate.prototype.pin = function(element, parentElement) {};
+
+/**
  * @param {JQLiteSelector} element
  * @param {JQLiteSelector} parentElement
  * @param {JQLiteSelector} afterElement
@@ -1111,6 +1136,19 @@ angular.$animateProvider.prototype.classNameFilter = function(
  *               function(!angular.JQLite, !angular.Scope=)=): !angular.JQLite}
  */
 angular.$compile;
+
+// TODO(martinprobst): remaining $compileProvider methods.
+
+/**
+ * @constructor
+ */
+angular.$compileProvider;
+
+/**
+ * @param {boolean=} opt_enabled
+ * @return {boolean|!angular.$compileProvider}
+ */
+angular.$compileProvider.prototype.debugInfoEnabled = function(opt_enabled) {};
 
 /******************************************************************************
  * $cacheFactory Service

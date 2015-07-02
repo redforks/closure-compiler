@@ -18,9 +18,10 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
-import com.google.javascript.jscomp.lint.CheckJSDoc;
+import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
@@ -226,7 +227,6 @@ public class DiagnosticGroups {
 //           JSTypeCreatorFromJSDoc.BAD_JSDOC_ANNOTATION,
           JSTypeCreatorFromJSDoc.CONFLICTING_EXTENDED_TYPE,
           JSTypeCreatorFromJSDoc.CONFLICTING_IMPLEMENTED_TYPE,
-//          JSTypeCreatorFromJSDoc.CONFLICTING_SHAPE_TYPE,
           JSTypeCreatorFromJSDoc.DICT_IMPLEMENTS_INTERF,
           JSTypeCreatorFromJSDoc.EXTENDS_NON_OBJECT,
           JSTypeCreatorFromJSDoc.EXTENDS_NOT_ON_CTOR_OR_INTERF,
@@ -247,7 +247,7 @@ public class DiagnosticGroups {
 //           GlobalTypeInfo.INVALID_PROP_OVERRIDE,
           GlobalTypeInfo.LENDS_ON_BAD_TYPE,
           GlobalTypeInfo.MALFORMED_ENUM,
-//           GlobalTypeInfo.MISPLACED_CONST_ANNOTATION,
+          GlobalTypeInfo.MISPLACED_CONST_ANNOTATION,
 //           GlobalTypeInfo.REDECLARED_PROPERTY,
           GlobalTypeInfo.STRUCTDICT_WITHOUT_CTOR,
           GlobalTypeInfo.UNDECLARED_NAMESPACE,
@@ -260,7 +260,7 @@ public class DiagnosticGroups {
           TypeValidator.INTERFACE_METHOD_NOT_IMPLEMENTED,
           NewTypeInference.ASSERT_FALSE,
           NewTypeInference.CANNOT_BIND_CTOR,
-//           NewTypeInference.CONST_REASSIGNED,
+          NewTypeInference.CONST_REASSIGNED,
           NewTypeInference.CROSS_SCOPE_GOTCHA,
 //           NewTypeInference.FAILED_TO_UNIFY,
 //           NewTypeInference.FORIN_EXPECTS_OBJECT,
@@ -398,9 +398,9 @@ public class DiagnosticGroups {
 
   public static final DiagnosticGroup MISPLACED_TYPE_ANNOTATION =
       DiagnosticGroups.registerGroup("misplacedTypeAnnotation",
-          RhinoErrorReporter.MISPLACED_TYPE_ANNOTATION,
-          RhinoErrorReporter.MISPLACED_FUNCTION_ANNOTATION,
-          RhinoErrorReporter.MISPLACED_MSG_ANNOTATION);
+          CheckJSDoc.DISALLOWED_MEMBER_JSDOC,
+          CheckJSDoc.MISPLACED_ANNOTATION,
+          CheckJSDoc.MISPLACED_MSG_ANNOTATION);
 
   public static final DiagnosticGroup SUSPICIOUS_CODE =
       DiagnosticGroups.registerGroup("suspiciousCode",
@@ -411,26 +411,28 @@ public class DiagnosticGroups {
 
   public static final DiagnosticGroup DEPRECATED_ANNOTATIONS =
       DiagnosticGroups.registerGroup("deprecatedAnnotations",
-          RhinoErrorReporter.ANNOTATION_DEPRECATED);
+          CheckJSDoc.ANNOTATION_DEPRECATED);
 
   // These checks are not intended to be enabled as errors. It is
   // recommended that you think of them as "linter" warnings that
   // provide optional suggestions.
   public static final DiagnosticGroup LINT_CHECKS =
       DiagnosticGroups.registerGroup("lintChecks", // undocumented
+          CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
           CheckEnums.DUPLICATE_ENUM_VALUE,
           // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
           // checkTypes DiagnosticGroup
           CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
           CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
-          CheckJSDoc.MISSING_PARAM_JSDOC,
-          CheckJSDoc.MUST_BE_PRIVATE,
-          CheckJSDoc.OPTIONAL_NAME_NOT_MARKED_OPTIONAL,
-          CheckJSDoc.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
+          CheckJSDocStyle.MISSING_PARAM_JSDOC,
+          CheckJSDocStyle.MUST_BE_PRIVATE,
+          CheckJSDocStyle.OPTIONAL_NAME_NOT_MARKED_OPTIONAL,
+          CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
           CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
           ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC,
+          RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
           TypeCheck.NON_STRINGIFIABLE_OBJECT_KEY);
 
   public static final DiagnosticGroup USE_OF_GOOG_BASE =

@@ -147,7 +147,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
      * PolymerElement.
      */
     private boolean isPolymerElementPropExpr(Node value) {
-      return value != null && value.isExprResult() && value.getFirstChild().isAssign()
+      return value != null && value.isExprResult()
           && value.getFirstChild().getFirstChild().isGetProp()
           && NodeUtil.getRootOfQualifiedName(
               value.getFirstChild().getFirstChild()).matchesQualifiedName(POLYMER_ELEMENT_NAME);
@@ -819,7 +819,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     String typeString = "";
     if (property.value.isObjectLit()) {
       Node typeValue = NodeUtil.getFirstPropMatchingKey(property.value, "type");
-      if (typeValue == null) {
+      if (typeValue == null || !typeValue.isName()) {
         compiler.report(JSError.make(property.name, POLYMER_INVALID_PROPERTY));
         return null;
       }

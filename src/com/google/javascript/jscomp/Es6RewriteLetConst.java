@@ -54,21 +54,21 @@ public final class Es6RewriteLetConst extends AbstractPostOrderCallback
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    // TODO(moz): Add support for renaming classes.
-    if (!n.isLet() && !n.isConst() && !NodeUtil.isBlockScopedFunctionDeclaration(n)) {
+    if (!n.isLet() && !n.isConst() && !NodeUtil.isBlockScopedFunctionDeclaration(n)
+        && !NodeUtil.isClassDeclaration(n)) {
       return;
     }
 
     Scope scope = t.getScope();
     Node nameNode = n.getFirstChild();
-    if (!n.isFunction() && !nameNode.hasChildren()
+    if (!n.isClass() && !n.isFunction() && !nameNode.hasChildren()
         && (parent == null || !NodeUtil.isEnhancedFor(parent))) {
       nameNode.addChildToFront(
           IR.name("undefined").useSourceInfoIfMissingFrom(nameNode));
     }
 
     String oldName = nameNode.getString();
-    if (n.isLet() || n.isConst()) {
+    if (n.isLet() || n.isConst() || NodeUtil.isClassDeclaration(n)) {
       blockScopedDeclarations.add(n);
     }
     Scope hoistScope = scope.getClosestHoistScope();
@@ -93,7 +93,7 @@ public final class Es6RewriteLetConst extends AbstractPostOrderCallback
       }
     }
     if (doRename) {
-      t.getCompiler().reportCodeChange();
+      compiler.reportCodeChange();
     }
   }
 
@@ -127,6 +127,9 @@ public final class Es6RewriteLetConst extends AbstractPostOrderCallback
   private void varify() {
     if (!blockScopedDeclarations.isEmpty()) {
       for (Node n : blockScopedDeclarations) {
+        if (n.isClass()) {
+          continue;
+        }
         if (n.isConst()) {
           JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
           builder.recordConstancy();
@@ -164,16 +167,32 @@ public final class Es6RewriteLetConst extends AbstractPostOrderCallback
   }
 
   /**
-   * Renames references when necessary.
+   * Renames references in code and JSDoc when necessary.
    */
   private class RenameReferences extends AbstractPostOrderCallback {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (!NodeUtil.isReferenceName(n)) {
-        return;
+      if (NodeUtil.isReferenceName(n)) {
+        renameReference(t, n);
       }
 
+      JSDocInfo info = n.getJSDocInfo();
+      if (info != null) {
+        renameTypeNode(t, info.getTypeNodes());
+      }
+    }
+
+    private void renameTypeNode(NodeTraversal t, Iterable<Node> typeNodes) {
+      for (Node type : typeNodes) {
+        if (type.isString()) {
+          renameReference(t, type);
+        }
+        renameTypeNode(t, type.children());
+      }
+    }
+
+    private void renameReference(NodeTraversal t, Node n) {
       Scope referencedIn = t.getScope();
       String oldName = n.getString();
       Scope current = referencedIn;
@@ -194,7 +213,7 @@ public final class Es6RewriteLetConst extends AbstractPostOrderCallback
       }
       if (doRename) {
         n.setString(newName);
-        t.getCompiler().reportCodeChange();
+        compiler.reportCodeChange();
       }
     }
   }

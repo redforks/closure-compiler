@@ -131,6 +131,7 @@ public class ParseTree {
   public OptionalParameterTree asOptionalParameter() { return (OptionalParameterTree) this; }
   public ParameterizedTypeTree asParameterizedType() { return (ParameterizedTypeTree) this; }
   public ArrayTypeTree asArrayType() { return (ArrayTypeTree) this; }
+  public RecordTypeTree asRecordType() { return (RecordTypeTree) this; }
   public UnionTypeTree asUnionType() { return (UnionTypeTree) this; }
   public FunctionTypeTree asFunctionType() { return (FunctionTypeTree) this; }
   public GenericTypeListTree asGenericTypeList() { return (GenericTypeListTree) this; }
@@ -146,9 +147,9 @@ public class ParseTree {
   public InterfaceDeclarationTree asInterfaceDeclaration() {
     return (InterfaceDeclarationTree) this;
   }
-  public EnumDeclarationTree asEnumDeclaration() {
-    return (EnumDeclarationTree) this;
-  }
+  public EnumDeclarationTree asEnumDeclaration() { return (EnumDeclarationTree) this; }
+  public TypeAliasTree asTypeAlias() { return (TypeAliasTree) this; }
+  public AmbientDeclarationTree asAmbientDeclaration() { return (AmbientDeclarationTree) this; }
 
   public boolean isPattern() {
     ParseTree parseTree = this;

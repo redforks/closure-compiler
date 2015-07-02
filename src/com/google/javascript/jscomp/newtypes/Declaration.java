@@ -33,26 +33,21 @@ public class Declaration {
   private EnumType enumType;
   private DeclaredTypeRegistry functionScope;
   private RawNominalType nominal;
-  private boolean isFormal;
   private boolean isTypeVar;
   private boolean isConstant;
-  private boolean isForwardDeclaration;
 
   public Declaration(JSType simpleType,
       Typedef typedef, NamespaceLit namespaceLit, EnumType enumType,
       DeclaredTypeRegistry functionScope, RawNominalType nominal,
-      boolean isFormal, boolean isTypeVar,
-      boolean isConstant, boolean isForwardDeclaration) {
+      boolean isTypeVar, boolean isConstant, boolean isForwardDeclaration) {
     this.simpleType = simpleType;
     this.typedef = typedef;
     this.namespaceLit = namespaceLit;
     this.enumType = enumType;
     this.functionScope = functionScope;
     this.nominal = nominal;
-    this.isFormal = isFormal;
     this.isTypeVar = isTypeVar;
     this.isConstant = isConstant;
-    this.isForwardDeclaration = isForwardDeclaration;
     this.checkValid();
   }
 
@@ -91,10 +86,6 @@ public class Declaration {
      return typedef;
   }
 
-  public NamespaceLit getNamespaceLit() {
-     return namespaceLit;
-  }
-
   public EnumType getEnum() {
      return enumType;
   }
@@ -107,20 +98,12 @@ public class Declaration {
      return nominal;
   }
 
-  public boolean isFormal() {
-     return isFormal;
-  }
-
   public boolean isTypeVar() {
      return isTypeVar;
   }
 
   public boolean isConstant() {
      return isConstant;
-  }
-
-  public boolean isForwardDeclaration() {
-     return isForwardDeclaration;
   }
 
   public Namespace getNamespace() {

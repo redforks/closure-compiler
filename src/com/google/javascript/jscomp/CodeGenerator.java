@@ -494,6 +494,18 @@ class CodeGenerator {
             add("extends");
             add(superClass);
           }
+
+          Node interfaces = (Node) n.getProp(Node.IMPLEMENTS);
+          if (interfaces != null) {
+            add("implements");
+            Node child = interfaces.getFirstChild();
+            add(child);
+            while ((child = child.getNext()) != null) {
+              add(",");
+              cc.maybeInsertSpace();
+              add(child);
+            }
+          }
           add(members);
           cc.endClass(context == Context.STATEMENT);
 
@@ -597,7 +609,11 @@ class CodeGenerator {
             }
             add(parameters);
             maybeAddTypeDecl(fn);
-            add(body, Context.PRESERVE_BLOCK);
+            if (body.isEmpty()) {
+              add(";");
+            } else {
+              add(body, Context.PRESERVE_BLOCK);
+            }
           }
           break;
         }
@@ -1116,7 +1132,7 @@ class CodeGenerator {
         break;
       case Token.RECORD_TYPE:
         add("{");
-        addList(first, false, Context.STATEMENT, ";");
+        addList(first, false, Context.OTHER, ",");
         add("}");
         break;
       case Token.PARAMETERIZED_TYPE:
@@ -1129,13 +1145,7 @@ class CodeGenerator {
         // CLASS -> NAME,EXPR|EMPTY,BLOCK
       case Token.GENERIC_TYPE_LIST:
         add("<");
-        Node generic = n.getFirstChild();
-        add(generic);
-        while ((generic = generic.getNext()) != null) {
-          add(",");
-          cc.maybeInsertSpace();
-          add(generic);
-        }
+        addList(first, false, Context.STATEMENT, ",");
         add(">");
         break;
       case Token.GENERIC_TYPE:
@@ -1158,11 +1168,12 @@ class CodeGenerator {
           maybeAddGenericTypes(name);
           if (!superTypes.isEmpty()) {
             add("extends");
-            for (Node child = superTypes.getFirstChild(); child != null; child = child.getNext()) {
-              if (child != n.getFirstChild()) {
-                add(",");
-              }
-              add(child);
+            Node superType = superTypes.getFirstChild();
+            add(superType);
+            while ((superType = superType.getNext()) != null) {
+              add(",");
+              cc.maybeInsertSpace();
+              add(superType);
             }
           }
           add(members);
@@ -1178,6 +1189,18 @@ class CodeGenerator {
           add(members);
           break;
         }
+      case Token.TYPE_ALIAS:
+        add("type");
+        add(n.getString());
+        cc.addOp("=", true);
+        add(last);
+        cc.endStatement();
+        break;
+      case Token.DECLARE:
+        add("declare");
+        add(first);
+        cc.endStatement();
+        break;
       default:
         throw new RuntimeException("Unknown type " + Token.name(type) + "\n" + n.toStringTree());
     }
