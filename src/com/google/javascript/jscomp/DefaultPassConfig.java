@@ -36,6 +36,7 @@ import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
+import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
 import com.google.javascript.jscomp.parsing.ParserRunner;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -224,8 +225,10 @@ public final class DefaultPassConfig extends PassConfig {
     }
 
     if (options.lowerFromEs6()) {
+      checks.add(es6RewriteArrowFunction);
       checks.add(es6RenameVariablesInParamLists);
       checks.add(es6SplitVariableDeclarations);
+      checks.add(es6RewriteDestructuring);
       checks.add(es6ConvertSuper);
       checks.add(convertEs6ToEs3);
       checks.add(rewriteLetConst);
@@ -1104,21 +1107,37 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
+  private final PassFactory es6RewriteDestructuring =
+      new PassFactory("Es6RewriteDestructuring", true) {
+        @Override
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          return new Es6RewriteDestructuring(compiler);
+        }
+      };
+
   private final HotSwapPassFactory es6RenameVariablesInParamLists =
       new HotSwapPassFactory("Es6RenameVariablesInParamLists", true) {
-    @Override
-    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new Es6RenameVariablesInParamLists(compiler);
-    }
-  };
+        @Override
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+          return new Es6RenameVariablesInParamLists(compiler);
+        }
+      };
+
+  private final PassFactory es6RewriteArrowFunction =
+      new PassFactory("Es6RewriteArrowFunction", true) {
+        @Override
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          return new Es6RewriteArrowFunction(compiler);
+        }
+      };
 
   private final HotSwapPassFactory es6SplitVariableDeclarations =
       new HotSwapPassFactory("Es6SplitVariableDeclarations", true) {
-    @Override
-    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new Es6SplitVariableDeclarations(compiler);
-    }
-  };
+        @Override
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+          return new Es6SplitVariableDeclarations(compiler);
+        }
+      };
 
   private final HotSwapPassFactory es6ConvertSuper =
       new HotSwapPassFactory("es6ConvertSuper", true) {
@@ -1519,14 +1538,19 @@ public final class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("lintChecks", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      return combineChecks(compiler, ImmutableList.<Callback>of(
-          new CheckEmptyStatements(compiler),
-          new CheckEnums(compiler),
-          new CheckInterfaces(compiler),
-          new CheckJSDocStyle(compiler),
-          new CheckNullableReturn(compiler),
-          new CheckPrototypeProperties(compiler),
-          new ImplicitNullabilityCheck(compiler)));
+      ImmutableList.Builder<Callback> callbacks = ImmutableList.<Callback>builder()
+          .add(new CheckEmptyStatements(compiler))
+          .add(new CheckEnums(compiler))
+          .add(new CheckInterfaces(compiler))
+          .add(new CheckJSDocStyle(compiler))
+          .add(new CheckNullableReturn(compiler))
+          .add(new CheckPrototypeProperties(compiler))
+          .add(new ImplicitNullabilityCheck(compiler));
+      if (options.closurePass) {
+        callbacks.add(new CheckRequiresAndProvidesSorted(compiler));
+      }
+
+      return combineChecks(compiler, callbacks.build());
     }
   };
 

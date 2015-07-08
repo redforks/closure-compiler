@@ -563,7 +563,8 @@ class GlobalTypeInfo implements CompilerPass {
       return false;
     }
     JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(pd.defSite);
-    return jsdoc == null || jsdoc.isOverride();
+    return jsdoc == null
+        || jsdoc.isOverride() && !jsdoc.containsFunctionDeclaration();
   }
 
   /**
@@ -1262,8 +1263,8 @@ class GlobalTypeInfo implements CompilerPass {
         return;
       }
       mayWarnAboutInterfacePropInit(rawType, initializer);
-      String pname = NodeUtil.getPrototypePropertyName(getProp);
-      mayAddPropToPrototype(rawType, pname, getProp, initializer);
+      mayAddPropToPrototype(
+          rawType, getProp.getLastChild().getString(), getProp, initializer);
     }
 
     private void mayWarnAboutInterfacePropInit(RawNominalType rawType, Node initializer) {
@@ -1812,9 +1813,6 @@ class GlobalTypeInfo implements CompilerPass {
 
       // Find the declared type of the property.
       if (initializer != null && initializer.isFunction()) {
-        // TODO(dimvar): we must do this for any function "defined" as the rhs
-        // of an assignment to a property, not just when the property is a
-        // prototype property.
         methodScope = visitFunctionLate(initializer, rawType);
         methodType = methodScope.getDeclaredFunctionType();
         propDeclType = commonTypes.fromFunctionType(methodType.toFunctionType());
@@ -2243,7 +2241,8 @@ class GlobalTypeInfo implements CompilerPass {
         Preconditions.checkState(decl.getNamespace() == null);
         return null;
       }
-      if (name.equals(this.name)) {
+      // When a function is a namespace, the parent scope has a better type.
+      if (name.equals(this.name) && !parent.isFunctionNamespace(name)) {
         return getCommonTypes()
             .fromFunctionType(getDeclaredFunctionType().toFunctionType());
       }

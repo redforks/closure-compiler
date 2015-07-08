@@ -935,27 +935,6 @@ public final class NodeUtil {
     // that we know to be safe
     switch (n.getType()) {
       // other side-effect free statements and expressions
-      case Token.CAST:
-      case Token.AND:
-      case Token.BLOCK:
-      case Token.EXPR_RESULT:
-      case Token.HOOK:
-      case Token.IF:
-      case Token.IN:
-      case Token.PARAM_LIST:
-      case Token.NUMBER:
-      case Token.OR:
-      case Token.THIS:
-      case Token.TRUE:
-      case Token.FALSE:
-      case Token.NULL:
-      case Token.STRING:
-      case Token.STRING_KEY:
-      case Token.SWITCH:
-      case Token.TRY:
-      case Token.EMPTY:
-        break;
-
       // Throws are by definition side effects, and yields are similar.
       case Token.THROW:
       case Token.YIELD:
@@ -1014,6 +993,32 @@ public final class NodeUtil {
           break;
         }
         return true;
+
+      case Token.TAGGED_TEMPLATELIT:
+        return functionCallHasSideEffects(n);
+
+      case Token.CAST:
+      case Token.AND:
+      case Token.BLOCK:
+      case Token.EXPR_RESULT:
+      case Token.HOOK:
+      case Token.IF:
+      case Token.IN:
+      case Token.PARAM_LIST:
+      case Token.NUMBER:
+      case Token.OR:
+      case Token.THIS:
+      case Token.TRUE:
+      case Token.FALSE:
+      case Token.NULL:
+      case Token.STRING:
+      case Token.STRING_KEY:
+      case Token.SWITCH:
+      case Token.TEMPLATELIT_SUB:
+      case Token.TRY:
+      case Token.EMPTY:
+      case Token.TEMPLATELIT:
+        break;
 
       default:
         if (isSimpleOperator(n)) {
@@ -1137,10 +1142,7 @@ public final class NodeUtil {
    */
   static boolean functionCallHasSideEffects(
       Node callNode, @Nullable AbstractCompiler compiler) {
-    if (!callNode.isCall()) {
-      throw new IllegalStateException(
-          "Expected CALL node, got " + Token.name(callNode.getType()));
-    }
+    Preconditions.checkState(callNode.isCall() || callNode.isTaggedTemplateLit(), callNode);
 
     if (callNode.isNoSideEffectsCall()) {
       return false;
@@ -1405,6 +1407,7 @@ public final class NodeUtil {
       case Token.THIS:
       case Token.SUPER:
       case Token.TRUE:
+      case Token.TAGGED_TEMPLATELIT:
       case Token.TEMPLATELIT:
       // Tokens from the type declaration AST
       case Token.UNION_TYPE:
@@ -1818,7 +1821,7 @@ public final class NodeUtil {
    */
   static boolean referencesThis(Node n) {
     Node start = (n.isFunction()) ? n.getLastChild() : n;
-    return containsType(start, Token.THIS, MATCH_NOT_FUNCTION);
+    return containsType(start, Token.THIS, MATCH_NOT_THIS_BINDING);
   }
 
   /**
@@ -2369,7 +2372,7 @@ public final class NodeUtil {
     return isNameReferenced(
         function.getLastChild(),
         "arguments",
-        MATCH_NOT_FUNCTION);
+        MATCH_NOT_THIS_BINDING);
   }
 
   /**
@@ -3182,6 +3185,13 @@ public final class NodeUtil {
   static final Predicate<Node> MATCH_NOT_FUNCTION = new MatchNotFunction();
 
   static final Predicate<Node> MATCH_NOT_CLASS = new MatchNotClass();
+
+  static final Predicate<Node> MATCH_NOT_THIS_BINDING = new Predicate<Node>() {
+    @Override
+    public boolean apply(Node n) {
+      return !n.isFunction() || n.isArrowFunction();
+    }
+  };
 
   /**
    * A predicate for matching statements without exiting the current scope.

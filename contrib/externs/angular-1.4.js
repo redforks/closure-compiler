@@ -219,99 +219,83 @@ angular.toJson = function(obj, opt_pretty) {};
 angular.uppercase = function(s) {};
 
 /**
- * @typedef {{
- *   enter: (function(!angular.JQLite, !Function): (!Function|undefined)|
- *       undefined),
- *   leave: (function(!angular.JQLite, !Function): (!Function|undefined)|
- *       undefined),
- *   move: (function(!angular.JQLite, !Function): (!Function|undefined)|
- *       undefined),
- *   addClass: (function(!angular.JQLite, !Function): (!Function|undefined)|
- *       undefined),
- *   removeClass: (function(!angular.JQLite, !Function): (!Function|undefined)|
- *       undefined)
- *   }}
+ * @constructor
  */
-angular.Animation;
+angular.Animation = function() {};
 
 /**
  * @param {!angular.JQLite} element
  * @param {!Function} done
  * @return {(!Function|undefined)}
  */
-angular.Animation.enter = function(element, done) {};
+angular.Animation.prototype.enter = function(element, done) {};
 
 /**
  * @param {!angular.JQLite} element
  * @param {!Function} done
  * @return {(!Function|undefined)}
  */
-angular.Animation.leave = function(element, done) {};
+angular.Animation.prototype.leave = function(element, done) {};
 
 /**
  * @param {!angular.JQLite} element
  * @param {!Function} done
  * @return {(!Function|undefined)}
  */
-angular.Animation.move = function(element, done) {};
+angular.Animation.prototype.move = function(element, done) {};
 
 /**
  * @param {!angular.JQLite} element
  * @param {!Function} done
  * @return {(!Function|undefined)}
  */
-angular.Animation.addClass = function(element, done) {};
+angular.Animation.prototype.addClass = function(element, done) {};
 
 /**
  * @param {!angular.JQLite} element
  * @param {!Function} done
  * @return {(!Function|undefined)}
  */
-angular.Animation.removeClass = function(element, done) {};
+angular.Animation.prototype.removeClass = function(element, done) {};
 
 /**
- * @typedef {{
- *   $attr: Object.<string,string>,
- *   $normalize: function(string): string,
- *   $observe: function(string, function(*)): function(),
- *   $set: function(string, ?(string|boolean), boolean=, string=)
- *   }}
+ * @constructor
  */
-angular.Attributes;
+angular.Attributes = function() {};
 
 /**
  * @type {Object.<string, string>}
  */
-angular.Attributes.$attr;
+angular.Attributes.prototype.$attr;
 
 /**
  * @param {string} classVal
  */
-angular.Attributes.$addClass = function(classVal) {};
+angular.Attributes.prototype.$addClass = function(classVal) {};
 
 /**
  * @param {string} classVal
  */
-angular.Attributes.$removeClass = function(classVal) {};
+angular.Attributes.prototype.$removeClass = function(classVal) {};
 
 /**
  * @param {string} newClasses
  * @param {string} oldClasses
  */
-angular.Attributes.$updateClass = function(newClasses, oldClasses) {};
+angular.Attributes.prototype.$updateClass = function(newClasses, oldClasses) {};
 
 /**
  * @param {string} name
  * @return {string}
  */
-angular.Attributes.$normalize = function(name) {};
+angular.Attributes.prototype.$normalize = function(name) {};
 
 /**
  * @param {string} key
  * @param {function(*)} fn
  * @return {function()}
  */
-angular.Attributes.$observe = function(key, fn) {};
+angular.Attributes.prototype.$observe = function(key, fn) {};
 
 /**
  * @param {string} key
@@ -319,7 +303,8 @@ angular.Attributes.$observe = function(key, fn) {};
  * @param {boolean=} opt_writeAttr
  * @param {string=} opt_attrName
  */
-angular.Attributes.$set = function(key, value, opt_writeAttr, opt_attrName) {};
+angular.Attributes.prototype.$set =
+    function(key, value, opt_writeAttr, opt_attrName) {};
 
 /**
  * @typedef {{
@@ -472,274 +457,231 @@ angular.Directive.transclude;
 angular.Injectable;
 
 /**
- * @typedef {{
- *   addClass: function(string): !angular.JQLite,
- *   after: function(JQLiteSelector): !angular.JQLite,
- *   append: function(JQLiteSelector): !angular.JQLite,
- *   attr: function(string, (string|boolean)=):
- *       (!angular.JQLite|string|boolean),
- *   bind: function(string, Function): !angular.JQLite,
- *   children: function(): !angular.JQLite,
- *   clone: function(): !angular.JQLite,
- *   contents: function(): !angular.JQLite,
- *   controller: function(string=): Object,
- *   css: function((string|!Object), string=): (!angular.JQLite|string),
- *   data: function(string=, *=): *,
- *   detach: function(): !angular.JQLite,
- *   empty: function(): !angular.JQLite,
- *   eq: function(number): !angular.JQLite,
- *   find: function(string): !angular.JQLite,
- *   hasClass: function(string): boolean,
- *   html: function(string=): (!angular.JQLite|string),
- *   inheritedData: function(string=, *=): *,
- *   injector: function(): !angular.$injector,
- *   isolateScope: function(): (!angular.Scope|undefined),
- *   length: number,
- *   next: function(): !angular.JQLite,
- *   on: function(string, Function): !angular.JQLite,
- *   off: function(string=, Function=): !angular.JQLite,
- *   one: function(string, Function): !angular.JQLite,
- *   parent: function(): !angular.JQLite,
- *   prepend: function(JQLiteSelector): !angular.JQLite,
- *   prop: function(string, *=): *,
- *   ready: function(Function): !angular.JQLite,
- *   remove: function(): !angular.JQLite,
- *   removeAttr: function(string): !angular.JQLite,
- *   removeClass: function(string): !angular.JQLite,
- *   removeData: function(string=): !angular.JQLite,
- *   replaceWith: function(JQLiteSelector): !angular.JQLite,
- *   scope: function(): !angular.Scope,
- *   text: function(string=): (!angular.JQLite|string),
- *   toggleClass: function(string, boolean=): !angular.JQLite,
- *   triggerHandler: function(string, *=): !angular.JQLite,
- *   unbind: function(string=, Function=): !angular.JQLite,
- *   val: function(string=): (!angular.JQLite|string),
- *   wrap: function(JQLiteSelector): !angular.JQLite
- *   }}
+ * @constructor
  */
-angular.JQLite;
+angular.JQLite = function() {};
 
 /**
  * @param {string} name
  * @return {!angular.JQLite}
  */
-angular.JQLite.addClass = function(name) {};
+angular.JQLite.prototype.addClass = function(name) {};
 
 /**
  * @param {JQLiteSelector} element
  * @return {!angular.JQLite}
  */
-angular.JQLite.after = function(element) {};
+angular.JQLite.prototype.after = function(element) {};
 
 /**
  * @param {JQLiteSelector} element
  * @return {!angular.JQLite}
  */
-angular.JQLite.append = function(element) {};
+angular.JQLite.prototype.append = function(element) {};
 
 /**
  * @param {string} name
  * @param {(string|boolean)=} opt_value
  * @return {!angular.JQLite|string|boolean}
  */
-angular.JQLite.attr = function(name, opt_value) {};
+angular.JQLite.prototype.attr = function(name, opt_value) {};
 
 /**
  * @param {string} type
  * @param {Function} fn
  * @return {!angular.JQLite}
  */
-angular.JQLite.bind = function(type, fn) {};
+angular.JQLite.prototype.bind = function(type, fn) {};
 
 /**
  * @return {!angular.JQLite}
  */
-angular.JQLite.children = function() {};
+angular.JQLite.prototype.children = function() {};
 
 /**
  * @return {!angular.JQLite}
  */
-angular.JQLite.clone = function() {};
+angular.JQLite.prototype.clone = function() {};
 
 /**
  * @return {!angular.JQLite}
  */
-angular.JQLite.contents = function() {};
+angular.JQLite.prototype.contents = function() {};
 
 /**
  * @param {string=} opt_name
  * @return {Object}
  */
-angular.JQLite.controller = function(opt_name) {};
+angular.JQLite.prototype.controller = function(opt_name) {};
 
 /**
  * @param {(string|!Object)} nameOrObject
  * @param {string=} opt_value
  * @return {!angular.JQLite|string}
  */
-angular.JQLite.css = function(nameOrObject, opt_value) {};
+angular.JQLite.prototype.css = function(nameOrObject, opt_value) {};
 
 /**
  * @param {string=} opt_key
  * @param {*=} opt_value
  * @return {*}
  */
-angular.JQLite.data = function(opt_key, opt_value) {};
+angular.JQLite.prototype.data = function(opt_key, opt_value) {};
 
 /**
  * @param {number} index
  * @return {!angular.JQLite}
  */
-angular.JQLite.eq = function(index) {};
+angular.JQLite.prototype.eq = function(index) {};
 
 /**
  * @param {string} selector
  * @return {!angular.JQLite}
  */
-angular.JQLite.find = function(selector) {};
+angular.JQLite.prototype.find = function(selector) {};
 
 /**
  * @param {string} name
  * @return {boolean}
  */
-angular.JQLite.hasClass = function(name) {};
+angular.JQLite.prototype.hasClass = function(name) {};
 
 /**
  * @param {string=} opt_value
  * @return {!angular.JQLite|string}
  */
-angular.JQLite.html = function(opt_value) {};
+angular.JQLite.prototype.html = function(opt_value) {};
 
 /**
  * @param {string=} opt_key
  * @param {*=} opt_value
  * @return {*}
  */
-angular.JQLite.inheritedData = function(opt_key, opt_value) {};
+angular.JQLite.prototype.inheritedData = function(opt_key, opt_value) {};
 
 /**
  * @return {!angular.$injector}
  */
-angular.JQLite.injector = function() {};
+angular.JQLite.prototype.injector = function() {};
 
 /** @type {number} */
-angular.JQLite.length;
+angular.JQLite.prototype.length;
 
 /**
  * @return {!angular.JQLite}
  */
-angular.JQLite.next = function() {};
+angular.JQLite.prototype.next = function() {};
 
 /**
  * @param {string} type
  * @param {Function} fn
  * @return {!angular.JQLite}
  */
-angular.JQLite.on = function(type, fn) {};
+angular.JQLite.prototype.on = function(type, fn) {};
 
 /**
  * @param {string=} opt_type
  * @param {Function=} opt_fn
  * @return {!angular.JQLite}
  */
-angular.JQLite.off = function(opt_type, opt_fn) {};
+angular.JQLite.prototype.off = function(opt_type, opt_fn) {};
 
 /**
  * @return {!angular.JQLite}
  */
-angular.JQLite.parent = function() {};
+angular.JQLite.prototype.parent = function() {};
 
 /**
  * @param {JQLiteSelector} element
  * @return {!angular.JQLite}
  */
-angular.JQLite.prepend = function(element) {};
+angular.JQLite.prototype.prepend = function(element) {};
 
 /**
  * @param {string} name
  * @param {*=} opt_value
  * @return {*}
  */
-angular.JQLite.prop = function(name, opt_value) {};
+angular.JQLite.prototype.prop = function(name, opt_value) {};
 
 /**
  * @param {Function} fn
  * @return {!angular.JQLite}
  */
-angular.JQLite.ready = function(fn) {};
+angular.JQLite.prototype.ready = function(fn) {};
 
 /**
  * @return {!angular.JQLite}
  */
-angular.JQLite.remove = function() {};
-
-/**
- * @param {string} name
- * @return {!angular.JQLite}
- */
-angular.JQLite.removeAttr = function(name) {};
+angular.JQLite.prototype.remove = function() {};
 
 /**
  * @param {string} name
  * @return {!angular.JQLite}
  */
-angular.JQLite.removeClass = function(name) {};
+angular.JQLite.prototype.removeAttr = function(name) {};
+
+/**
+ * @param {string} name
+ * @return {!angular.JQLite}
+ */
+angular.JQLite.prototype.removeClass = function(name) {};
 
 /**
  * @param {string=} opt_name
  * @return {!angular.JQLite}
  */
-angular.JQLite.removeData = function(opt_name) {};
+angular.JQLite.prototype.removeData = function(opt_name) {};
 
 /**
  * @param {JQLiteSelector} element
  * @return {!angular.JQLite}
  */
-angular.JQLite.replaceWith = function(element) {};
+angular.JQLite.prototype.replaceWith = function(element) {};
 
 /**
  * @return {!angular.Scope}
  */
-angular.JQLite.scope = function() {};
+angular.JQLite.prototype.scope = function() {};
 
 /**
  * @param {string=} opt_value
  * @return {!angular.JQLite|string}
  */
-angular.JQLite.text = function(opt_value) {};
+angular.JQLite.prototype.text = function(opt_value) {};
 
 /**
  * @param {string} name
  * @param {boolean=} opt_condition
  * @return {!angular.JQLite}
  */
-angular.JQLite.toggleClass = function(name, opt_condition) {};
+angular.JQLite.prototype.toggleClass = function(name, opt_condition) {};
 
 /**
  * @param {string} type
  * @param {*=} opt_value
  * @return {!angular.JQLite}
  */
-angular.JQLite.triggerHandler = function(type, opt_value) {};
+angular.JQLite.prototype.triggerHandler = function(type, opt_value) {};
 
 /**
  * @param {string=} opt_type
  * @param {Function=} opt_fn
  * @return {!angular.JQLite}
  */
-angular.JQLite.unbind = function(opt_type, opt_fn) {};
+angular.JQLite.prototype.unbind = function(opt_type, opt_fn) {};
 
 /**
  * @param {string=} opt_value
  * @return {!angular.JQLite|string}
  */
-angular.JQLite.val = function(opt_value) {};
+angular.JQLite.prototype.val = function(opt_value) {};
 
 /**
  * @param {JQLiteSelector} element
  * @return {!angular.JQLite}
  */
-angular.JQLite.wrap = function(element) {};
+angular.JQLite.prototype.wrap = function(element) {};
 
 /** @constructor */
 angular.Module = function() {};
@@ -1091,11 +1033,11 @@ angular.$animate.prototype.setClass = function(
     element, add, remove, opt_options) {};
 
 /**
+ * @param {(boolean|JQLiteSelector)=} opt_elementOrValue
  * @param {boolean=} opt_value
- * @param {JQLiteSelector=} opt_element
  * @return {boolean}
  */
-angular.$animate.prototype.enabled = function(opt_value, opt_element) {};
+angular.$animate.prototype.enabled = function(opt_elementOrValue, opt_value) {};
 
 /**
  * @param {angular.$q.Promise} animationPromise
@@ -1406,69 +1348,59 @@ angular.$http.pendingRequests;
 angular.$http.Interceptor;
 
 /**
- * @typedef {{
- *   defaults: !angular.$http.Config,
- *   interceptors: !Array.<string|function(...*): !angular.$http.Interceptor>,
- *   useApplyAsync: function(boolean=):(boolean|!angular.$HttpProvider)
- * }}
+ * @constructor
  */
-angular.$HttpProvider;
+angular.$HttpProvider = function() {};
 
 /**
  * @type {angular.$http.Config}
  */
-angular.$HttpProvider.defaults;
+angular.$HttpProvider.prototype.defaults;
 
 /**
  * @type {!Array.<string|function(...*): !angular.$http.Interceptor>}
  */
-angular.$HttpProvider.interceptors;
+angular.$HttpProvider.prototype.interceptors;
 
 /**
  * @param {boolean=} opt_value
  * @return {boolean|!angular.$HttpProvider}
  */
-angular.$HttpProvider.useApplyAsync = function(opt_value) {};
+angular.$HttpProvider.prototype.useApplyAsync = function(opt_value) {};
 
 /******************************************************************************
  * $injector Service
  *****************************************************************************/
 
 /**
- * @typedef {{
- *   annotate: function(angular.Injectable):Array.<string>,
- *   get: function(string):(?),
- *   has: function(string):boolean,
- *   instantiate: function(Function, Object=):Object,
- *   invoke: function(angular.Injectable, Object=, Object=):(?)
- *   }}
+ * @constructor
  */
-angular.$injector;
+angular.$injector = function() {};
 
 /**
  * @param {angular.Injectable} fn
  * @return {Array.<string>}
  */
-angular.$injector.annotate = function(fn) {};
+angular.$injector.prototype.annotate = function(fn) {};
 
 /**
  * @param {string} name
  * @return {?}
  */
-angular.$injector.get = function(name) {};
+angular.$injector.prototype.get = function(name) {};
 
 /**
  * @param {string} name
  * @return {boolean}
  */
-angular.$injector.has = function(name) {};
+angular.$injector.prototype.has = function(name) {};
 
 /**
  * @param {!Function} type
  * @param {Object=} opt_locals
  * @return {Object}
  */
-angular.$injector.instantiate = function(type, opt_locals) {};
+angular.$injector.prototype.instantiate = function(type, opt_locals) {};
 
 /**
  * @param {angular.Injectable} fn
@@ -1476,25 +1408,22 @@ angular.$injector.instantiate = function(type, opt_locals) {};
  * @param {Object=} opt_locals
  * @return {?}
  */
-angular.$injector.invoke = function(fn, opt_self, opt_locals) {};
+angular.$injector.prototype.invoke = function(fn, opt_self, opt_locals) {};
 
 /******************************************************************************
  * $interpolateProvider Service
  *****************************************************************************/
 
 /**
- * @typedef {{
- *   startSymbol: function(string),
- *   endSymbol: function(string)
- *   }}
+ * @constructor
  */
-angular.$interpolateProvider;
+angular.$interpolateProvider = function() {};
 
 /** @type {function(string)} */
-angular.$interpolateProvider.startSymbol;
+angular.$interpolateProvider.prototype.startSymbol;
 
 /** @type {function(string)} */
-angular.$interpolateProvider.endSymbol;
+angular.$interpolateProvider.prototype.endSymbol;
 
 /******************************************************************************
  * $interval Service
@@ -1528,70 +1457,59 @@ angular.$interval_.cancel = function(promise) {};
  *****************************************************************************/
 
 /**
- * @typedef {{
- *   absUrl: function():string,
- *   hash: function(string=):string,
- *   host: function():string,
- *   path: function(string=):(string|!angular.$location),
- *   port: function():number,
- *   protocol: function():string,
- *   replace: function(),
- *   search: function((string|Object.<string, string>)=,
- *       ?(string|Array.<string>|boolean|number)=): (!Object|angular.$location),
- *   url: function(string=):string
- *   }}
+ * @constructor
  */
-angular.$location;
+angular.$location = function() {};
 
 /**
  * @return {string}
  */
-angular.$location.absUrl = function() {};
+angular.$location.prototype.absUrl = function() {};
 
 /**
  * @param {string=} opt_hash
  * @return {string}
  */
-angular.$location.hash = function(opt_hash) {};
+angular.$location.prototype.hash = function(opt_hash) {};
 
 /**
  * @return {string}
  */
-angular.$location.host = function() {};
+angular.$location.prototype.host = function() {};
 
 /**
  * @param {string=} opt_path
  * @return {string|!angular.$location}
  */
-angular.$location.path = function(opt_path) {};
+angular.$location.prototype.path = function(opt_path) {};
 
 /**
  * @return {number}
  */
-angular.$location.port = function() {};
+angular.$location.prototype.port = function() {};
 
 /**
  * @return {string}
  */
-angular.$location.protocol = function() {};
+angular.$location.prototype.protocol = function() {};
 
 /**
  * @type {function()}
  */
-angular.$location.replace = function() {};
+angular.$location.prototype.replace = function() {};
 
 /**
  * @param {(string|Object.<string, string>)=} opt_search
  * @param {?(string|Array.<string>|boolean|number)=} opt_paramValue
  * @return {(!Object|angular.$location)}
  */
-angular.$location.search = function(opt_search, opt_paramValue) {};
+angular.$location.prototype.search = function(opt_search, opt_paramValue) {};
 
 /**
  * @param {string=} opt_url
  * @return {string}
  */
-angular.$location.url = function(opt_url) {};
+angular.$location.prototype.url = function(opt_url) {};
 
 /******************************************************************************
  * $locationProvider Service
@@ -1606,62 +1524,55 @@ angular.$location.url = function(opt_url) {};
 angular.$locationProvider.html5ModeConfig;
 
 /**
- * @typedef {{
- *   hashPrefix:
- *       function(string=): (string|!angular.$locationProvider),
- *   html5Mode:
- *       function(
- *           (boolean|angular.$locationProvider.html5ModeConfig)=):
- *               (boolean|!angular.$locationProvider)
- *   }}
+ * @constructor
  */
-angular.$locationProvider;
+angular.$locationProvider = function() {};
 
 /**
  * @param {string=} opt_prefix
  * @return {string|!angular.$locationProvider}
  */
-angular.$locationProvider.hashPrefix = function(opt_prefix) {};
+angular.$locationProvider.prototype.hashPrefix = function(opt_prefix) {};
 
 /**
  * @param {(boolean|angular.$locationProvider.html5ModeConfig)=} opt_mode
  * @return {boolean|!angular.$locationProvider}
  */
-angular.$locationProvider.html5Mode = function(opt_mode) {};
+angular.$locationProvider.prototype.html5Mode = function(opt_mode) {};
 
 /******************************************************************************
  * $log Service
  *****************************************************************************/
 
 /**
- * @typedef {{
- *   error: function(...*),
- *   info: function(...*),
- *   log: function(...*),
- *   warn: function(...*)
- *   }}
+ * @constructor
  */
-angular.$log;
+angular.$log = function() {};
 
 /**
  * @param {...*} var_args
  */
-angular.$log.error = function(var_args) {};
+angular.$log.prototype.debug = function(var_args) {};
 
 /**
  * @param {...*} var_args
  */
-angular.$log.info = function(var_args) {};
+angular.$log.prototype.error = function(var_args) {};
 
 /**
  * @param {...*} var_args
  */
-angular.$log.log = function(var_args) {};
+angular.$log.prototype.info = function(var_args) {};
 
 /**
  * @param {...*} var_args
  */
-angular.$log.warn = function(var_args) {};
+angular.$log.prototype.log = function(var_args) {};
+
+/**
+ * @param {...*} var_args
+ */
+angular.$log.prototype.warn = function(var_args) {};
 
 /******************************************************************************
  * NgModelController
@@ -1922,40 +1833,35 @@ angular.$parse_.assign = function(scope, newValue) {};
  *****************************************************************************/
 
 /**
- * @typedef {{
- *   constant: function(string, *): Object,
- *   decorator: function(string, angular.Injectable),
- *   factory: function(string, angular.Injectable): Object,
- *   provider: function(string, (angular.Injectable|angular.$provide.Provider)):
- *       Object,
- *   service: function(string, angular.Injectable): Object,
- *   value: function(string, *): Object
- *   }}
+ * @constructor
  */
-angular.$provide;
+angular.$provide = function() {};
 
 /** @typedef {{$get: (!Array.<string|!Function>|!Function)}} */
 angular.$provide.Provider;
+
+/** @typedef {(!Array.<string|!Function>|!Function)} */
+angular.$provide.Provider.$get;
 
 /**
  * @param {string} name
  * @param {*} object
  * @return {Object}
  */
-angular.$provide.constant = function(name, object) {};
+angular.$provide.prototype.constant = function(name, object) {};
 
 /**
  * @param {string} name
  * @param {angular.Injectable} decorator
  */
-angular.$provide.decorator = function(name, decorator) {};
+angular.$provide.prototype.decorator = function(name, decorator) {};
 
 /**
  * @param {string} name
  * @param {angular.Injectable} providerFunction
  * @return {Object}
  */
-angular.$provide.factory = function(name, providerFunction) {};
+angular.$provide.prototype.factory = function(name, providerFunction) {};
 
 /**
  * @param {string} name
@@ -1963,82 +1869,66 @@ angular.$provide.factory = function(name, providerFunction) {};
  *     providerType
  * @return {Object}
  */
-angular.$provide.provider = function(name, providerType) {};
+angular.$provide.prototype.provider = function(name, providerType) {};
 
 /**
  * @param {string} name
  * @param {angular.Injectable} constructor
  * @return {Object}
  */
-angular.$provide.service = function(name, constructor) {};
+angular.$provide.prototype.service = function(name, constructor) {};
 
 /**
  * @param {string} name
  * @param {*} object
  * @return {Object}
  */
-angular.$provide.value = function(name, object) {};
+angular.$provide.prototype.value = function(name, object) {};
 
 /******************************************************************************
  * $route Service
  *****************************************************************************/
 
-/**
- * @typedef {{
- *   reload: function(),
- *   current: !angular.$route.Route,
- *   routes: Array.<!angular.$route.Route>
- * }}
- */
-angular.$route;
+/** @constructor */
+angular.$route = function() {};
 
 /** @type {function()} */
-angular.$route.reload = function() {};
+angular.$route.prototype.reload = function() {};
 
 /**
  * @param {!Object<string,string>} object
  */
-angular.$route.updateParams = function(object) {};
+angular.$route.prototype.updateParams = function(object) {};
 
 /** @type {!angular.$route.Route} */
-angular.$route.current;
+angular.$route.prototype.current;
 
 /** @type {Array.<!angular.$route.Route>} */
-angular.$route.routes;
+angular.$route.prototype.routes;
 
-/**
- * @typedef {{
- *   $route: angular.$routeProvider.Params,
- *   locals: Object.<string, *>,
- *   params: Object.<string, string>,
- *   pathParams: Object.<string, string>,
- *   scope: Object.<string, *>,
- *   originalPath: (string|undefined),
- *   regexp: (RegExp|undefined)
- * }}
- */
-angular.$route.Route;
+/** @constructor */
+angular.$route.Route = function() {};
 
 /** @type {angular.$routeProvider.Params} */
-angular.$route.Route.$route;
+angular.$route.Route.prototype.$route;
 
 /** @type {Object.<string, *>} */
-angular.$route.Route.locals;
+angular.$route.Route.prototype.locals;
 
 /** @type {Object.<string, string>} */
-angular.$route.Route.params;
+angular.$route.Route.prototype.params;
 
 /** @type {Object.<string, string>} */
-angular.$route.Route.pathParams;
+angular.$route.Route.prototype.pathParams;
 
 /** @type {Object.<string, *>} */
-angular.$route.Route.scope;
+angular.$route.Route.prototype.scope;
 
 /** @type {string|undefined} */
-angular.$route.Route.originalPath;
+angular.$route.Route.prototype.originalPath;
 
 /** @type {RegExp|undefined} */
-angular.$route.Route.regexp;
+angular.$route.Route.prototype.regexp;
 
 /******************************************************************************
  * $routeParams Service

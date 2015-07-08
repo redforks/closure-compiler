@@ -7750,6 +7750,34 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "(new G).method('asdf', 'asdf');"),
         NewTypeInference.INVALID_ARGUMENT_TYPE,
         CheckMissingReturn.MISSING_RETURN_STATEMENT);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "Foo.prototype.m = function() {};",
+        "/** @constructor @extends {Foo}*/",
+        "function Bar() {}",
+        "/**",
+        " * @param {number=} x",
+        " * @override",
+        " */",
+        "Bar.prototype.m = function(x) {};",
+        "(new Bar).m(123);"));
+
+    typeCheck("(123).toString(16);");
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @constructor @extends {Foo}*/",
+        "function Bar() {}",
+        "/**",
+        " * @param {number=} x",
+        " * @override",
+        " */",
+        "Bar.prototype.m = function(x) {};",
+        "(new Bar).m(123);"),
+        TypeCheck.UNKNOWN_OVERRIDE);
   }
 
   public void testOverrideNoInitializer() {
@@ -8860,6 +8888,18 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @constructor @dict @implements {Foo} */",
         "function Bar() {}"),
         JSTypeCreatorFromJSDoc.DICT_IMPLEMENTS_INTERF);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/**",
+        " * @constructor",
+        " * @struct",
+        " * @extends {Foo}",
+        " * @suppress {newCheckTypesAllChecks}",
+        " */",
+        "function Bar() {}",
+        "var /** !Foo */ x = new Bar;"));
   }
 
   public void testStructPropCreation() {
@@ -12656,6 +12696,11 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  var /** string */ s = f.subns.prop;",
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(Joiner.on('\n').join(
+        "function f() {",
+        "  f.prop = function() {};",
+        "}"));
   }
 
   public void testFunctionNamespacesThatAreProperties() {
@@ -12797,5 +12842,18 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  var /** string */ s = ns.f.subns.prop;",
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testInterfaceMethodNoReturn() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @interface */",
+        "ns.Foo = function() {};",
+        "/** @return {number} */",
+        "ns.Foo.prototype.m = function() {};"));
+
+    // Don't crash when ns.Foo is not defined.
+    typeCheck("ns.Foo.prototype.m = function() {};");
   }
 }

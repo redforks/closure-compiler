@@ -1964,6 +1964,9 @@ angular.$provide;
 /** @typedef {{$get: (!Array.<string|!Function>|!Function)}} */
 angular.$provide.Provider;
 
+/** @typedef {(!Array.<string|!Function>|!Function)} */
+angular.$provide.Provider.$get;
+
 /**
  * @param {string} name
  * @param {*} object
@@ -2012,6 +2015,7 @@ angular.$provide.value = function(name, object) {};
 /**
  * @typedef {{
  *   reload: function(),
+ *   updateParams: function(!Object<string,string>),
  *   current: !angular.$route.Route,
  *   routes: Array.<!angular.$route.Route>
  * }}

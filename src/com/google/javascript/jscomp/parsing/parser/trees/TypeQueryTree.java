@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 The Closure Compiler Authors.
+ * Copyright 2015 The Closure Compiler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,21 +19,15 @@ package com.google.javascript.jscomp.parsing.parser.trees;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 
-import javax.annotation.Nullable;
-
 /**
- * Template literal production in ES6.
+ * Parse tree node representing a type query of the form {@code typeof foo.bar.baz}
  */
-public class TemplateLiteralExpressionTree extends ParseTree {
+public class TypeQueryTree extends ParseTree {
 
-  @Nullable public final ParseTree operand;
-  public final ImmutableList<ParseTree> elements;
+  public final ImmutableList<String> segments;
 
-  public TemplateLiteralExpressionTree(SourceRange location, ParseTree operand,
-      ImmutableList<ParseTree> elements) {
-    super(ParseTreeType.TEMPLATE_LITERAL_EXPRESSION, location);
-    this.operand = operand;
-    this.elements = elements;
+  public TypeQueryTree(SourceRange location, ImmutableList<String> segments) {
+    super(ParseTreeType.TYPE_QUERY, location);
+    this.segments = segments;
   }
-
 }

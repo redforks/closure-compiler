@@ -108,6 +108,14 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
     test("var x: string | number;", "var /** string | number */ x;");
   }
 
+  // TypeQuery is currently not supported.
+  public void testTypeQuery() {
+    testError("var x: typeof y | number;",
+        Es6TypedToEs6Converter.TYPE_QUERY_NOT_SUPPORTED);
+    testError("var x: (p1: typeof y) => number;",
+        Es6TypedToEs6Converter.TYPE_QUERY_NOT_SUPPORTED);
+  }
+
   public void testTypedParameter() {
     test("function f(p1: number) {}", "function f(/** number */ p1) {}");
   }
@@ -122,11 +130,11 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
     test("function f(...p1) {}", "function f(...p1) {}");
   }
 
-    public void testReturnType() {
-      test("function f(...p1: number[]): void {}",
-           "/** @return{void} */ function f(/** ...number */ ...p1) {}");
-      test("function f(...p1) {}", "function f(...p1) {}");
-    }
+  public void testReturnType() {
+    test("function f(...p1: number[]): void {}",
+         "/** @return{void} */ function f(/** ...number */ ...p1) {}");
+    test("function f(...p1) {}", "function f(...p1) {}");
+  }
 
   public void testBuiltins() {
     test("var x: any;", "var /** ? */ x;");
@@ -203,6 +211,10 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
          "/** @implements {Baz} */ class Foo extends Bar {}");
   }
 
+  public void testEnum() {
+    test("enum E { Foo, Bar }", "/** @enum {number} */ var E = { Foo: 0, Bar: 1 }");
+  }
+
   public void testInterface() {
     test("interface I { foo: string; }",
          "/** @interface */ class I {} /** @type {string} */ I.prototype.foo;");
@@ -218,5 +230,16 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
         Es6TypedToEs6Converter.TYPE_ALIAS_ALREADY_DECLARED);
     testError("let Foo = 3; type Foo = number;",
         Es6TypedToEs6Converter.TYPE_ALIAS_ALREADY_DECLARED);
+  }
+
+  public void testAmbientDeclaration() {
+    test("declare var x;", "/** @suppress {duplicate} */ var x;");
+    test("declare let x;", "/** @suppress {duplicate} */ var x;");
+    test("declare const x;", "/** @suppress {duplicate} @const */ var x;");
+    test("declare function f();", "/** @suppress {duplicate} */ function f() {}");
+    test("declare enum Foo {}", "/** @suppress {duplicate} @enum {number} */ var Foo = {}");
+    test("declare class C { constructor(); };",
+         "/** @suppress {duplicate} */ class C { constructor() {} }");
+
   }
 }

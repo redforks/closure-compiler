@@ -54,7 +54,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
     enableAstValidation(true);
     disableTypeCheck();
     runTypeCheckAfterProcessing = true;
-    compareJsDoc = true;
   }
 
   @Override
@@ -327,7 +326,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testExtends() {
-    compareJsDoc = false;
     test(
         "class D {} class C extends D {}",
         LINE_JOINER.join(
@@ -415,8 +413,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testSuperCall() {
-    compareJsDoc = false;
-
     test(
         "class D {} class C extends D { constructor() { super(); } }",
         LINE_JOINER.join(
@@ -527,7 +523,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "  var D = function() {}",
             "};"));
 
-    compareJsDoc = false;
     test(
         "class C { f() { class D extends C {} } }",
         LINE_JOINER.join(
@@ -593,7 +588,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testSuperCallNonConstructor() {
-    compareJsDoc = false;
 
     test(
         "class S extends B { static f() { super(); } }",
@@ -647,7 +641,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testStaticInheritance() {
-    compareJsDoc = false;
 
     test(
         LINE_JOINER.join(
@@ -721,42 +714,8 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
               Es6ToEs3Converter.CANNOT_CONVERT);
   }
 
-  public void testArrowInClass() {
-    test(
-        LINE_JOINER.join(
-            "class C {",
-            "  constructor() {",
-            "    this.counter = 0;",
-            "  }",
-            "",
-            "  init() {",
-            "    document.onclick = () => this.logClick();",
-            "  }",
-            "",
-            "  logClick() {",
-            "     this.counter++;",
-            "  }",
-            "}"),
-        LINE_JOINER.join(
-            "/**",
-            " * @constructor",
-            " * @struct",
-            " */",
-            "var C = function() { this.counter = 0; };",
-            "",
-            "C.prototype.init = function() {",
-            "  /** @const */ var $jscomp$this = this;",
-            "  document.onclick = function() { return $jscomp$this.logClick(); }",
-            "};",
-            "",
-            "C.prototype.logClick = function() {",
-            "  this.counter++;",
-            "}"));
-  }
-
   public void testInvalidClassUse() {
     enableTypeCheck(CheckLevel.WARNING);
-    compareJsDoc = false;
 
     test(
         EXTERNS_BASE,
@@ -797,9 +756,12 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "Foo.f = function() {};",
             "class Sub extends Foo {}"),
         LINE_JOINER.join(
-            "function Foo(){}Foo.f=function(){};",
-            "var Sub=function(var_args){Foo.apply(this,arguments)};",
-            "$jscomp.inherits(Sub,Foo)"),
+            "/** @constructor */",
+            "function Foo() {}",
+            "Foo.f = function() {};",
+            "/** @constructor @struct @extends {Foo} */",
+            "var Sub = function(var_args) { Foo.apply(this, arguments); };",
+            "$jscomp.inherits(Sub, Foo);"),
         null,
         null);
   }
@@ -1112,212 +1074,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
     testSame("var x = { set y(value) {} };");
   }
 
-  public void testArrowFunction() {
-    test("var f = x => { return x+1; };",
-        "var f = function(x) { return x+1; };");
-
-    test("var odds = [1,2,3,4].filter((n) => n%2 == 1);",
-        "var odds = [1,2,3,4].filter(function(n) { return n%2 == 1; });");
-
-    test("var f = x => x+1;",
-        "var f = function(x) { return x+1; };");
-
-    test(
-        "var f = () => this;",
-        LINE_JOINER.join(
-            "/** @const */ var $jscomp$this = this;",
-            "var f = function() { return $jscomp$this; };"));
-
-    test(
-        "var f = x => { this.needsBinding(); return 0; };",
-        LINE_JOINER.join(
-            "/** @const */ var $jscomp$this = this;",
-            "var f = function(x) {",
-            "  $jscomp$this.needsBinding();",
-            "  return 0;",
-            "};"));
-
-    test(
-        LINE_JOINER.join(
-            "var f = x => {", "  this.init();", "  this.doThings();", "  this.done();", "};"),
-        LINE_JOINER.join(
-            "/** @const */ var $jscomp$this = this;",
-            "var f = function(x) {",
-            "  $jscomp$this.init();",
-            "  $jscomp$this.doThings();",
-            "  $jscomp$this.done();",
-            "};"));
-
-    test(
-        "switch(a) { case b: (() => { this; })(); }",
-        LINE_JOINER.join(
-            "switch(a) {",
-            "  case b:",
-            "    /** @const */ var $jscomp$this = this;",
-            "    (function() { $jscomp$this; })();",
-            "}"));
-  }
-
-  public void testMultipleArrowsInSameScope() {
-    test(
-        "var a1 = x => x+1; var a2 = x => x-1;",
-        "var a1 = function(x) { return x+1; }; var a2 = function(x) { return x-1; };");
-
-    test(
-        "function f() { var a1 = x => x+1; var a2 = x => x-1; }",
-        LINE_JOINER.join(
-            "function f() {",
-            "  var a1 = function(x) { return x+1; };",
-            "  var a2 = function(x) { return x-1; };",
-            "}"));
-
-    test(
-        "function f() { var a1 = () => this.x; var a2 = () => this.y; }",
-        LINE_JOINER.join(
-            "function f() {",
-            "  /** @const */ var $jscomp$this = this;",
-            "  var a1 = function() { return $jscomp$this.x; };",
-            "  var a2 = function() { return $jscomp$this.y; };",
-            "}"));
-
-    test(
-        "var a = [1,2,3,4]; var b = a.map(x => x+1).map(x => x*x);",
-        LINE_JOINER.join(
-            "var a = [1,2,3,4];",
-            "var b = a.map(function(x) { return x+1; }).map(function(x) { return x*x; });"));
-
-    test(
-        LINE_JOINER.join(
-            "function f() {",
-            "  var a = [1,2,3,4];",
-            "  var b = a.map(x => x+1).map(x => x*x);",
-            "}"),
-        LINE_JOINER.join(
-            "function f() {",
-            "  var a = [1,2,3,4];",
-            "  var b = a.map(function(x) { return x+1; }).map(function(x) { return x*x; });",
-            "}"));
-  }
-
-  public void testArrowNestedScope() {
-    test(
-        LINE_JOINER.join(
-            "var outer = {",
-            "  f: function() {",
-            "     var a1 = () => this.x;",
-            "     var inner = {",
-            "       f: function() {",
-            "         var a2 = () => this.y;",
-            "       }",
-            "     };",
-            "  }",
-            "}"),
-        LINE_JOINER.join(
-            "var outer = {",
-            "  f: function() {",
-            "     /** @const */ var $jscomp$this = this;",
-            "     var a1 = function() { return $jscomp$this.x; }",
-            "     var inner = {",
-            "       f: function() {",
-            "         /** @const */ var $jscomp$this = this;",
-            "         var a2 = function() { return $jscomp$this.y; }",
-            "       }",
-            "     };",
-            "  }",
-            "}"));
-
-    test(
-        LINE_JOINER.join(
-            "function f() {",
-            "  var setup = () => {",
-            "    function Foo() { this.x = 5; }",
-            "    this.f = new Foo;",
-            "  }",
-            "}"),
-        LINE_JOINER.join(
-            "function f() {",
-            "  /** @const */ var $jscomp$this = this;",
-            "  var setup = function() {",
-            "    function Foo() { this.x = 5; }",
-            "    $jscomp$this.f = new Foo;",
-            "  }",
-            "}"));
-  }
-
-  public void testArrowception() {
-    test("var f = x => y => x+y;",
-        "var f = function(x) {return function(y) { return x+y; }; };");
-  }
-
-  public void testArrowceptionWithThis() {
-    test(
-        "var f = (x => { var g = (y => { this.foo(); }) });",
-        LINE_JOINER.join(
-            "/** @const */ var $jscomp$this = this;",
-            "var f = function(x) {",
-            "  var g = function(y) {",
-            "    $jscomp$this.foo();",
-            "  }",
-            "}"));
-  }
-
-  public void testDefaultParameters() {
-    enableTypeCheck(CheckLevel.WARNING);
-
-    test(
-        "var x = true; function f(a=x) { var x = false; return a; }",
-        LINE_JOINER.join(
-            "var x = true;",
-            "function f(a) {",
-            "  a = (a === undefined) ? x : a;",
-            "  var x$0 = false;",
-            "  return a;",
-            "}"));
-
-    test(
-        "function f(zero, one = 1, two = 2) {}; f(1); f(1,2,3);",
-        LINE_JOINER.join(
-            "function f(zero, one, two) {",
-            "  one = (one === undefined) ? 1 : one;",
-            "  two = (two === undefined) ? 2 : two;",
-            "};",
-            "f(1); f(1,2,3);"));
-
-    test(
-        "function f(zero, one = 1, two = 2) {}; f();",
-        LINE_JOINER.join(
-            "function f(zero, one, two) {",
-            "  one = (one === undefined) ? 1 : one;",
-            "  two = (two === undefined) ? 2 : two;",
-            "}; f();"),
-        null,
-        TypeCheck.WRONG_ARGUMENT_COUNT);
-  }
-
-  public void testDefaultUndefinedParameters() {
-    enableTypeCheck(CheckLevel.WARNING);
-
-    test("function f(zero, one=undefined) {}",
-         "function f(zero, one) {}");
-
-    test("function f(zero, one=void 42) {}",
-         "function f(zero, one) {}");
-
-    test("function f(zero, one=void(42)) {}",
-         "function f(zero, one) {}");
-
-    test("function f(zero, one=void '\\x42') {}",
-         "function f(zero, one) {}");
-
-    test(
-        "function f(zero, one='undefined') {}",
-        "function f(zero, one) {   one = (one === undefined) ? 'undefined' : one; }");
-
-    test(
-        "function f(zero, one=void g()) {}",
-        "function f(zero, one) {   one = (one === undefined) ? void g() : one; }");
-  }
-
   public void testRestParameter() {
     test("function f(...zero) { return zero; }",
         LINE_JOINER.join(
@@ -1395,10 +1151,10 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testDefaultAndRestParameters() {
-    test("function f(zero, one = 1, ...two) {}",
+    test(
+        "function f(zero, one, ...two) {one = (one === undefined) ? 1 : one;}",
         LINE_JOINER.join(
             "function f(zero, one, two) {",
-            "  one = (one === undefined) ? 1 : one;",
             "  var $jscomp$restParams = [];",
             "  for (var $jscomp$restIndex = 2; $jscomp$restIndex < arguments.length;",
             "      ++$jscomp$restIndex) {",
@@ -1406,12 +1162,12 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "  }",
             "  {",
             "    var two$0 = $jscomp$restParams;",
+            "    one = (one === undefined) ? 1 : one;",
             "  }",
             "}"));
   }
 
   public void testForOf() {
-    compareJsDoc = false;
 
     // With array literal and declaring new bound variable.
     test(
@@ -1469,21 +1225,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "  alert(i$1);",
             "}",
             "alert(i);"));
-  }
-
-  public void testDestructuringForOf() {
-    test(
-        "for ({x} of y) { console.log(x); }",
-        LINE_JOINER.join(
-            "for (var $jscomp$iter$0 = $jscomp.makeIterator(y),",
-            "         $jscomp$key$$jscomp$destructuring$var0 = $jscomp$iter$0.next();",
-            "     !$jscomp$key$$jscomp$destructuring$var0.done;",
-            "     $jscomp$key$$jscomp$destructuring$var0 = $jscomp$iter$0.next()) {",
-            "  var $jscomp$destructuring$var0 = $jscomp$key$$jscomp$destructuring$var0.value;",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0;",
-            "  x = $jscomp$destructuring$var1.x",
-            "  console.log(x);",
-            "}"));
   }
 
   public void testSpreadArray() {
@@ -1570,11 +1311,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
         "var $jscomp$spread$args0;",
         "($jscomp$spread$args0 = Factory.create()).m.apply($jscomp$spread$args0, [].concat(arr));"
     ), null, null);
-  }
-
-  public void testArrowFunctionInObject() {
-    test("var obj = { f: () => 'bar' };",
-        "var obj = { f: function() { return 'bar'; } };");
   }
 
   public void testMethodInObject() {
@@ -1755,294 +1491,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   public void testNoComputedProperties() {
     testSame("({'a' : 1})");
     testSame("({'a' : 1, f : 1, b : 1})");
-  }
-
-  public void testArrayDestructuring() {
-    test(
-        "var [x,y] = z();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = z();",
-            "var x = $jscomp$destructuring$var0[0];",
-            "var y = $jscomp$destructuring$var0[1];"));
-
-    test(
-        "var x,y;\n" + "[x,y] = z();",
-        LINE_JOINER.join(
-            "var x,y;",
-            "var $jscomp$destructuring$var0 = z();",
-            "x = $jscomp$destructuring$var0[0];",
-            "y = $jscomp$destructuring$var0[1];"));
-
-    test(
-        "var [a,b] = c();" + "var [x,y] = z();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = c();",
-            "var a = $jscomp$destructuring$var0[0];",
-            "var b = $jscomp$destructuring$var0[1];",
-            "var $jscomp$destructuring$var1 = z();",
-            "var x = $jscomp$destructuring$var1[0];",
-            "var y = $jscomp$destructuring$var1[1];"));
-  }
-
-  public void testArrayDestructuringDefaultValues() {
-    test(
-        "var a; [a=1] = b();",
-        LINE_JOINER.join(
-            "var a;",
-            "var $jscomp$destructuring$var0 = b()",
-            "a = ($jscomp$destructuring$var0[0] === undefined) ?",
-            "    1 :",
-            "    $jscomp$destructuring$var0[0];"));
-
-    test(
-        "var [a=1] = b();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = b()",
-            "var a = ($jscomp$destructuring$var0[0] === undefined) ?",
-            "    1 :",
-            "    $jscomp$destructuring$var0[0];"));
-
-    test(
-        "var [a, b=1, c] = d();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0=d();",
-            "var a = $jscomp$destructuring$var0[0];",
-            "var b = ($jscomp$destructuring$var0[1] === undefined) ?",
-            "    1 :",
-            "    $jscomp$destructuring$var0[1];",
-            "var c=$jscomp$destructuring$var0[2]"));
-
-    test(
-        "var a; [[a] = ['b']] = [];",
-        LINE_JOINER.join(
-            "var a;",
-            "var $jscomp$destructuring$var0 = [];",
-            "var $jscomp$destructuring$var1 = ($jscomp$destructuring$var0[0] === undefined)",
-            "    ? ['b']",
-            "    : $jscomp$destructuring$var0[0];",
-            "a = $jscomp$destructuring$var1[0]"));
-  }
-
-  public void testArrayDestructuringParam() {
-    test(
-        "function f([x,y]) { use(x); use(y); }",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0;",
-            "  var x = $jscomp$destructuring$var1[0];",
-            "  var y = $jscomp$destructuring$var1[1];",
-            "  use(x);",
-            "  use(y);",
-            "}"));
-
-    test(
-        "function f([x, , y]) { use(x); use(y); }",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0;",
-            "  var x = $jscomp$destructuring$var1[0];",
-            "  var y = $jscomp$destructuring$var1[2];",
-            "  use(x);",
-            "  use(y);",
-            "}"));
-  }
-
-  public void testArrayDestructuringRest() {
-    test(
-        "let [one, ...others] = f();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = f();",
-            "var one = $jscomp$destructuring$var0[0];",
-            "var others = [].slice.call($jscomp$destructuring$var0, 1);"));
-
-    test(
-        "function f([first, ...rest]) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0;",
-            "  var first = $jscomp$destructuring$var1[0];",
-            "  var rest = [].slice.call($jscomp$destructuring$var1, 1);",
-            "}"));
-  }
-
-  public void testObjectDestructuring() {
-    test(
-        "var {a: b, c: d} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var b = $jscomp$destructuring$var0.a;",
-            "var d = $jscomp$destructuring$var0.c;"));
-
-    test(
-        "var {a,b} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var a = $jscomp$destructuring$var0.a;",
-            "var b = $jscomp$destructuring$var0.b;"));
-
-    test(
-        "var x; ({a: x}) = foo();",
-        LINE_JOINER.join(
-            "var x;",
-            "var $jscomp$destructuring$var0 = foo();",
-            "x = $jscomp$destructuring$var0.a;"));
-  }
-
-  public void testObjectDestructuringWithInitializer() {
-    test(
-        "var {a : b = 'default'} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var b = ($jscomp$destructuring$var0.a === undefined) ?",
-            "    'default' :",
-            "    $jscomp$destructuring$var0.a"));
-
-    test(
-        "var {a = 'default'} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var a = ($jscomp$destructuring$var0.a === undefined) ?",
-            "    'default' :",
-            "    $jscomp$destructuring$var0.a"));
-  }
-
-  public void testObjectDestructuringNested() {
-    test(
-        "var {a: {b}} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var $jscomp$destructuring$var1 = $jscomp$destructuring$var0.a;",
-            "var b = $jscomp$destructuring$var1.b"));
-  }
-
-  public void testObjectDestructuringComputedProps() {
-    test(
-        "var {[a]: b} = foo();",
-        "var $jscomp$destructuring$var0 = foo(); var b = $jscomp$destructuring$var0[a];");
-
-    test(
-        "({[a]: b}) = foo();",
-        "var $jscomp$destructuring$var0 = foo(); b = $jscomp$destructuring$var0[a];");
-
-    test(
-        "var {[foo()]: x = 5} = {};",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = {};",
-            "var $jscomp$destructuring$var1 = $jscomp$destructuring$var0[foo()];",
-            "var x = $jscomp$destructuring$var1 === undefined ?",
-            "    5 : $jscomp$destructuring$var1"));
-
-    test(
-        "function f({['KEY']: x}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var x = $jscomp$destructuring$var1['KEY']",
-            "}"));
-  }
-
-  public void testObjectDestructuringStrangeProperties() {
-    test(
-        "var {5: b} = foo();",
-        "var $jscomp$destructuring$var0 = foo(); var b = $jscomp$destructuring$var0['5']");
-
-    test(
-        "var {0.1: b} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var b = $jscomp$destructuring$var0['0.1']"));
-
-    test(
-        "var {'str': b} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var b = $jscomp$destructuring$var0['str']"));
-  }
-
-  public void testObjectDestructuringFunction() {
-    test(
-        "function f({a: b}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var b = $jscomp$destructuring$var1.a",
-            "}"));
-
-    test(
-        "function f({a}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var a = $jscomp$destructuring$var1.a",
-            "}"));
-
-    test(
-        "function f({k: {subkey : a}}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var $jscomp$destructuring$var2 = $jscomp$destructuring$var1.k;",
-            "  var a = $jscomp$destructuring$var2.subkey;",
-            "}"));
-
-    test(
-        "function f({k: [x, y, z]}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var $jscomp$destructuring$var2 = $jscomp$destructuring$var1.k;",
-            "  var x = $jscomp$destructuring$var2[0];",
-            "  var y = $jscomp$destructuring$var2[1];",
-            "  var z = $jscomp$destructuring$var2[2];",
-            "}"));
-
-    test(
-        "function f({key: x = 5}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var x = $jscomp$destructuring$var1.key === undefined ?",
-            "      5 : $jscomp$destructuring$var1.key",
-            "}"));
-
-    test(
-        "function f({[key]: x = 5}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var $jscomp$destructuring$var2 = $jscomp$destructuring$var1[key]",
-            "  var x = $jscomp$destructuring$var2 === undefined ?",
-            "      5 : $jscomp$destructuring$var2",
-            "}"));
-
-    test(
-        "function f({x = 5}) {}",
-        LINE_JOINER.join(
-            "function f($jscomp$destructuring$var0) {",
-            "  var $jscomp$destructuring$var1 = $jscomp$destructuring$var0",
-            "  var x = $jscomp$destructuring$var1.x === undefined ?",
-            "      5 : $jscomp$destructuring$var1.x",
-            "}"));
-  }
-
-  public void testMixedDestructuring() {
-    test(
-        "var [a,{b,c}] = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var a = $jscomp$destructuring$var0[0];",
-            "var $jscomp$destructuring$var1 = $jscomp$destructuring$var0[1];",
-            "var b=$jscomp$destructuring$var1.b;",
-            "var c=$jscomp$destructuring$var1.c"));
-
-    test(
-        "var {a,b:[c,d]} = foo();",
-        LINE_JOINER.join(
-            "var $jscomp$destructuring$var0 = foo();",
-            "var a = $jscomp$destructuring$var0.a;",
-            "var $jscomp$destructuring$var1 = $jscomp$destructuring$var0.b;",
-            "var c = $jscomp$destructuring$var1[0];",
-            "var d = $jscomp$destructuring$var1[1]"));
   }
 
   public void testUntaggedTemplateLiteral() {

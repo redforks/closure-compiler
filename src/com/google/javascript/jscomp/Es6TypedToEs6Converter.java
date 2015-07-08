@@ -37,6 +37,7 @@ public final class Es6TypedToEs6Converter
       "JSC_CANNOT_CONVERT_FIELDS",
       "Can only convert class member variables (fields) in declarations or the right hand side of "
           + "a simple assignment.");
+
   static final DiagnosticType CANNOT_CONVERT_BOUNDED_GENERICS = DiagnosticType.error(
       "JSC_CANNOT_CONVERT_BOUNDED_GENERICS",
       "Bounded generics are not yet implemented.");
@@ -44,6 +45,10 @@ public final class Es6TypedToEs6Converter
   static final DiagnosticType TYPE_ALIAS_ALREADY_DECLARED = DiagnosticType.error(
       "JSC_TYPE_ALIAS_ALREADY_DECLARED",
       "Type alias already declared as a variable: {0}");
+
+  static final DiagnosticType TYPE_QUERY_NOT_SUPPORTED = DiagnosticType.error(
+      "JSC_TYPE_QUERY_NOT_SUPPORTED",
+      "Type query is currently not supported.");
 
   private final AbstractCompiler compiler;
 
@@ -72,9 +77,12 @@ public final class Es6TypedToEs6Converter
         maybeAddGenerics(n, n);
         visitInterface(n);
         break;
+      case Token.ENUM:
+        visitEnum(n, parent);
+        break;
       case Token.NAME:
       case Token.REST:
-        visitColonType(n, n);
+        maybeVisitColonType(n, n);
         break;
       case Token.FUNCTION:
         // For member functions (eg. class Foo<T> { f() {} }), the JSDocInfo
@@ -83,13 +91,15 @@ public final class Es6TypedToEs6Converter
             ? parent
             : n;
         maybeAddGenerics(n, jsDocNode);
-        visitColonType(n, jsDocNode); // Return types are colon types on the function node
+        maybeVisitColonType(n, jsDocNode); // Return types are colon types on the function node
         break;
       case Token.TYPE_ALIAS:
         visitTypeAlias(t, n, parent);
         break;
+      case Token.DECLARE:
+        visitAmbientDeclaration(n, parent);
+        break;
       default:
-
     }
   }
 
@@ -162,7 +172,6 @@ public final class Es6TypedToEs6Converter
       if (member.isMemberFunctionDef()) {
         Node function = member.getFirstChild();
         function.getLastChild().setType(Token.BLOCK);
-        function.putBooleanProp(Node.METHOD_SIGNATURE, false);
         continue;
       }
 
@@ -187,13 +196,50 @@ public final class Es6TypedToEs6Converter
         Es6ToEs3Converter.getQualifiedMemberAccess(compiler, member, nameAccess,
             prototypeAcess);
     // Copy type information.
-    visitColonType(member, member);
+    maybeVisitColonType(member, member);
     qualifiedMemberAccess.setJSDocInfo(member.getJSDocInfo());
     Node newNode = NodeUtil.newExpr(qualifiedMemberAccess);
     return newNode.useSourceInfoIfMissingFromForTree(member);
   }
 
-  private void visitColonType(Node n, Node jsDocNode) {
+  private void visitEnum(Node n, Node parent) {
+    Node name = n.getFirstChild();
+    Node members = n.getLastChild();
+    double nextValue = 0;
+    Node[] stringKeys = new Node[members.getChildCount()];
+    for (int i = 0; i < members.getChildCount(); i++) {
+      Node child = members.getChildAtIndex(i);
+      if (child.hasChildren()) {
+        nextValue = child.getFirstChild().getDouble() + 1;
+      } else {
+        child.addChildToFront(IR.number(nextValue++));
+      }
+      stringKeys[i] = child;
+    }
+    for (Node child : stringKeys) {
+      child.detachFromParent();
+    }
+    Node var = IR.var(name.detachFromParent());
+    Node objectlit = IR.objectlit(stringKeys);
+    name.addChildToFront(objectlit);
+
+    JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+    builder.recordEnumParameterType(
+        new JSTypeExpression(IR.string("number"), n.getSourceFileName()));
+    var.setJSDocInfo(builder.build());
+
+    parent.replaceChild(n, var.useSourceInfoIfMissingFromForTree(n));
+    compiler.reportCodeChange();
+  }
+
+  private void maybeClearColonType(Node n, boolean hasColonType) {
+    if (hasColonType) {
+      n.setDeclaredTypeExpression(null);
+      compiler.reportCodeChange();
+    }
+  }
+
+  private void maybeVisitColonType(Node n, Node jsDocNode) {
     Node type = n.getDeclaredTypeExpression();
     boolean hasColonType = type != null;
     if (n.isRest() && hasColonType) {
@@ -226,10 +272,7 @@ public final class Es6TypedToEs6Converter
     info = builder.build();
     jsDocNode.setJSDocInfo(info);
 
-    if (hasColonType) {
-      n.setDeclaredTypeExpression(null); // clear out declared type
-      compiler.reportCodeChange();
-    }
+    maybeClearColonType(n, hasColonType);
   }
 
   private void visitTypeAlias(NodeTraversal t, Node n, Node parent) {
@@ -247,14 +290,46 @@ public final class Es6TypedToEs6Converter
     compiler.reportCodeChange();
   }
 
-  private Node maybeCreateAnyType(Node type) {
-    return type == null ? TypeDeclarationsIR.anyType() : type;
+  private void visitAmbientDeclaration(Node n, Node parent) {
+    Node child = n.removeFirstChild();
+    JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(child.getJSDocInfo());
+    builder.addSuppression("duplicate");
+    switch (child.getType()) {
+      case Token.FUNCTION:
+        child.replaceChild(child.getLastChild(), IR.block().useSourceInfoFrom(child));
+        break;
+      case Token.CLASS:
+        Node members = child.getLastChild();
+        for (Node member : members.children()) {
+          if (member.isMemberFunctionDef()) {
+            Node function = member.getFirstChild();
+            function.replaceChild(
+                function.getLastChild(), IR.block().copyInformationFrom(function));
+          }
+        }
+        break;
+      case Token.LET:
+        child.setType(Token.VAR);
+        break;
+      case Token.CONST:
+        builder.recordConstancy();
+        child.setType(Token.VAR);
+        break;
+    }
+    child.setJSDocInfo(builder.build());
+
+    parent.replaceChild(n, child);
+    compiler.reportCodeChange();
+  }
+
+  private Node maybeCreateAnyType(Node n, Node type) {
+    return type == null ? TypeDeclarationsIR.anyType().copyInformationFrom(n) : type;
   }
 
   private Node maybeProcessOptionalParameter(Node n, Node type) {
     if (n.getBooleanProp(Node.OPT_PARAM_ES6_TYPED)) {
       n.putBooleanProp(Node.OPT_PARAM_ES6_TYPED, false);
-      type = maybeCreateAnyType(type);
+      type = maybeCreateAnyType(n, type);
       return new Node(Token.EQUALS, convertWithLocation(type));
     } else {
       return type == null ? null : convertWithLocation(type);
@@ -314,7 +389,8 @@ public final class Es6TypedToEs6Converter
                   convertWithLocation(paramType.getFirstChild()));
             }
           } else {
-            paramType = maybeProcessOptionalParameter(param, maybeCreateAnyType(paramType));
+            paramType = maybeProcessOptionalParameter(param,
+                maybeCreateAnyType(param, paramType));
           }
           paramList.addChildToBack(paramType);
         }
@@ -338,6 +414,10 @@ public final class Es6TypedToEs6Converter
           lb.addChildrenToBack(colon);
         }
         return new Node(Token.LC, lb);
+      case Token.TYPEOF:
+        // Currently, TypeQuery is not supported in Closure's type system.
+        compiler.report(JSError.make(type, TYPE_QUERY_NOT_SUPPORTED));
+        return new Node(Token.QMARK);
       default:
         // TODO(moz): Implement.
         break;

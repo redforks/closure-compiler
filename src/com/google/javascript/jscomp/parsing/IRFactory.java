@@ -119,6 +119,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.ThrowStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TryStatementTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypeAliasTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypeNameTree;
+import com.google.javascript.jscomp.parsing.parser.trees.TypeQueryTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypedParameterTree;
 import com.google.javascript.jscomp.parsing.parser.trees.UnaryExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.UnionTypeTree;
@@ -142,6 +143,7 @@ import com.google.javascript.rhino.TokenStream;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1219,7 +1221,6 @@ class IRFactory {
 
       node.setIsGeneratorFunction(isGenerator);
       node.setIsArrowFunction(isArrow);
-      node.putBooleanProp(Node.METHOD_SIGNATURE, isSignature);
 
       Node result;
 
@@ -1640,11 +1641,13 @@ class IRFactory {
 
     Node processTemplateLiteral(TemplateLiteralExpressionTree tree) {
       maybeWarnEs6Feature(tree, "template literals");
+      Node templateLitNode = newNode(Token.TEMPLATELIT);
+      setSourceInfo(templateLitNode, tree);
       Node node = tree.operand == null
-          ? newNode(Token.TEMPLATELIT)
-          : newNode(Token.TEMPLATELIT, transform(tree.operand));
+          ? templateLitNode
+          : newNode(Token.TAGGED_TEMPLATELIT, transform(tree.operand), templateLitNode);
       for (ParseTree child : tree.elements) {
-        node.addChildToBack(transform(child));
+        templateLitNode.addChildToBack(transform(child));
       }
       return node;
     }
@@ -1749,10 +1752,10 @@ class IRFactory {
         operand.setDouble(-operand.getDouble());
         return operand;
       } else {
-        if (type == Token.DELPROP &&
-            !(operand.isGetProp() ||
-              operand.isGetElem() ||
-              operand.isName())) {
+        if (type == Token.DELPROP
+            && !(operand.isGetProp()
+                || operand.isGetElem()
+                || operand.isName())) {
           String msg =
               "Invalid delete operand. Only properties can be deleted.";
           errorReporter.error(
@@ -1920,6 +1923,10 @@ class IRFactory {
       Node body = newNode(Token.CLASS_MEMBERS);
       setSourceInfo(body, tree);
       for (ParseTree child : tree.elements) {
+        if (child.type == ParseTreeType.MEMBER_VARIABLE ||
+            child.type == ParseTreeType.COMPUTED_PROPERTY_MEMBER_VARIABLE) {
+          maybeWarnTypeSyntax(child, "member variable in class");
+        }
         body.addChildToBack(transform(child));
       }
 
@@ -2057,43 +2064,43 @@ class IRFactory {
         String typeName = tree.segments.get(0);
         switch (typeName) {
           case "any":
-            typeNode = anyType();
+            typeNode = cloneProps(anyType());
             break;
           case "number":
-            typeNode = numberType();
+            typeNode = cloneProps(numberType());
             break;
           case "boolean":
-            typeNode = booleanType();
+            typeNode = cloneProps(booleanType());
             break;
           case "string":
-            typeNode = stringType();
+            typeNode = cloneProps(stringType());
             break;
           case "void":
-            typeNode = voidType();
+            typeNode = cloneProps(voidType());
             break;
           case "undefined":
-            typeNode = undefinedType();
+            typeNode = cloneProps(undefinedType());
             break;
           default:
-            typeNode = namedType(tree.segments);
+            typeNode = cloneProps(namedType(tree.segments));
             break;
         }
       } else {
-        typeNode = namedType(tree.segments);
+        typeNode = cloneProps(namedType(tree.segments));
       }
       setSourceInfo(typeNode, tree);
       return typeNode;
     }
 
     Node processTypedParameter(TypedParameterTree typeAnnotation) {
-      Node param = process(typeAnnotation.param);
+      Node param = transform(typeAnnotation.param);
       maybeProcessType(param, typeAnnotation.typeAnnotation);
       return param;
     }
 
     Node processOptionalParameter(OptionalParameterTree optionalParam) {
       maybeWarnTypeSyntax(optionalParam, "optional parameter");
-      Node param = process(optionalParam.param);
+      Node param = transform(optionalParam.param);
       param.putBooleanProp(Node.OPT_PARAM_ES6_TYPED, true);
       return param;
     }
@@ -2109,48 +2116,48 @@ class IRFactory {
 
     private Node convertTypeTree(ParseTree typeTree) {
       maybeWarnTypeSyntax(typeTree);
-      return process(typeTree);
+      return transform(typeTree);
     }
 
     Node processParameterizedType(ParameterizedTypeTree tree) {
       ImmutableList.Builder<TypeDeclarationNode> arguments = ImmutableList.builder();
       for (ParseTree arg : tree.typeArguments) {
-        arguments.add((TypeDeclarationNode) process(arg));
+        arguments.add((TypeDeclarationNode) transform(arg));
       }
-      TypeDeclarationNode typeName = (TypeDeclarationNode) process(tree.typeName);
-      return parameterizedType(typeName, arguments.build());
+      TypeDeclarationNode typeName = (TypeDeclarationNode) transform(tree.typeName);
+      return cloneProps(parameterizedType(typeName, arguments.build()));
     }
 
     Node processArrayType(ArrayTypeTree tree) {
-      return arrayType(process(tree.elementType));
+      return cloneProps(arrayType(transform(tree.elementType)));
     }
 
     Node processRecordType(RecordTypeTree tree) {
       LinkedHashMap<String, TypeDeclarationNode> members = new LinkedHashMap<>();
       for (Map.Entry<IdentifierToken, ParseTree> entry : tree.members.entrySet()) {
-        members.put(entry.getKey().value, (TypeDeclarationNode) process(entry.getValue()));
+        members.put(entry.getKey().value, (TypeDeclarationNode) transform(entry.getValue()));
       }
-      return recordType(members);
+      return cloneProps(recordType(members));
     }
 
     Node processUnionType(UnionTypeTree tree) {
       ImmutableList.Builder<TypeDeclarationNode> options = ImmutableList.builder();
       for (ParseTree option : tree.types) {
-        options.add((TypeDeclarationNode) process(option));
+        options.add((TypeDeclarationNode) transform(option));
       }
-      return unionType(options.build());
+      return cloneProps(unionType(options.build()));
     }
 
     Node processTypeAlias(TypeAliasTree tree) {
       maybeWarnTypeSyntax(tree, "type alias");
       Node typeAlias = newStringNode(Token.TYPE_ALIAS, tree.alias.value);
-      typeAlias.addChildrenToFront(process(tree.original));
+      typeAlias.addChildrenToFront(transform(tree.original));
       return typeAlias;
     }
 
     Node processAmbientDeclaration(AmbientDeclarationTree tree) {
       maybeWarnTypeSyntax(tree, "ambient declaration");
-      return new Node(Token.DECLARE, process(tree.declaration));
+      return newNode(Token.DECLARE, transform(tree.declaration));
     }
 
     private boolean checkParameters(ImmutableList<ParseTree> params) {
@@ -2161,7 +2168,7 @@ class IRFactory {
         TypeDeclarationNode type = null;
         if (param.type == ParseTreeType.TYPED_PARAMETER) {
           TypedParameterTree typedParam = param.asTypedParameter();
-          type = (TypeDeclarationNode) process(typedParam.typeAnnotation);
+          type = (TypeDeclarationNode) transform(typedParam.typeAnnotation);
           param = typedParam.param;
         }
         switch (param.type) {
@@ -2212,7 +2219,7 @@ class IRFactory {
           TypeDeclarationNode type = null;
           if (param.type == ParseTreeType.TYPED_PARAMETER) {
             TypedParameterTree typedParam = param.asTypedParameter();
-            type = (TypeDeclarationNode) process(typedParam.typeAnnotation);
+            type = (TypeDeclarationNode) transform(typedParam.typeAnnotation);
             param = typedParam.param;
           }
           switch (param.type) {
@@ -2238,12 +2245,21 @@ class IRFactory {
         }
       }
 
-      return functionType(process(tree.returnType), requiredParams, optionalParams,
-          restName, restType);
+      return cloneProps(functionType(transform(tree.returnType), requiredParams, optionalParams,
+          restName, restType));
+    }
+
+    Node processTypeQuery(TypeQueryTree tree) {
+      Iterator<String> segmentsIt = tree.segments.iterator();
+      Node node = newStringNode(Token.NAME, segmentsIt.next());
+      while (segmentsIt.hasNext()) {
+        node = IR.getprop(node, IR.string(segmentsIt.next()));
+      }
+      return cloneProps(new TypeDeclarationNode(Token.TYPEOF, node));
     }
 
     Node processGenericTypeList(GenericTypeListTree tree) {
-      Node list = new Node(Token.GENERIC_TYPE_LIST);
+      Node list = newNode(Token.GENERIC_TYPE_LIST);
       for (Map.Entry<IdentifierToken, ParseTree> generic : tree.generics.entrySet()) {
         Node type = newStringNode(Token.GENERIC_TYPE, generic.getKey().value);
         ParseTree bound = generic.getValue();
@@ -2499,6 +2515,8 @@ class IRFactory {
           return processUnionType(node.asUnionType());
         case FUNCTION_TYPE:
           return processFunctionType(node.asFunctionType());
+        case TYPE_QUERY:
+          return processTypeQuery(node.asTypeQuery());
         case GENERIC_TYPE_LIST:
           return processGenericTypeList(node.asGenericTypeList());
         case MEMBER_VARIABLE:
@@ -2952,5 +2970,19 @@ class IRFactory {
 
   private Node newNumberNode(Double value) {
     return IR.number(value).clonePropsFrom(templateNode);
+  }
+
+  /**
+   * Clone the properties from the template node recursively, skips nodes that
+   * have properties already.
+   */
+  private Node cloneProps(Node n) {
+    if (!n.hasProps()) {
+      n.clonePropsFrom(templateNode);
+    }
+    for (Node child : n.children()) {
+      cloneProps(child);
+    }
+    return n;
   }
 }
