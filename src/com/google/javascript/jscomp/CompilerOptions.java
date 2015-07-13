@@ -39,7 +39,7 @@ import java.util.Set;
  * Compiler options
  * @author nicksantos@google.com (Nick Santos)
  */
-public class CompilerOptions implements Serializable, Cloneable {
+public class CompilerOptions implements Serializable {
 
   // Unused. For people using reflection to circumvent access control.
   @SuppressWarnings("unused")
@@ -77,24 +77,6 @@ public class CompilerOptions implements Serializable, Cloneable {
   private LanguageMode languageOut;
 
   /**
-   * Allows ES6 compilation output.
-   */
-  private boolean allowEs6Out;
-
-  /**
-   * Allow ES6 as the output language.
-   * WARNING: Enabling this option may cause the compiler to crash
-   *     or produce incorrect output.
-   */
-  public void setAllowEs6Out(boolean value) {
-    allowEs6Out = value;
-  }
-
-  public boolean getAllowEs6Out() {
-    return allowEs6Out;
-  }
-
-  /**
    * If true, transpile ES6 to ES3 only. All others passes will be skipped.
    */
   boolean transpileOnly;
@@ -105,6 +87,20 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public void setTranspileOnly(boolean value) {
     transpileOnly = value;
+  }
+
+  /**
+   * If true, don't transpile ES6 to ES3.
+   *  WARNING: Enabling this option will likely cause the compiler to crash
+   *     or produce incorrect output.
+   */
+  boolean skipTranspilationAndCrash = false;
+
+  /**
+   * Allow disabling ES6 to ES3 transpilation.
+   */
+  public void setSkipTranspilationAndCrash(boolean value) {
+    skipTranspilationAndCrash = value;
   }
 
   /**
@@ -986,9 +982,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     languageIn = LanguageMode.ECMASCRIPT3;
     languageOut = LanguageMode.NO_TRANSPILE;
 
-    // Experimental
-    allowEs6Out = false;
-
     // Language variation
     acceptConstKeyword = false;
     acceptTypeSyntax = false;
@@ -1704,13 +1697,6 @@ public class CompilerOptions implements Serializable, Cloneable {
         && languageOut == LanguageMode.ECMASCRIPT6_TYPED;
   }
 
-  @Override
-  public Object clone() throws CloneNotSupportedException {
-    CompilerOptions clone = (CompilerOptions) super.clone();
-    // TODO(bolinfest): Add relevant custom cloning.
-    return clone;
-  }
-
   public void setAliasTransformationHandler(
       AliasTransformationHandler changes) {
     this.aliasHandler = changes;
@@ -2139,6 +2125,7 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setClosurePass(boolean closurePass) {
     this.closurePass = closurePass;
+    setAggressiveVarCheck(CheckLevel.ERROR);
   }
 
   public void setPreserveGoogRequires(boolean preserveGoogRequires) {

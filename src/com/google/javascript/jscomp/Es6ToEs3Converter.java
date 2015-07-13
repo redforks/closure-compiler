@@ -274,7 +274,28 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
 
     restParam.setType(Token.NAME);
     restParam.setVarArgs(true);
+
+    // Make sure rest parameters are typechecked
+    JSTypeExpression type = null;
+    JSDocInfo info = restParam.getJSDocInfo();
     String paramName = restParam.getString();
+    if (info != null) {
+      type = info.getType();
+    } else {
+      JSDocInfo functionInfo = paramList.getParent().getJSDocInfo();
+      if (functionInfo != null) {
+        type = functionInfo.getParameterType(paramName);
+      }
+    }
+    if (type != null && type.getRoot().getType() != Token.ELLIPSIS) {
+      compiler.report(JSError.make(restParam, BAD_REST_PARAMETER_ANNOTATION));
+    }
+
+    if (!functionBody.hasChildren()) {
+      // If function has no body, we are done!
+      compiler.reportCodeChange();
+      return;
+    }
 
     Node newBlock = IR.block().useSourceInfoFrom(functionBody);
     Node name = IR.name(paramName);
@@ -286,23 +307,9 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
       newBlock.addChildToBack(child.detachFromParent());
     }
 
-    // Make sure rest parameters are typechecked
-    JSTypeExpression type = null;
-    JSDocInfo info = restParam.getJSDocInfo();
-    if (info != null) {
-      type = info.getType();
-    } else {
-      JSDocInfo functionInfo = paramList.getParent().getJSDocInfo();
-      if (functionInfo != null) {
-        type = functionInfo.getParameterType(paramName);
-      }
-    }
     if (type != null) {
       Node arrayType = IR.string("Array");
       Node typeNode = type.getRoot();
-      if (typeNode.getType() != Token.ELLIPSIS) {
-        compiler.report(JSError.make(typeNode, BAD_REST_PARAMETER_ANNOTATION));
-      }
       Node memberType =
           typeNode.getType() == Token.ELLIPSIS
               ? typeNode.getFirstChild().cloneNode()
@@ -496,8 +503,8 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     JSDocInfo ctorJSDocInfo = null;
     // Process all members of the class
     Node classMembers = classNode.getLastChild();
-    Map<String, JSTypeExpression> prototypeMembersToDeclare = new LinkedHashMap<>();
-    Map<String, JSTypeExpression> classMembersToDeclare = new LinkedHashMap<>();
+    Map<String, JSDocInfo> prototypeMembersToDeclare = new LinkedHashMap<>();
+    Map<String, JSDocInfo> classMembersToDeclare = new LinkedHashMap<>();
     for (Node member : classMembers.children()) {
       if (member.isEmpty()) {
         continue;
@@ -511,13 +518,19 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
         JSTypeExpression typeExpr = getTypeFromGetterOrSetter(member).clone();
         addToDefinePropertiesObject(metadata, member);
 
-        Map<String, JSTypeExpression> membersToDeclare =
+        Map<String, JSDocInfo> membersToDeclare =
             member.isStaticMember() ? classMembersToDeclare : prototypeMembersToDeclare;
-        JSTypeExpression existingType = membersToDeclare.get(member.getString());
+        JSDocInfo existingJSDoc = membersToDeclare.get(member.getString());
+        JSTypeExpression existingType = existingJSDoc == null ? null : existingJSDoc.getType();
         if (existingType != null && !existingType.equals(typeExpr)) {
           compiler.report(JSError.make(member, CONFLICTING_GETTER_SETTER_TYPE, member.getString()));
         } else {
-          membersToDeclare.put(member.getString(), typeExpr);
+          JSDocInfoBuilder jsDoc = new JSDocInfoBuilder(false);
+          jsDoc.recordType(typeExpr);
+          if (member.getJSDocInfo() != null && member.getJSDocInfo().isExport()) {
+            jsDoc.recordExport();
+          }
+          membersToDeclare.put(member.getString(), jsDoc.build());
         }
       } else if (member.isMemberFunctionDef() && member.getString().equals("constructor")) {
         ctorJSDocInfo = member.getJSDocInfo();
@@ -557,23 +570,17 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     // so that the typechecker knows those properties exist on the class.
     // This is a temporary solution. Eventually, the type checker should understand
     // Object.defineProperties calls directly.
-    for (Map.Entry<String, JSTypeExpression> entry : prototypeMembersToDeclare.entrySet()) {
+    for (Map.Entry<String, JSDocInfo> entry : prototypeMembersToDeclare.entrySet()) {
       String declaredMember = entry.getKey();
       Node declaration = IR.getprop(prototypeAccess.cloneTree(), IR.string(declaredMember));
-      JSDocInfoBuilder declInfo = new JSDocInfoBuilder(true);
-
-      declInfo.recordType(entry.getValue());
-      declaration.setJSDocInfo(declInfo.build());
+      declaration.setJSDocInfo(entry.getValue());
       metadata.insertNodeAndAdvance(
           IR.exprResult(declaration).useSourceInfoIfMissingFromForTree(classNode));
     }
-    for (Map.Entry<String, JSTypeExpression> entry : classMembersToDeclare.entrySet()) {
+    for (Map.Entry<String, JSDocInfo> entry : classMembersToDeclare.entrySet()) {
       String declaredMember = entry.getKey();
       Node declaration = IR.getprop(classNameAccess.cloneTree(), IR.string(declaredMember));
-      JSDocInfoBuilder declInfo = new JSDocInfoBuilder(true);
-
-      declInfo.recordType(entry.getValue());
-      declaration.setJSDocInfo(declInfo.build());
+      declaration.setJSDocInfo(entry.getValue());
       metadata.insertNodeAndAdvance(
           IR.exprResult(declaration).useSourceInfoIfMissingFromForTree(classNode));
     }

@@ -267,6 +267,7 @@ public class DiagnosticGroups {
           NewTypeInference.FORIN_EXPECTS_STRING_KEY,
 //           NewTypeInference.GOOG_BIND_EXPECTS_FUNCTION,
 //           NewTypeInference.INVALID_ARGUMENT_TYPE,
+//           NewTypeInference.INVALID_CAST,
           NewTypeInference.INVALID_INFERRED_RETURN_TYPE,
 //           NewTypeInference.INVALID_OBJLIT_PROPERTY_TYPE,
 //           NewTypeInference.INVALID_OPERAND_TYPE,
@@ -289,7 +290,6 @@ public class DiagnosticGroups {
           TypeCheck.NOT_CALLABLE,
 //           TypeCheck.WRONG_ARGUMENT_COUNT,
 //           TypeValidator.ILLEGAL_PROPERTY_ACCESS,
-//           TypeValidator.INVALID_CAST,
           TypeValidator.UNKNOWN_TYPEOF_VALUE);
   }
 
@@ -426,14 +426,13 @@ public class DiagnosticGroups {
           CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
           CheckJSDocStyle.MISSING_PARAM_JSDOC,
           CheckJSDocStyle.MUST_BE_PRIVATE,
-          CheckJSDocStyle.OPTIONAL_NAME_NOT_MARKED_OPTIONAL,
+          CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL,
           CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
           CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
           ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC,
-          RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
-          TypeCheck.NON_STRINGIFIABLE_OBJECT_KEY);
+          RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING);
 
   public static final DiagnosticGroup USE_OF_GOOG_BASE =
       DiagnosticGroups.registerGroup("useOfGoogBase",
@@ -464,6 +463,9 @@ public class DiagnosticGroups {
     // For internal use only, so there is no constant for it.
     DiagnosticGroups.registerGroup("invalidProvide",
         ProcessClosurePrimitives.INVALID_PROVIDE_ERROR);
+
+    DiagnosticGroups.registerGroup("es6Typed",
+        RhinoErrorReporter.MISPLACED_TYPE_SYNTAX);
   }
 
   /**

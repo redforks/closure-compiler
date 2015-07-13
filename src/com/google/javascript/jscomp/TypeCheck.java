@@ -41,6 +41,7 @@ import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
+import com.google.javascript.rhino.jstype.NamedType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.Property;
 import com.google.javascript.rhino.jstype.TemplateTypeMap;
@@ -246,7 +247,7 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           "Illegal key, the object literal is a {0}");
 
   static final DiagnosticType NON_STRINGIFIABLE_OBJECT_KEY =
-      DiagnosticType.disabled(
+      DiagnosticType.warning(
           "JSC_NON_STRINGIFIABLE_OBJECT_KEY",
           "Object type \"{0}\" contains non-stringifiable key and it may lead to an "
           + "error. Please use ES6 Map instead or implement your own Map structure.");
@@ -286,6 +287,7 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       IN_USED_WITH_STRUCT,
       ILLEGAL_PROPERTY_CREATION,
       ILLEGAL_OBJLIT_KEY,
+      NON_STRINGIFIABLE_OBJECT_KEY,
       RhinoErrorReporter.TYPE_PARSE_ERROR,
       TypedScopeCreator.UNKNOWN_LENDS,
       TypedScopeCreator.LENDS_ON_NON_OBJECT,
@@ -759,6 +761,10 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         typeable = false;
         break;
       }
+
+      case Token.MEMBER_FUNCTION_DEF:
+        ensureTyped(t, n, getJSType(n.getFirstChild()));
+        break;
 
       case Token.FUNCTION:
         visitFunction(t, n);
@@ -2137,6 +2143,12 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       if (templatizedType.getReferencedType().isArrayType()) {
         return isStringifiable(templatizedType.getTemplateTypes().get(0));
       }
+    }
+
+    // Named types are usually @typedefs. For such types we need to check underlying type specified
+    // in @typedef annotation.
+    if (type instanceof NamedType) {
+      return isStringifiable(((NamedType) type).getReferencedType());
     }
 
     // Handle interfaces and classes.

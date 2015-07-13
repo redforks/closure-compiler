@@ -13,19 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.javascript.jscomp.parsing.parser.trees;
 
-import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 
-public class RecordTypeTree extends ParseTree {
+/**
+ * Represents an indexable object in TypeScript.
+ */
+public class IndexSignatureTree extends ParseTree {
+  public final ParseTree name;
+  public final ParseTree declaredType;
 
-  public final ImmutableList<ParseTree> members;
-
-  public RecordTypeTree(SourceRange location, ImmutableList<ParseTree> members) {
-    super(ParseTreeType.RECORD_TYPE, location);
-
-    this.members = members;
+  public IndexSignatureTree(SourceRange location, ParseTree name,
+      ParseTree declaredType) {
+    super(ParseTreeType.INDEX_SIGNATURE, location);
+    this.name = name;
+    this.declaredType = declaredType;
   }
 }

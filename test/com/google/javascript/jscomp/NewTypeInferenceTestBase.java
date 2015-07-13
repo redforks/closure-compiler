@@ -34,16 +34,22 @@ import java.util.List;
 public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
   protected List<PassFactory> passes;
 
-  protected static final String CLOSURE_BASE = "var goog;";
+  protected static final String CLOSURE_BASE =
+      Joiner.on('\n').join(
+          "/** @const */ var goog = {};",
+          "/** @return {void} */",
+          "goog.nullFunction = function() {};");
   protected static final String DEFAULT_EXTERNS =
       CompilerTypeTestCase.DEFAULT_EXTERNS + Joiner.on('\n').join(
+          "/** @return {string} */",
+          "Object.prototype.toString = function() {};",
           "/**",
           " * @param {*} propertyName",
           " * @return {boolean}",
           " */",
           "Object.prototype.hasOwnProperty = function(propertyName) {};",
           "/** @return {string} */",
-          "String.prototype.toString = function() { return '' };",
+          "String.prototype.toString = function() {};",
           "/**",
           " * @constructor",
           " * @param {*=} arg",
@@ -54,7 +60,7 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " @param {number=} opt_radix",
           " @return {string}",
           "*/",
-          "Number.prototype.toString = function(opt_radix) { return '' };",
+          "Number.prototype.toString = function(opt_radix) {};",
           "/**",
           " * @constructor",
           " * @param {*=} arg",
@@ -62,7 +68,7 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " */",
           "function Boolean(arg) {}",
           "/** @return {string} */",
-          "Boolean.prototype.toString = function() { return '' };",
+          "Boolean.prototype.toString = function() {};",
           "/**",
           " * @param {?=} opt_begin",
           " * @param {?=} opt_end",

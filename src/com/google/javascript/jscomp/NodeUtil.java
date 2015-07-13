@@ -1404,6 +1404,9 @@ public final class NodeUtil {
       case Token.SPREAD:
       case Token.STRING:
       case Token.STRING_KEY:
+      case Token.MEMBER_VARIABLE_DEF:
+      case Token.INDEX_SIGNATURE:
+      case Token.CALL_SIGNATURE:
       case Token.THIS:
       case Token.SUPER:
       case Token.TRUE:
@@ -1809,7 +1812,8 @@ public final class NodeUtil {
   @Nullable static Node getFirstPropMatchingKey(Node objlit, String keyName) {
     Preconditions.checkState(objlit.isObjectLit());
     for (Node keyNode : objlit.children()) {
-      if (keyNode.isStringKey() && keyNode.getString().equals(keyName)) {
+      if ((keyNode.isStringKey() || keyNode.isMemberFunctionDef())
+          && keyNode.getString().equals(keyName)) {
         return keyNode.getFirstChild();
       }
     }
@@ -2489,6 +2493,7 @@ public final class NodeUtil {
       case Token.STRING_KEY:
       case Token.GETTER_DEF:
       case Token.SETTER_DEF:
+      case Token.MEMBER_FUNCTION_DEF:
         return true;
     }
     return false;
@@ -2504,6 +2509,7 @@ public final class NodeUtil {
       case Token.STRING_KEY:
       case Token.GETTER_DEF:
       case Token.SETTER_DEF:
+      case Token.MEMBER_FUNCTION_DEF:
         return key.getString();
     }
     throw new IllegalStateException("Unexpected node type: " + key);
@@ -3655,7 +3661,7 @@ public final class NodeUtil {
       } else if (parent.isFunction()) {
         // FUNCTION may be inside ASSIGN
         return getBestJSDocInfo(parent);
-      } else if (parent.isVar() && parent.hasOneChild()) {
+      } else if (NodeUtil.isNameDeclaration(parent) && parent.hasOneChild()) {
         return parent.getJSDocInfo();
       } else if ((parent.isHook() && parent.getFirstChild() != n)
                  || parent.isOr()

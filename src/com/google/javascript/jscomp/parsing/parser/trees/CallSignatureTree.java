@@ -16,16 +16,28 @@
 
 package com.google.javascript.jscomp.parsing.parser.trees;
 
-import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 
-public class RecordTypeTree extends ParseTree {
+import javax.annotation.Nullable;
 
-  public final ImmutableList<ParseTree> members;
+/**
+ * Represents an callable or newable object in TypeScript.
+ */
+public class CallSignatureTree extends ParseTree {
 
-  public RecordTypeTree(SourceRange location, ImmutableList<ParseTree> members) {
-    super(ParseTreeType.RECORD_TYPE, location);
+  public final boolean isNew;
+  public final GenericTypeListTree generics;
+  public final FormalParameterListTree formalParameterList;
+  @Nullable public final ParseTree returnType;
 
-    this.members = members;
+  public CallSignatureTree(SourceRange location, boolean isNew,
+      GenericTypeListTree generics, FormalParameterListTree formalParameterList,
+      @Nullable ParseTree returnType) {
+    super(ParseTreeType.CALL_SIGNATURE, location);
+
+    this.isNew = isNew;
+    this.generics = generics;
+    this.formalParameterList = formalParameterList;
+    this.returnType = returnType;
   }
 }

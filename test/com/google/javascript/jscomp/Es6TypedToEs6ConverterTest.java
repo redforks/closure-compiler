@@ -151,6 +151,7 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
 
   public void testArrayType() {
     test("var x: string[];", "var /** !Array.<string> */ x;");
+    test("var x: string[][];", "var /** !Array.<!Array.<string>> */ x;");
     test("var x: test.Type[];", "var /** !Array.<!test.Type> */ x;");
   }
 
@@ -159,6 +160,9 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
     test("var x: {p: string, q: number};", "var /** {p: string, q: number} */ x;");
     test("var x: {p: string; q: {p: string; q: number}};",
          "var /** {p: string, q: {p: string, q: number}}*/ x;");
+
+    testError("var x: {constructor(); q: number};",
+        Es6TypedToEs6Converter.UNSUPPORTED_RECORD_TYPE);
   }
 
   public void testParameterizedType() {
@@ -240,6 +244,17 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
     test("declare enum Foo {}", "/** @suppress {duplicate} @enum {number} */ var Foo = {}");
     test("declare class C { constructor(); };",
          "/** @suppress {duplicate} */ class C { constructor() {} }");
+  }
 
+  public void testIndexSignature() {
+    test("interface I { [foo: string]: Bar<Baz>; }",
+         "/** @interface @extends {IObject<string, !Bar<!Baz>>} */ class I {}");
+    test("interface I extends J { [foo: string]: Bar<Baz>; }",
+        "/** @interface @extends {J} @extends {IObject<string, !Bar<!Baz>>} */ class I {}");
+    test("class C implements D { [foo: string]: number; }",
+        "/** @implements {D} @implements {IObject<string, number>} */ class C {}");
+
+    testError("var x: { [foo: string]: number; };",
+        Es6TypedToEs6Converter.UNSUPPORTED_RECORD_TYPE);
   }
 }

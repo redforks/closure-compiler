@@ -191,10 +191,6 @@ public class Token {
 
       DEFAULT_VALUE = 179, // Formal parameter or destructuring element with a default value
 
-      // ECMAScript 6 Typed AST Nodes.
-
-      MEMBER_VARIABLE_DEF = 180,
-
       // Used by type declaration ASTs
       STRING_TYPE = 200,
       BOOLEAN_TYPE = 201,
@@ -236,6 +232,9 @@ public class Token {
       IMPLEMENTS = 316,
       TYPE_ALIAS = 317,
       DECLARE = 318,
+      MEMBER_VARIABLE_DEF = 319,
+      INDEX_SIGNATURE = 320,
+      CALL_SIGNATURE = 321,
 
       // Token Types to use for internal bookkeeping,
       // an AST is invalid while these are present.
@@ -553,11 +552,15 @@ public class Token {
         return "TYPE_ALIAS";
       case DECLARE:
         return "DECLARE";
+      case INDEX_SIGNATURE:
+        return "INDEX_SIGNATURE";
+      case CALL_SIGNATURE:
+        return "CALL_SIGNATURE";
     }
 
-        // Token without name
-        throw new IllegalStateException("No name defined for " + token);
-    }
+    // Token without name
+    throw new IllegalStateException("No name defined for " + token);
+  }
 
   /** If the arity isn't always the same, this function returns -1 */
   public static int arity(int token) {
@@ -798,6 +801,10 @@ public class Token {
         return 1;
       case TYPE_ALIAS:
         return 1;
+      case INDEX_SIGNATURE:
+        return 1;
+      case MEMBER_VARIABLE_DEF:
+        return 0;
     }
     throw new IllegalStateException(
         "No arity defined for " + Token.name(token));
