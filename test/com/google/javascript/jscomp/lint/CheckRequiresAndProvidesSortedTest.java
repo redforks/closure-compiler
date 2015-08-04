@@ -15,6 +15,8 @@
  */
 package com.google.javascript.jscomp.lint;
 
+import static com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted.MODULE_AND_PROVIDES;
+import static com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted.MULTIPLE_MODULES_IN_FILE;
 import static com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES;
 import static com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted.PROVIDES_NOT_SORTED;
 import static com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted.REQUIRES_NOT_SORTED;
@@ -65,5 +67,22 @@ public final class CheckRequiresAndProvidesSortedTest extends CompilerTestCase {
 
   public void testWarning_requiresFirst() {
     testWarning("goog.require('a');\ngoog.provide('b')", PROVIDES_AFTER_REQUIRES);
+  }
+
+  public void testB3473189() {
+    testSame(
+        LINE_JOINER.join(
+            "goog.provide('abc');",
+            "if (typeof goog != 'undefined' && typeof goog.provide == 'function') {",
+            "  goog.provide('MyLib.Base');",
+            "}"));
+  }
+
+  public void testGoogModuleAndProvide() {
+    testWarning("goog.module('xyz');\ngoog.provide('abc');", MODULE_AND_PROVIDES);
+  }
+
+  public void testMultipleGoogModules() {
+    testWarning("goog.module('xyz');\ngoog.module('abc');", MULTIPLE_MODULES_IN_FILE);
   }
 }

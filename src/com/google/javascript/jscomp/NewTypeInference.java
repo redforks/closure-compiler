@@ -24,7 +24,6 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
 import com.google.javascript.jscomp.CodingConvention.Bind;
-import com.google.javascript.jscomp.GlobalTypeInfo.Scope;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphEdge;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.jscomp.newtypes.DeclaredFunctionType;
@@ -194,6 +193,12 @@ final class NewTypeInference implements CompilerPass {
           "Property {0} of {1} cannot have a valid type."
           + "Maybe the result of a union of incompatible types?");
 
+  static final DiagnosticType INVALID_CAST =
+      DiagnosticType.warning("JSC_INVALID_CAST",
+          "invalid cast - the types do not have a common subtype\n" +
+          "from: {0}\n" +
+          "to  : {1}");
+
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
       ASSERT_FALSE,
       BOTTOM_PROP,
@@ -206,6 +211,7 @@ final class NewTypeInference implements CompilerPass {
       FORIN_EXPECTS_STRING_KEY,
       GOOG_BIND_EXPECTS_FUNCTION,
       INVALID_ARGUMENT_TYPE,
+      INVALID_CAST,
       INVALID_INFERRED_RETURN_TYPE,
       INVALID_OBJLIT_PROPERTY_TYPE,
       INVALID_OPERAND_TYPE,
@@ -229,7 +235,6 @@ final class NewTypeInference implements CompilerPass {
       TypeCheck.NOT_CALLABLE,
       TypeCheck.WRONG_ARGUMENT_COUNT,
       TypeValidator.ILLEGAL_PROPERTY_ACCESS,
-      TypeValidator.INVALID_CAST,
       TypeValidator.UNKNOWN_TYPEOF_VALUE);
 
   private static String getFileWhereWarningOccurred(JSError warning) {
@@ -257,10 +262,10 @@ final class NewTypeInference implements CompilerPass {
   private final AbstractCompiler compiler;
   private final CodingConvention convention;
   private Map<DiGraphEdge<Node, ControlFlowGraph.Branch>, TypeEnv> envs;
-  private Map<Scope, JSType> summaries;
+  private Map<NTIScope, JSType> summaries;
   private Map<Node, DeferredCheck> deferredChecks;
   private ControlFlowGraph<Node> cfg;
-  private Scope currentScope;
+  private NTIScope currentScope;
   // This TypeEnv should be computed once per scope
   private TypeEnv typeEnvFromDeclaredTypes = null;
   private GlobalTypeInfo symbolTable;
@@ -300,7 +305,7 @@ final class NewTypeInference implements CompilerPass {
   }
 
   @VisibleForTesting // Only used from tests
-  public Scope processForTesting(Node externs, Node root) {
+  public NTIScope processForTesting(Node externs, Node root) {
     process(externs, root);
     return symbolTable.getGlobalScope();
   }
@@ -308,9 +313,9 @@ final class NewTypeInference implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     try {
-      symbolTable = compiler.getSymbolTable();
-      commonTypes = symbolTable.getTypesUtilObject();
-      for (Scope scope : symbolTable.getScopes()) {
+      this.symbolTable = compiler.getSymbolTable();
+      this.commonTypes = symbolTable.getTypesUtilObject();
+      for (NTIScope scope : symbolTable.getScopes()) {
         analyzeFunction(scope);
         envs.clear();
       }
@@ -325,7 +330,7 @@ final class NewTypeInference implements CompilerPass {
       if (currentScope != null) {
         message += "\nIn scope: " + currentScope;
       }
-      compiler.throwInternalError(message, unexpectedException);
+      this.compiler.throwInternalError(message, unexpectedException);
     }
   }
 
@@ -446,9 +451,6 @@ final class NewTypeInference implements CompilerPass {
       FunctionType fnType = summaryType.getFunType();
       if (fnType.isConstructor() || fnType.isInterfaceDefinition()) {
         summaryType = fnType.getConstructorObject();
-      } else {
-        summaryType = summaryType.withProperty(
-            new QualifiedName("prototype"), JSType.TOP_OBJECT);
       }
       entryEnv = envPutType(entryEnv, fnName, summaryType);
     }
@@ -491,9 +493,6 @@ final class NewTypeInference implements CompilerPass {
       FunctionType fnType = summaryType.getFunType();
       if (fnType.isConstructor() || fnType.isInterfaceDefinition()) {
         summaryType = fnType.getConstructorObject();
-      } else {
-        summaryType = summaryType.withProperty(
-            new QualifiedName("prototype"), JSType.TOP_OBJECT);
       }
       env = envPutType(env, fnName, summaryType);
     }
@@ -518,10 +517,8 @@ final class NewTypeInference implements CompilerPass {
       // TODO(dimvar): when declType is a union, consider also creating
       // appropriate ctor objs. (This is going to be rare.)
       return funType.getConstructorObject();
-    } else {
-      return declType.withProperty(
-          new QualifiedName("prototype"), JSType.TOP_OBJECT);
     }
+    return declType;
   }
 
   private void buildWorkset(
@@ -601,7 +598,7 @@ final class NewTypeInference implements CompilerPass {
     }
   }
 
-  private void analyzeFunction(Scope scope) {
+  private void analyzeFunction(NTIScope scope) {
     println("=== Analyzing function: ", scope.getReadableName(), " ===");
     currentScope = scope;
     ControlFlowAnalysis cfa = new ControlFlowAnalysis(compiler, false, false);
@@ -779,7 +776,12 @@ final class NewTypeInference implements CompilerPass {
           break;
         case Token.EXPR_RESULT:
           println("\tsemi ", Token.name(n.getFirstChild().getType()));
-          outEnv = analyzeExprFwd(n.getFirstChild(), inEnv, JSType.UNKNOWN).env;
+          if (n.getBooleanProp(Node.ANALYZED_DURING_GTI)) {
+            n.removeProp(Node.ANALYZED_DURING_GTI);
+            outEnv = inEnv;
+          } else {
+            outEnv = analyzeExprFwd(n.getFirstChild(), inEnv, JSType.UNKNOWN).env;
+          }
           break;
         case Token.RETURN: {
           Node retExp = n.getFirstChild();
@@ -893,7 +895,7 @@ final class NewTypeInference implements CompilerPass {
     }
   }
 
-  private void createSummary(Scope fn) {
+  private void createSummary(NTIScope fn) {
     Node fnRoot = fn.getRoot();
     Preconditions.checkArgument(!fnRoot.isFromExterns());
     FunctionTypeBuilder builder = new FunctionTypeBuilder();
@@ -985,8 +987,9 @@ final class NewTypeInference implements CompilerPass {
     }
   }
 
-  private JSType mayChangeSummaryForFunctionsWithProperties(Scope fnScope, JSType currentSummary) {
-    Scope enclosingScope = fnScope.getParent();
+  private JSType mayChangeSummaryForFunctionsWithProperties(
+      NTIScope fnScope, JSType currentSummary) {
+    NTIScope enclosingScope = fnScope.getParent();
     Node fnNameNode = NodeUtil.getFunctionNameNode(fnScope.getRoot());
     JSType summary = currentSummary;
     JSType namespaceType = null;
@@ -1036,7 +1039,7 @@ final class NewTypeInference implements CompilerPass {
     return typeAfterBwd;
   }
 
-  private static boolean isAllowedToNotReturn(Scope methodScope) {
+  private static boolean isAllowedToNotReturn(NTIScope methodScope) {
     Node fn = methodScope.getRoot();
     if (fn.isFromExterns()) {
       return true;
@@ -1126,8 +1129,7 @@ final class NewTypeInference implements CompilerPass {
    */
   private EnvTypePair analyzeExprFwd(
       Node expr, TypeEnv inEnv, JSType requiredType, JSType specializedType) {
-    Preconditions.checkArgument(
-        requiredType != null && !requiredType.isBottom());
+    Preconditions.checkArgument(requiredType != null && !requiredType.isBottom());
     EnvTypePair resultPair = null;
     switch (expr.getType()) {
       case Token.EMPTY: // can be created by a FOR with empty condition
@@ -1676,7 +1678,7 @@ final class NewTypeInference implements CompilerPass {
       warnings.add(JSError.make(
           expr, TypeCheck.NOT_CALLABLE, calleeType.toString()));
     }
-    FunctionType funType = calleeType.getFunType();
+    FunctionType funType = calleeType.getFunTypeIfSingletonObj();
     if (funType == null
         || funType.isTopFunction() || funType.isQmarkFunction()) {
       return analyzeCallNodeArgsFwdWhenError(expr, inEnv);
@@ -2024,10 +2026,9 @@ final class NewTypeInference implements CompilerPass {
     EnvTypePair pair = analyzeExprFwd(expr.getFirstChild(), inEnv);
     JSType fromType = pair.type;
     JSType toType = symbolTable.getCastType(expr);
-    if (!toType.removeType(JSType.NULL).isSubtypeOf(fromType)
-        && !fromType.isSubtypeOf(toType)) {
-      warnings.add(JSError.make(expr, TypeValidator.INVALID_CAST,
-              fromType.toString(), toType.toString()));
+    if (!JSType.haveCommonSubtype(fromType, toType)) {
+      warnings.add(JSError.make(
+          expr, INVALID_CAST, fromType.toString(), toType.toString()));
     }
     pair.type = toType;
     return pair;
@@ -2495,11 +2496,11 @@ final class NewTypeInference implements CompilerPass {
     }
     // The warning depends on whether we are testing for the existence of a
     // property.
-    boolean isNotAnObject = JSType.meet(recvType, JSType.TOP_OBJECT).isBottom();
+    boolean isNotAnObject = !JSType.haveCommonSubtype(recvType, JSType.TOP_OBJECT);
     boolean mayNotBeAnObject = !recvType.isSubtypeOf(JSType.TOP_OBJECT);
-    if (isNotAnObject ||
-        (!specializedType.isTruthy() && !specializedType.isFalsy() &&
-            mayNotBeAnObject)) {
+    if (isNotAnObject
+        || (!specializedType.isTruthy() && !specializedType.isFalsy()
+            && mayNotBeAnObject)) {
       warnings.add(JSError.make(receiver, PROPERTY_ACCESS_ON_NONOBJECT,
               getPropNameForErrorMsg(receiver.getParent()),
               recvType.toString()));
@@ -2572,7 +2573,7 @@ final class NewTypeInference implements CompilerPass {
     return false;
   }
 
-  private boolean mayWarnAboutGlobalThis(Node thisExpr, Scope currentScope) {
+  private boolean mayWarnAboutGlobalThis(Node thisExpr, NTIScope currentScope) {
     Preconditions.checkArgument(thisExpr.isThis());
     Preconditions.checkState(!currentScope.hasThis());
     Node parent = thisExpr.getParent();
@@ -2706,13 +2707,13 @@ final class NewTypeInference implements CompilerPass {
 
   private void collectTypesForFreeVarsFwd(Node callee, TypeEnv env) {
     Preconditions.checkArgument(callee.isName());
-    Scope calleeScope = currentScope.getScope(callee.getString());
+    NTIScope calleeScope = currentScope.getScope(callee.getString());
     for (String freeVar : calleeScope.getOuterVars()) {
       if (calleeScope.getDeclaredTypeOf(freeVar) == null) {
         FunctionType summary = summaries.get(calleeScope).getFunType();
         JSType outerType = envGetType(env, freeVar);
         JSType innerType = summary.getOuterVarPrecondition(freeVar);
-        if (outerType != null && JSType.meet(outerType, innerType).isBottom()) {
+        if (outerType != null && !JSType.haveCommonSubtype(outerType, innerType)) {
           warnings.add(JSError.make(callee, CROSS_SCOPE_GOTCHA,
                   freeVar, outerType.toString(), innerType.toString()));
         }
@@ -2722,7 +2723,7 @@ final class NewTypeInference implements CompilerPass {
 
   private TypeEnv collectTypesForFreeVarsBwd(Node callee, TypeEnv env) {
     Preconditions.checkArgument(callee.isName());
-    Scope calleeScope = currentScope.getScope(callee.getString());
+    NTIScope calleeScope = currentScope.getScope(callee.getString());
     for (String freeVar : calleeScope.getOuterVars()) {
       if (!currentScope.isDefinedLocally(freeVar, false) &&
           !currentScope.isOuterVar(freeVar)) {
@@ -3209,7 +3210,7 @@ final class NewTypeInference implements CompilerPass {
     if (currentScope.isKnownFunction(calleeName)
         && !currentScope.isLocalFunDef(calleeName)
         && !currentScope.isExternalFunction(calleeName)) {
-      Scope s = currentScope.getScope(calleeName);
+      NTIScope s = currentScope.getScope(calleeName);
       JSType expectedRetType;
       if (s.getDeclaredFunctionType().getReturnType() == null) {
         expectedRetType = requiredType;
@@ -3777,8 +3778,8 @@ final class NewTypeInference implements CompilerPass {
 
   private static class DeferredCheck {
     final Node callSite;
-    final Scope callerScope;
-    final Scope calleeScope;
+    final NTIScope callerScope;
+    final NTIScope calleeScope;
     // Null types means that they were declared
     // (and should have been checked during inference)
     JSType expectedRetType;
@@ -3787,8 +3788,8 @@ final class NewTypeInference implements CompilerPass {
     DeferredCheck(
         Node callSite,
         JSType expectedRetType,
-        Scope callerScope,
-        Scope calleeScope) {
+        NTIScope callerScope,
+        NTIScope calleeScope) {
       this.callSite = callSite;
       this.expectedRetType = expectedRetType;
       this.callerScope = callerScope;
@@ -3797,8 +3798,7 @@ final class NewTypeInference implements CompilerPass {
 
     void updateReturn(JSType expectedRetType) {
       if (this.expectedRetType != null) {
-        this.expectedRetType =
-            JSType.meet(this.expectedRetType, expectedRetType);
+        this.expectedRetType = JSType.meet(this.expectedRetType, expectedRetType);
       }
     }
 
@@ -3807,7 +3807,7 @@ final class NewTypeInference implements CompilerPass {
     }
 
     private void runCheck(
-        Map<Scope, JSType> summaries, WarningReporter warnings) {
+        Map<NTIScope, JSType> summaries, WarningReporter warnings) {
       FunctionType fnSummary = summaries.get(this.calleeScope).getFunType();
       println(
           "Running deferred check of function: ", calleeScope.getReadableName(),

@@ -15,6 +15,7 @@
  */
 package com.google.javascript.jscomp.lint;
 
+import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.DiagnosticType;
@@ -23,6 +24,7 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeUtil;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
+import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 
 /**
@@ -36,8 +38,8 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
   public static final DiagnosticType MUST_BE_PRIVATE =
       DiagnosticType.warning("JSC_MUST_BE_PRIVATE", "Function {0} must be marked @private");
 
-  public static final DiagnosticType OPTIONAL_NAME_NOT_MARKED_OPTIONAL =
-      DiagnosticType.warning("JSC_OPTIONAL_NAME_NOT_MARKED_OPTIONAL",
+  public static final DiagnosticType OPTIONAL_PARAM_NOT_MARKED_OPTIONAL =
+      DiagnosticType.warning("JSC_OPTIONAL_PARAM_NOT_MARKED_OPTIONAL",
           "Parameter {0} is optional so its type must end with =");
 
   public static final DiagnosticType OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME =
@@ -58,30 +60,52 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     if (n.isFunction()) {
-      JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(n);
-      if (jsDoc != null) {
-        if (!jsDoc.isOverride()) {
-          for (Node param : n.getFirstChild().getNext().children()) {
-            if (!jsDoc.hasParameterType(param.getString())) {
-              t.report(param, MISSING_PARAM_JSDOC, param.getString());
-            } else {
-              boolean jsDocOptional = jsDoc.getParameterType(param.getString()).isOptionalArg();
-              boolean nameOptional = compiler.getCodingConvention().isOptionalParameter(param);
-              if (nameOptional && !jsDocOptional) {
-                t.report(param, OPTIONAL_NAME_NOT_MARKED_OPTIONAL, param.getString());
-              } else if (!nameOptional && jsDocOptional) {
-                t.report(param, OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME, param.getString());
-              }
-            }
+      visitFunction(t, n);
+    }
+  }
+
+  private void visitFunction(NodeTraversal t, Node function) {
+    JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(function);
+    if (jsDoc == null) {
+      return;
+    }
+    if (!jsDoc.isOverride()) {
+      Node paramList = function.getFirstChild().getNext();
+      for (Node param : paramList.children()) {
+        boolean nameOptional;
+        if (param.isDefaultValue()) {
+          param = param.getFirstChild();
+          nameOptional = true;
+        } else if (param.isName()) {
+          nameOptional = param.getString().startsWith("opt_");
+        } else {
+          Preconditions.checkState(param.isDestructuringPattern() || param.isRest(), param);
+          continue;
+        }
+
+        JSTypeExpression paramType = jsDoc.getParameterType(param.getString());
+        if (paramType == null) {
+          if (param.getJSDocInfo() != null) {
+            paramType = Preconditions.checkNotNull(param.getJSDocInfo().getType());
+          } else {
+            t.report(param, MISSING_PARAM_JSDOC, param.getString());
+            return;
           }
         }
 
-        String name = NodeUtil.getFunctionName(n);
-        if (name != null && compiler.getCodingConvention().isPrivate(name)
-            && !jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
-          t.report(n, MUST_BE_PRIVATE, name);
+        boolean jsDocOptional = paramType.isOptionalArg();
+        if (nameOptional && !jsDocOptional) {
+          t.report(param, OPTIONAL_PARAM_NOT_MARKED_OPTIONAL, param.getString());
+        } else if (!nameOptional && jsDocOptional) {
+          t.report(param, OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME, param.getString());
         }
       }
+    }
+
+    String name = NodeUtil.getFunctionName(function);
+    if (name != null && compiler.getCodingConvention().isPrivate(name)
+        && !jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
+      t.report(function, MUST_BE_PRIVATE, name);
     }
   }
 }

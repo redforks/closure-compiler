@@ -43,7 +43,7 @@ public final class ScopedAliasesTest extends CompilerTestCase {
   private static final String GOOG_SCOPE_END_BLOCK = "});";
 
   private static final String SCOPE_NAMESPACE =
-      "var $jscomp = {}; $jscomp.scope = {};";
+      "/** @const */ var $jscomp = {}; /** @const */ $jscomp.scope = {};";
 
   private static final String EXTERNS = "var window;";
 
@@ -52,7 +52,6 @@ public final class ScopedAliasesTest extends CompilerTestCase {
 
   public ScopedAliasesTest() {
     super(EXTERNS);
-    compareJsDoc = false;
   }
 
   @Override
@@ -370,25 +369,33 @@ public final class ScopedAliasesTest extends CompilerTestCase {
             "  /** @param {Foo} foo */",
             "  y: function(foo) { }",
             "};"),
-        "goog.x = {y: function(foo) { }};");
+        LINE_JOINER.join(
+            "goog.x = {",
+            "  /** @param {goog.Foo} foo */",
+            "  y: function(foo) {}",
+            "};"));
 
     testScoped(
         LINE_JOINER.join(
             "var Foo = goog.Foo;",
             "goog.x = {",
-            "  y:",
-            "  /** @param {Foo} foo */ function(foo) {}",
+            "  y: /** @param {Foo} foo */ function(foo) {}",
             "};"),
-        "goog.x = {y: function(foo) {}};");
+        LINE_JOINER.join(
+            "goog.x = {",
+            "  y: /** @param {goog.Foo} foo */ function(foo) {}",
+            "};"));
 
     testScoped(
         LINE_JOINER.join(
             "var Foo = goog.Foo;",
             "goog.x = {",
-            "  y:",
-            "  /** @type {function(Foo)} */ (function(foo) {})",
+            "  y: /** @type {function(Foo)} */ (function(foo) {})",
             "};"),
-        "goog.x = {y: /** @type {function(Foo)} */ (function(foo) {})};");
+        LINE_JOINER.join(
+            "goog.x = {",
+            "  y: /** @type {function(goog.Foo)} */ (function(foo) {})",
+            "};"));
   }
 
   public void testObjectLiteralShorthand() {
@@ -492,130 +499,154 @@ public final class ScopedAliasesTest extends CompilerTestCase {
   public void testJsDocType() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @type {x} */ types.actual;"
-        + "/** @type {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @type {goog.Timer} */ types.actual;",
+            "/** @type {goog.Timer} */ types.expected;"));
   }
 
   public void testJsDocParameter() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @param {x} a */ types.actual;"
-        + "/** @param {goog.Timer} a */ types.expected;");
+        LINE_JOINER.join(
+            "/** @param {goog.Timer} a */ types.actual;",
+            "/** @param {goog.Timer} a */ types.expected;"));
   }
 
   public void testJsDocExtends() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @extends {x} */ types.actual;"
-        + "/** @extends {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @extends {goog.Timer} */ types.actual;",
+            "/** @extends {goog.Timer} */ types.expected;"));
   }
 
   public void testJsDocImplements() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @implements {x} */ types.actual;"
-        + "/** @implements {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @implements {goog.Timer} */ types.actual;",
+            "/** @implements {goog.Timer} */ types.expected;"));
   }
 
   public void testJsDocEnum() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @enum {x} */ types.actual;"
-        + "/** @enum {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "",
+            "/** @enum {goog.Timer} */ types.actual;",
+            "/** @enum {goog.Timer} */ types.expected;"));
   }
 
   public void testJsDocReturn() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @return {x} */ types.actual;"
-        + "/** @return {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @return {goog.Timer} */ types.actual;",
+            "/** @return {goog.Timer} */ types.expected;"));
   }
 
   public void testJsDocThis() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @this {x} */ types.actual;"
-        + "/** @this {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @this {goog.Timer} */ types.actual;",
+            "/** @this {goog.Timer} */ types.expected;"));
   }
 
   public void testJsDocThrows() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @throws {x} */ types.actual;"
-        + "/** @throws {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @throws {goog.Timer} */ types.actual;",
+            "/** @throws {goog.Timer} */ types.expected;"));
   }
 
   public void testJsDocSubType() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @type {x.Enum} */ types.actual;"
-        + "/** @type {goog.Timer.Enum} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @type {goog.Timer.Enum} */ types.actual;",
+            "/** @type {goog.Timer.Enum} */ types.expected;"));
   }
 
   public void testJsDocTypedef() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @typedef {x} */ types.actual;"
-        + "/** @typedef {goog.Timer} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @typedef {goog.Timer} */ types.actual;",
+            "/** @typedef {goog.Timer} */ types.expected;"));
+
+    testScoped(
+        LINE_JOINER.join(
+            "/** @typedef {string} */ var s;",
+            "/** @type {s} */ var t;"),
+        LINE_JOINER.join(
+            SCOPE_NAMESPACE,
+            "/** @typedef {string} */ $jscomp.scope.s;",
+            "/** @type {$jscomp.scope.s} */ $jscomp.scope.t;"));
+
+    testScoped(
+        LINE_JOINER.join(
+            "/** @typedef {string} */ let s;",
+            "/** @type {s} */ var t;"),
+        LINE_JOINER.join(
+            SCOPE_NAMESPACE,
+            "/** @typedef {string} */ $jscomp.scope.s;",
+            "/** @type {$jscomp.scope.s} */ $jscomp.scope.t;"),
+        LanguageMode.ECMASCRIPT6);
   }
 
   public void testJsDocRecord() {
     enableTypeCheck(CheckLevel.WARNING);
     runTypeCheckAfterProcessing = true;
-    test("/** @const */ var ns = {};" +
-         "goog.scope(function () {" +
-         "  var x = goog.Timer;" +
-         "  /** @type {{x: string}} */ ns.y = {'goog.Timer': 'x'};" +
-         "});",
-         " var ns = {}; ns.y = {'goog.Timer': 'x'};",
-         null,
-         TypeValidator.TYPE_MISMATCH_WARNING);
+    test(
+        LINE_JOINER.join(
+            "/** @const */ var ns = {};",
+            "goog.scope(function () {",
+            "  var x = goog.Timer;",
+            "  /** @type {{x: string}} */ ns.y = {'goog.Timer': 'x'};",
+            "});"),
+        LINE_JOINER.join(
+            "/** @const */ var ns = {};",
+            "/** @type {{x: string}} */ ns.y = {'goog.Timer': 'x'};"),
+        null,
+        TypeValidator.TYPE_MISMATCH_WARNING);
   }
 
   public void testArrayJsDoc() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @type {Array.<x>} */ types.actual;"
-        + "/** @type {Array.<goog.Timer>} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @type {Array.<goog.Timer>} */ types.actual;",
+            "/** @type {Array.<goog.Timer>} */ types.expected;"));
   }
 
   public void testObjectJsDoc() {
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @type {{someKey: x}} */ types.actual;"
-        + "/** @type {{someKey: goog.Timer}} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @type {{someKey: goog.Timer}} */ types.actual;",
+            "/** @type {{someKey: goog.Timer}} */ types.expected;"));
     testTypes(
         "var x = goog.Timer;",
-        ""
-        + "/** @type {{x: number}} */ types.actual;"
-        + "/** @type {{x: number}} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @type {{x: number}} */ types.actual;",
+            "/** @type {{x: number}} */ types.expected;"));
   }
 
   public void testObjectJsDoc2() {
     testTypes(
         "var x = goog$Timer;",
-        ""
-        + "/** @type {{someKey: x}} */ types.actual;"
-        + "/** @type {{someKey: goog$Timer}} */ types.expected;");
+        LINE_JOINER.join(
+            "/** @type {{someKey: goog$Timer}} */ types.actual;",
+            "/** @type {{someKey: goog$Timer}} */ types.expected;"));
   }
 
   public void testUnionJsDoc() {
     testTypes(
         "var x = goog.Timer;",
         ""
-        + "/** @type {x|Object} */ types.actual;"
+        + "/** @type {goog.Timer|Object} */ types.actual;"
         + "/** @type {goog.Timer|Object} */ types.expected;");
   }
 
@@ -623,12 +654,12 @@ public final class ScopedAliasesTest extends CompilerTestCase {
     testTypes(
         "var x = goog.Timer;",
         ""
-        + "/** @type {function(x) : void} */ types.actual;"
+        + "/** @type {function(goog.Timer) : void} */ types.actual;"
         + "/** @type {function(goog.Timer) : void} */ types.expected;");
     testTypes(
         "var x = goog.Timer;",
         ""
-        + "/** @type {function() : x} */ types.actual;"
+        + "/** @type {function() : goog.Timer} */ types.actual;"
         + "/** @type {function() : goog.Timer} */ types.expected;");
   }
 
@@ -672,11 +703,24 @@ public final class ScopedAliasesTest extends CompilerTestCase {
         + "/** @param draggable */ types.expected;");
   }
 
+  public void testJSDocCopiedForFunctions() {
+    testScoped(
+        "/** @export */ function Foo() {}",
+        SCOPE_NAMESPACE + "/** @export */ $jscomp.scope.Foo =/** @export */ function() {}");
+  }
+
+  public void testJSDocCopiedForClasses() {
+    testScoped(
+        "/** @export */ class Foo {}",
+        SCOPE_NAMESPACE + "/** @export */ $jscomp.scope.Foo = /** @export */ class {}",
+        LanguageMode.ECMASCRIPT6);
+  }
+
   public void testIssue772() {
     testTypes(
         "var b = a.b;" +
         "var c = b.c;",
-        "/** @param {c.MyType} x */ types.actual;" +
+        "/** @param {a.b.c.MyType} x */ types.actual;" +
         "/** @param {a.b.c.MyType} x */ types.expected;");
   }
 
@@ -753,6 +797,7 @@ public final class ScopedAliasesTest extends CompilerTestCase {
   public void testNonAliasLocal() {
     testScopedError("try { } catch (e) {}", ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
     testScopedError("for (var k in { a: 1, b: 2 }) {}", ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
     testScopedError("for (var k of [1, 2, 3]) {}", ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
   }
 
@@ -839,6 +884,7 @@ public final class ScopedAliasesTest extends CompilerTestCase {
          "var ns = {};" +
          "ns.sub = {};" +
          "/** @constructor */ ns.sub.C = function () {};" +
+         "/** @type {ns.sub.C} */" +
          "$jscomp.scope.x = null;");
   }
 
@@ -846,19 +892,19 @@ public final class ScopedAliasesTest extends CompilerTestCase {
     enableTypeCheck(CheckLevel.WARNING);
     runTypeCheckAfterProcessing = true;
 
-    String js =
+    test(
         LINE_JOINER.join(
             "goog.scope(function () {",
             "  /** @constructor */ function F() {}",
             "  /** @return {F} */ function createFoo() { return 1; }",
-            "});");
-
-    test(js,
-         SCOPE_NAMESPACE +
-         "$jscomp.scope.createFoo = function() { return 1; };" +
-         "$jscomp.scope.F = function() { };",
-         null,
-         TypeValidator.TYPE_MISMATCH_WARNING);
+            "});"),
+        LINE_JOINER.join(
+            SCOPE_NAMESPACE,
+            "/** @return {$jscomp.scope.F} */",
+            "$jscomp.scope.createFoo = /** @return {$jscomp.scope.F} */ function() { return 1; };",
+            "/** @constructor */ $jscomp.scope.F = /** @constructor */ function() { };"),
+            null,
+            TypeValidator.TYPE_MISMATCH_WARNING);
   }
 
   // Alias Recording Tests

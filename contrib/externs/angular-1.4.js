@@ -343,7 +343,7 @@ angular.LinkingFunctions.post = function(scope, iElement, iAttrs, controller) {
 
 /**
  * @typedef {{
- *   bindToController: (boolean|undefined),
+ *   bindToController: (boolean|!Object<string, string>|undefined),
  *   compile: (function(
  *       !angular.JQLite=, !angular.Attributes=, Function=)|undefined),
  *   controller: (angular.Injectable|string|undefined),
@@ -371,85 +371,6 @@ angular.LinkingFunctions.post = function(scope, iElement, iAttrs, controller) {
  *   }}
  */
 angular.Directive;
-
-/**
- * @param {!angular.JQLite=} tElement
- * @param {!angular.Attributes=} tAttrs
- * @param {Function=} transclude
- * @return {Function|angular.LinkingFunctions|undefined}
- */
-angular.Directive.compile = function(tElement, tAttrs, transclude) {};
-
-angular.Directive.controller = function() {};
-
-/**
- * @type {string|undefined}
- */
-angular.Directive.controllerAs;
-
-/**
- * @type {(
- *   function(!angular.Scope=, !angular.JQLite=, !angular.Attributes=,
- *     (!Object|!Array.<!Object>)=)|
- *   !angular.LinkingFunctions|
- *   undefined
- * )}
- */
-angular.Directive.link;
-
-/**
- * @type {(string|undefined)}
- */
-angular.Directive.name;
-
-/**
- * @type {(number|undefined)}
- */
-angular.Directive.priority;
-
-/**
- * @type {(boolean|undefined)}
- */
-angular.Directive.replace;
-
-/**
- * @type {(string|Array.<string>|undefined)}
- */
-angular.Directive.require;
-
-/**
- * @type {(string|undefined)}
- */
-angular.Directive.restrict;
-
-/**
- * @type {(boolean|Object.<string, string>|undefined)}
- */
-angular.Directive.scope;
-
-/**
- * @type {(
- *   string|
- *   function(!angular.JQLite=,!angular.Attributes=): string|
- *   undefined
- * )}
- */
-angular.Directive.template;
-
-/**
- * @type {(string|function(!angular.JQLite=, !angular.Attributes=)|undefined)}
- */
-angular.Directive.templateUrl;
-
-/**
- * @type {(boolean|undefined)}
- */
-angular.Directive.terminal;
-
-/**
- * @type {(boolean|string|undefined)}
- */
-angular.Directive.transclude;
 
 /**
  * @typedef {(Function|Array.<string|Function>)}
@@ -529,6 +450,16 @@ angular.JQLite.prototype.css = function(nameOrObject, opt_value) {};
 angular.JQLite.prototype.data = function(opt_key, opt_value) {};
 
 /**
+ * @return {!angular.JQLite}
+ */
+angular.JQLite.prototype.detach = function() {};
+
+/**
+ * @return {!angular.JQLite}
+ */
+angular.JQLite.prototype.empty = function() {};
+
+/**
  * @param {number} index
  * @return {!angular.JQLite}
  */
@@ -578,6 +509,13 @@ angular.JQLite.prototype.next = function() {};
  * @return {!angular.JQLite}
  */
 angular.JQLite.prototype.on = function(type, fn) {};
+
+/**
+ * @param {string} events
+ * @param {Object|function(Event)} dataOrHandler
+ * @param {function(Event)=} opt_handler
+ */
+angular.JQLite.prototype.one = function(events, dataOrHandler, opt_handler) {};
 
 /**
  * @param {string=} opt_type
@@ -771,7 +709,7 @@ angular.Module.prototype.name = '';
 angular.Module.prototype.requires;
 
 /** @constructor */
-angular.Scope;
+angular.Scope = function() {};
 
 /** @type {string} */
 angular.Scope.prototype.$$phase;
@@ -852,6 +790,13 @@ angular.Scope.prototype.$watch =
  * @return {function()}
  */
 angular.Scope.prototype.$watchCollection = function(exp, opt_listener) {};
+
+/**
+ * @param {Array<string|!Function>} exps
+ * @param {(string|Function)=} opt_listener
+ * @return {function()}
+ */
+angular.Scope.prototype.$watchGroup = function(exps, opt_listener) {};
 
 /**
  * @typedef {{
@@ -943,7 +888,7 @@ angular.$anchorScrollProvider.disableAutoScrolling = function() {};
 /**
  * @constructor
  */
-angular.$animate;
+angular.$animate = function() {};
 
 /**
  * @param {JQLiteSelector} element
@@ -1051,7 +996,7 @@ angular.$animate.prototype.cancel = function(animationPromise) {};
 /**
  * @constructor
  */
-angular.$animateProvider;
+angular.$animateProvider = function() {};
 
 /**
  * @param {string} name
@@ -1084,7 +1029,7 @@ angular.$compile;
 /**
  * @constructor
  */
-angular.$compileProvider;
+angular.$compileProvider = function() {};
 
 /**
  * @param {boolean=} opt_enabled
@@ -1501,7 +1446,7 @@ angular.$location.prototype.replace = function() {};
 /**
  * @param {(string|Object.<string, string>)=} opt_search
  * @param {?(string|Array.<string>|boolean|number)=} opt_paramValue
- * @return {(!Object|angular.$location)}
+ * @return {(!Object|!angular.$location)}
  */
 angular.$location.prototype.search = function(opt_search, opt_paramValue) {};
 

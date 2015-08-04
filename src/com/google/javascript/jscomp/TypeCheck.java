@@ -41,15 +41,14 @@ import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
+import com.google.javascript.rhino.jstype.NamedType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.Property;
 import com.google.javascript.rhino.jstype.TemplateTypeMap;
 import com.google.javascript.rhino.jstype.TemplateTypeMapReplacer;
 import com.google.javascript.rhino.jstype.TemplatizedType;
 import com.google.javascript.rhino.jstype.TernaryValue;
-import com.google.javascript.rhino.jstype.UnionType;
 
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
@@ -89,10 +88,8 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           "JSC_INEXISTENT_ENUM_ELEMENT",
           "element {0} does not exist on this enum");
 
-  // TODO(johnlenz): enable this by default, now that we have created
-  // "POSSIBLE_INEXISTENT_PROPERTY"
-  static final DiagnosticType INEXISTENT_PROPERTY =
-      DiagnosticType.disabled(
+  public static final DiagnosticType INEXISTENT_PROPERTY =
+      DiagnosticType.warning(
           "JSC_INEXISTENT_PROPERTY",
           "Property {0} never defined on {1}");
 
@@ -246,7 +243,7 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           "Illegal key, the object literal is a {0}");
 
   static final DiagnosticType NON_STRINGIFIABLE_OBJECT_KEY =
-      DiagnosticType.disabled(
+      DiagnosticType.warning(
           "JSC_NON_STRINGIFIABLE_OBJECT_KEY",
           "Object type \"{0}\" contains non-stringifiable key and it may lead to an "
           + "error. Please use ES6 Map instead or implement your own Map structure.");
@@ -286,6 +283,7 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       IN_USED_WITH_STRUCT,
       ILLEGAL_PROPERTY_CREATION,
       ILLEGAL_OBJLIT_KEY,
+      NON_STRINGIFIABLE_OBJECT_KEY,
       RhinoErrorReporter.TYPE_PARSE_ERROR,
       TypedScopeCreator.UNKNOWN_LENDS,
       TypedScopeCreator.LENDS_ON_NON_OBJECT,
@@ -318,8 +316,6 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   private int unknownCount = 0;
   private boolean inExterns;
 
-  private Method editDistance;
-
   private static final class SuggestionPair {
     private final String suggestion;
     final int distance;
@@ -345,16 +341,6 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     this.reportUnknownTypes = ((Compiler) compiler).getOptions().enables(
         DiagnosticGroups.REPORT_UNKNOWN_TYPES);
     this.inferJSDocInfo = new InferJSDocInfo(compiler);
-
-    ClassLoader classLoader = TypeCheck.class.getClassLoader();
-    try {
-      Class<?> c = classLoader.loadClass(
-          "com.google.common.string.EditDistance");
-      editDistance = c.getDeclaredMethod(
-          "getEditDistance", String.class, String.class, boolean.class);
-    } catch (Exception ignored) {
-      editDistance = null;
-    }
   }
 
   public TypeCheck(AbstractCompiler compiler,
@@ -759,6 +745,10 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         typeable = false;
         break;
       }
+
+      case Token.MEMBER_FUNCTION_DEF:
+        ensureTyped(t, n, getJSType(n.getFirstChild()));
+        break;
 
       case Token.FUNCTION:
         visitFunction(t, n);
@@ -1501,56 +1491,6 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
   private SuggestionPair getClosestPropertySuggestion(
       JSType objectType, String propName) {
-    if (editDistance == null) {
-      return null;
-    }
-
-    String bestSoFar = null;
-    int shortest = Integer.MAX_VALUE;
-    if (objectType instanceof ObjectType) {
-      ObjectType type = (ObjectType) objectType;
-      for (String alt : type.getPropertyNames()) {
-        int distance;
-        try {
-          distance = (Integer) editDistance.invoke(null, propName, alt, false);
-        } catch (Exception e) {
-          return null;
-        }
-        if (distance <= shortest) {
-          if (distance == shortest) {
-            // To make warning determistic across runs we 'tie-break' by
-            // alphabetical order ignore-case.
-            if (bestSoFar != null && alt.compareToIgnoreCase(bestSoFar) > 0) {
-              continue;
-            }
-          }
-          shortest = distance;
-          bestSoFar = alt;
-        }
-      }
-    } else if (objectType.isUnionType()) {
-      UnionType type = (UnionType) objectType;
-      for (JSType alt : type.getAlternates()) {
-        SuggestionPair pair = getClosestPropertySuggestion(alt, propName);
-        if (pair != null) {
-          if (pair.distance <= shortest) {
-            if (pair.distance  == shortest) {
-              if (bestSoFar != null &&
-                  pair.suggestion.compareToIgnoreCase(bestSoFar) > 0) {
-                continue;
-              }
-            }
-            shortest = pair.distance;
-            bestSoFar = pair.suggestion;
-          }
-        }
-      }
-    }
-
-    if (bestSoFar != null) {
-      return new SuggestionPair(bestSoFar, shortest);
-    }
-
     return null;
   }
 
@@ -2139,6 +2079,12 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       }
     }
 
+    // Named types are usually @typedefs. For such types we need to check underlying type specified
+    // in @typedef annotation.
+    if (type instanceof NamedType) {
+      return isStringifiable(((NamedType) type).getReferencedType());
+    }
+
     // Handle interfaces and classes.
     if (type.isObject()) {
       ObjectType objectType = type.toMaybeObjectType();
@@ -2205,6 +2151,16 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           return result;
         }
       }
+    }
+    if (type.isOrdinaryFunction()) {
+      FunctionType function = type.toMaybeFunctionType();
+      for (Node parameter : function.getParameters()) {
+        JSType result = findObjectWithNonStringifiableKey(parameter.getJSType());
+        if (result != null) {
+          return result;
+        }
+      }
+      return findObjectWithNonStringifiableKey(function.getReturnType());
     }
     return null;
   }

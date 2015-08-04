@@ -30,6 +30,7 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
+import com.google.javascript.rhino.TokenUtil;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
 import java.util.Collection;
@@ -124,6 +125,12 @@ public final class NodeUtil {
    */
   static TernaryValue getPureBooleanValue(Node n) {
     switch (n.getType()) {
+      case Token.TEMPLATELIT:
+        if (n.hasOneChild()) {
+          return TernaryValue.forBoolean(!n.getFirstChild().getString().isEmpty());
+        }
+        break;
+
       case Token.STRING:
         return TernaryValue.forBoolean(n.getString().length() > 0);
 
@@ -157,6 +164,7 @@ public final class NodeUtil {
 
       case Token.TRUE:
       case Token.REGEXP:
+      case Token.CLASS:
         return TernaryValue.TRUE;
 
       case Token.ARRAYLIT:
@@ -376,37 +384,14 @@ public final class NodeUtil {
     int start = 0;
     int end = s.length();
     while (end > 0
-        && isStrWhiteSpaceChar(s.charAt(end - 1)) == TernaryValue.TRUE) {
+        && TokenUtil.isStrWhiteSpaceChar(s.charAt(end - 1)) == TernaryValue.TRUE) {
       end--;
     }
     while (start < end
-        && isStrWhiteSpaceChar(s.charAt(start)) == TernaryValue.TRUE) {
+        && TokenUtil.isStrWhiteSpaceChar(s.charAt(start)) == TernaryValue.TRUE) {
       start++;
     }
     return s.substring(start, end);
-  }
-
-  /**
-   * Copied from Rhino's ScriptRuntime
-   */
-  public static TernaryValue isStrWhiteSpaceChar(int c) {
-    switch (c) {
-      case '\u000B': // <VT>
-        return TernaryValue.UNKNOWN;  // IE says "no", ECMAScript says "yes"
-      case ' ': // <SP>
-      case '\n': // <LF>
-      case '\r': // <CR>
-      case '\t': // <TAB>
-      case '\u00A0': // <NBSP>
-      case '\u000C': // <FF>
-      case '\u2028': // <LS>
-      case '\u2029': // <PS>
-      case '\uFEFF': // <BOM>
-        return TernaryValue.TRUE;
-      default:
-        return (Character.getType(c) == Character.SPACE_SEPARATOR)
-            ? TernaryValue.TRUE : TernaryValue.FALSE;
-    }
   }
 
   /**
@@ -492,6 +477,7 @@ public final class NodeUtil {
    * <li>{@code &#123;name: function() ...&#125;}</li>
    * <li>{@code function name() ...}</li>
    * <li>{@code var name = function() ...}</li>
+   * <li>{@code var obj = {name() {} ...}}</li>
    * <li>{@code qualified.name = function() ...}</li>
    * <li>{@code var name2 = function name1() ...}</li>
    * <li>{@code qualified.name2 = function name1() ...}</li>
@@ -510,9 +496,10 @@ public final class NodeUtil {
       return name;
     }
 
-    // Check for the form { 'x' : function() { } }
+    // Check for the form { 'x' : function() { }} and {x() {}}
     Node parent = n.getParent();
     switch (parent.getType()) {
+      case Token.MEMBER_FUNCTION_DEF:
       case Token.SETTER_DEF:
       case Token.GETTER_DEF:
       case Token.STRING_KEY:
@@ -1404,6 +1391,9 @@ public final class NodeUtil {
       case Token.SPREAD:
       case Token.STRING:
       case Token.STRING_KEY:
+      case Token.MEMBER_VARIABLE_DEF:
+      case Token.INDEX_SIGNATURE:
+      case Token.CALL_SIGNATURE:
       case Token.THIS:
       case Token.SUPER:
       case Token.TRUE:
@@ -1809,7 +1799,8 @@ public final class NodeUtil {
   @Nullable static Node getFirstPropMatchingKey(Node objlit, String keyName) {
     Preconditions.checkState(objlit.isObjectLit());
     for (Node keyNode : objlit.children()) {
-      if (keyNode.isStringKey() && keyNode.getString().equals(keyName)) {
+      if ((keyNode.isStringKey() || keyNode.isMemberFunctionDef())
+          && keyNode.getString().equals(keyName)) {
         return keyNode.getFirstChild();
       }
     }
@@ -1860,6 +1851,29 @@ public final class NodeUtil {
   }
 
   /**
+   * Is this node the name of a block-scoped declaration?
+   * Checks for let, const, class, or block-scoped function declarations.
+   *
+   * @param n The node
+   * @return True if {@code n} is the NAME of a block-scoped declaration.
+   */
+  static boolean isBlockScopedDeclaration(Node n) {
+    if (n.isName()) {
+      switch (n.getParent().getType()) {
+        case Token.LET:
+        case Token.CONST:
+        case Token.CATCH:
+          return true;
+        case Token.CLASS:
+          return n.getParent().getFirstChild() == n;
+        case Token.FUNCTION:
+          return isBlockScopedFunctionDeclaration(n.getParent());
+      }
+    }
+    return false;
+  }
+
+  /**
    * Is this node a name declaration?
    *
    * @param n The node
@@ -1883,14 +1897,6 @@ public final class NodeUtil {
       }
     }
     return false;
-  }
-
-  /**
-   * Is this node declaring a block-scoped variable?
-   */
-  static boolean isLexicalDeclaration(Node n) {
-    return n.isLet() || n.isConst()
-        || isFunctionDeclaration(n) || isClassDeclaration(n);
   }
 
   /**
@@ -2063,13 +2069,8 @@ public final class NodeUtil {
       case Token.DO:
         return n.getLastChild();
       case Token.FOR:
-        switch (n.getChildCount()) {
-          case 3:
-            return null;
-          case 4:
-            return n.getFirstChild().getNext();
-        }
-        throw new IllegalArgumentException("malformed 'for' statement " + n);
+        return NodeUtil.isForIn(n) ? null : n.getFirstChild().getNext();
+      case Token.FOR_OF:
       case Token.CASE:
         return null;
     }
@@ -2107,6 +2108,22 @@ public final class NodeUtil {
         return true;
     }
     return false;
+  }
+
+  static boolean isValidCfgRoot(Node n) {
+    switch (n.getType()) {
+      case Token.FUNCTION:
+      case Token.SCRIPT:
+        return true;
+      case Token.BLOCK:
+        // Only valid for top level synthetic block
+        if (n.getParent() == null
+            || n.getFirstChild() != null && n.getFirstChild().isScript()) {
+          return true;
+        }
+      default:
+        return false;
+    }
   }
 
   /**
@@ -2306,6 +2323,10 @@ public final class NodeUtil {
     return false;
   }
 
+  static boolean isFunctionBlock(Node n) {
+    return n.isBlock() && n.getParent() != null && n.getParent().isFunction();
+  }
+
   /**
    * Is a FUNCTION node an function expression? An function expression is one
    * that has either no name or a name that is not added to the current scope.
@@ -2489,6 +2510,7 @@ public final class NodeUtil {
       case Token.STRING_KEY:
       case Token.GETTER_DEF:
       case Token.SETTER_DEF:
+      case Token.MEMBER_FUNCTION_DEF:
         return true;
     }
     return false;
@@ -2504,6 +2526,7 @@ public final class NodeUtil {
       case Token.STRING_KEY:
       case Token.GETTER_DEF:
       case Token.SETTER_DEF:
+      case Token.MEMBER_FUNCTION_DEF:
         return key.getString();
     }
     throw new IllegalStateException("Unexpected node type: " + key);
@@ -2803,12 +2826,12 @@ public final class NodeUtil {
   }
 
   /**
-   * Gets the root node of a qualified name. Must be either NAME or THIS.
+   * Gets the root node of a qualified name. Must be either NAME, THIS or SUPER.
    */
   static Node getRootOfQualifiedName(Node qName) {
     for (Node current = qName; true;
          current = current.getFirstChild()) {
-      if (current.isName() || current.isThis()) {
+      if (current.isName() || current.isThis() || current.isSuper()) {
         return current;
       }
       Preconditions.checkState(current.isGetProp());
@@ -3652,10 +3675,10 @@ public final class NodeUtil {
         return getBestJSDocInfo(parent);
       } else if (isObjectLitKey(parent)) {
         return parent.getJSDocInfo();
-      } else if (parent.isFunction()) {
-        // FUNCTION may be inside ASSIGN
+      } else if (parent.isFunction() || parent.isClass()) {
+        // FUNCTION and CLASS may be inside ASSIGN
         return getBestJSDocInfo(parent);
-      } else if (parent.isVar() && parent.hasOneChild()) {
+      } else if (NodeUtil.isNameDeclaration(parent) && parent.hasOneChild()) {
         return parent.getJSDocInfo();
       } else if ((parent.isHook() && parent.getFirstChild() != n)
                  || parent.isOr()
@@ -3758,9 +3781,9 @@ public final class NodeUtil {
       case Token.OR:
         return (expr == parent.getFirstChild()) || isExpressionResultUsed(parent);
       case Token.COMMA:
-        Node gramps = parent.getParent();
-        if (gramps.isCall() &&
-            parent == gramps.getFirstChild()) {
+        Node grandparent = parent.getParent();
+        if (grandparent.isCall() &&
+            parent == grandparent.getFirstChild()) {
           // Semantically, a direct call to eval is different from an indirect
           // call to an eval. See ECMA-262 S15.1.2.1. So it's OK for the first
           // expression to a comma to be a no-op if it's used to indirect

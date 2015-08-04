@@ -534,11 +534,17 @@ class ScopedAliases implements HotSwapCompilerPass {
                 new MakeDeclaredNamesUnique.ContextualRenamer(),
                 forbiddenLocals);
         for (String s : forbiddenLocals) {
-          renamer.addDeclaredName(s);
+          renamer.addDeclaredName(s, false);
         }
         MakeDeclaredNamesUnique uniquifier =
             new MakeDeclaredNamesUnique(renamer);
-        NodeTraversal.traverse(compiler, t.getScopeRoot(), uniquifier);
+        Node scopeRoot = t.getScopeRoot();
+        // If in ES6 mode, pass the FUNCTION node as root for traversal to meet
+        // MakeDeclaredNamesUnique's assumption.
+        if (scopeRoot.isBlock() && scopeRoot.getParent().isFunction()) {
+          scopeRoot = scopeRoot.getParent();
+        }
+        NodeTraversal.traverse(compiler, scopeRoot, uniquifier);
       }
     }
 

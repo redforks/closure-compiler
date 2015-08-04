@@ -107,6 +107,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
   }
 
   public void testBreakInForOf() {
+    mode = LanguageMode.ECMASCRIPT6;
     parse(""
         + "for (var x of [1, 2, 3]) {\n"
         + "  if (x == 2) break;\n"
@@ -150,10 +151,29 @@ public final class NewParserTest extends BaseJSTypeTestCase {
   }
 
   public void testContinueInForOf() {
+    mode = LanguageMode.ECMASCRIPT6;
     parse(""
         + "for (var x of [1, 2, 3]) {\n"
         + "  if (x == 2) continue;\n"
         + "}");
+  }
+
+  /** @bug 19100575 */
+  public void testVarSourceLocations() {
+    isIdeMode = true;
+
+    Node n = parse("var x, y = 1;");
+    Node var = n.getFirstChild();
+    assertNode(var).hasType(Token.VAR);
+
+    Node x = var.getFirstChild();
+    assertNode(x).hasType(Token.NAME);
+    assertNode(x).hasCharno("var ".length());
+
+    Node y = x.getNext();
+    assertNode(y).hasType(Token.NAME);
+    assertNode(y).hasCharno("var x, ".length());
+    assertNode(y).hasLength("y = 1".length());
   }
 
   public void testReturn() {
@@ -532,7 +552,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
   public void testJSDocAttachment6() throws Exception {
     Node functionNode = parse(
         "var a = /** @param {number} index */5;"
-        + "/** @return boolean */function f(index){}")
+        + "/** @return {boolean} */function f(index){}")
         .getFirstChild().getNext();
 
     assertThat(functionNode.getType()).isEqualTo(Token.FUNCTION);
@@ -540,7 +560,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     assertThat(info).isNotNull();
     assertThat(info.hasParameter("index")).isFalse();
     assertThat(info.hasReturnType()).isTrue();
-    assertTypeEquals(UNKNOWN_TYPE, info.getReturnType());
+    assertTypeEquals(BOOLEAN_TYPE, info.getReturnType());
   }
 
   public void testJSDocAttachment7() {
@@ -809,14 +829,14 @@ public final class NewParserTest extends BaseJSTypeTestCase {
   public void testIncorrectJSDocDoesNotAlterJSParsing4() throws Exception {
     assertNodeEquality(
         parse("C.prototype.say=function(nums) {alert(nums.join(','));};"),
-        parse("/** @return boolean */" +
+        parse("/** @return {boolean} */" +
             "C.prototype.say=function(nums) {alert(nums.join(','));};"));
   }
 
   public void testIncorrectJSDocDoesNotAlterJSParsing5() throws Exception {
     assertNodeEquality(
         parse("C.prototype.say=function(nums) {alert(nums.join(','));};"),
-        parse("/** @param boolean this is some string*/" +
+        parse("/** @param {boolean} this is some string*/" +
             "C.prototype.say=function(nums) {alert(nums.join(','));};"));
   }
 
@@ -2678,7 +2698,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     ParseResult result = ParserRunner.parse(
         new SimpleSourceFile("input", false),
         source,
-        ParserRunner.createConfig(isIdeMode, mode, false, null),
+        ParserRunner.createConfig(isIdeMode, mode, null),
         testErrorReporter);
     Node script = result.ast;
 
@@ -2700,7 +2720,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     Node script = ParserRunner.parse(
         file,
         string,
-        ParserRunner.createConfig(isIdeMode, mode, false, null),
+        ParserRunner.createConfig(isIdeMode, mode, null),
         testErrorReporter).ast;
 
     // verifying that all warnings were seen

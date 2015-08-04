@@ -65,6 +65,13 @@ public final class TypeSyntaxTest extends TestCase {
     testErrorManager.expectErrors(errors);
   }
 
+  private void testNotEs6TypedFullError(String source, String error) {
+    expectErrors(error);
+    parse(source, LanguageMode.ECMASCRIPT6);
+    expectErrors(error);
+    parse(source, LanguageMode.ECMASCRIPT6_STRICT);
+  }
+
   private void testNotEs6Typed(String source, String... features) {
     for (int i = 0; i < features.length; i++) {
       features[i] =
@@ -100,8 +107,7 @@ public final class TypeSyntaxTest extends TestCase {
   }
 
   public void testTypeInDocAndSyntax() {
-    expectErrors("Parse error. Bad type syntax - "
-        + "can only have JSDoc or inline type annotations, not both");
+    expectErrors("Can only have JSDoc or inline type annotations, not both");
     parse("var /** string */ foo: string = 'hello';");
   }
 
@@ -157,8 +163,7 @@ public final class TypeSyntaxTest extends TestCase {
   }
 
   public void testFunctionReturn_typeInDocAndSyntax() {
-    expectErrors("Parse error. Bad type syntax - "
-        + "can only have JSDoc or inline type annotations, not both");
+    expectErrors("Can only have JSDoc or inline type annotations, not both");
     parse("function /** string */ foo(): string { return 'hello'; }");
   }
 
@@ -181,6 +186,8 @@ public final class TypeSyntaxTest extends TestCase {
   public void testArrayType() {
     TypeDeclarationNode arrayOfString = arrayType(stringType());
     assertVarType("string[]", arrayOfString, "var foo: string[];");
+
+    parse("var foo: string[][];");
   }
 
   public void testArrayType_empty() {
@@ -204,10 +211,10 @@ public final class TypeSyntaxTest extends TestCase {
   }
 
   public void testRecordType() {
-    parse("var x: {p:string, q:string, r:string};");
-    parse("var x: {p:string, q:string}[];");
-    parse("var x: {p:string, q:string} | string;");
-    parse("var x: (o: {p:string, q:string}) => r;");
+    parse("var x: {p: string, q: string, r: string};");
+    parse("var x: {p: string, q: string}[];");
+    parse("var x: {p: string, q: string} | string;");
+    parse("var x: (o: {p: string, q: string}) => r;");
   }
 
   public void testParameterizedType() {
@@ -219,6 +226,9 @@ public final class TypeSyntaxTest extends TestCase {
                 namedType("ns.B")));
     assertVarType("parameterized type 2 args", parameterizedType,
         "var x: my.parameterized.Type<ns.A, ns.B>;");
+
+    parse("var x: Foo<Bar<Baz>>;");
+    parse("var x: A<B<C<D>>>;");
   }
 
   public void testParameterizedType_empty() {
@@ -324,7 +334,7 @@ public final class TypeSyntaxTest extends TestCase {
     parse("var n: (p1 : p2?) => number;");
     expectErrors("Parse error. ')' expected");
     parse("var n: (p1 : p2 = p3) => number;");
-    expectErrors("Parse error. ':' expected");
+    expectErrors("Parse error. ')' expected");
     parse("var n: ({x, y}, z) => number;");
     expectErrors("Parse error. Unexpected token '[' in type expression");
     parse("var n: ([x, y], z) => number;");
@@ -388,7 +398,7 @@ public final class TypeSyntaxTest extends TestCase {
     parse("interface I {\n  foo<T>(p: boolean): string;\n}");
     parse("interface I {\n  *foo(p: boolean);\n}");
 
-    expectErrors("Parse error. ';' expected");
+    expectErrors("Parse error. ',' expected");
     parse("interface I { foo(p: boolean): string {}}");
     expectErrors("Parse error. '}' expected");
     parse("if (true) { interface I {} }");
@@ -470,8 +480,9 @@ public final class TypeSyntaxTest extends TestCase {
 
   public void testGenericInterface() {
     parse("interface Foo<T> {\n}");
+    parse("interface J<F extends Array<I<number>>> {\n}");
 
-    testNotEs6Typed("interface Foo<T> {\n}", "interface", "generic interface");
+    testNotEs6Typed("interface Foo<T> {\n}", "interface", "generics");
   }
 
   public void testGenericClass() {
@@ -480,7 +491,7 @@ public final class TypeSyntaxTest extends TestCase {
     parse("class Foo<U extends () => boolean, V> {\n}");
     parse("var Foo = class<T> {\n};");
 
-    testNotEs6Typed("class Foo<T> {}", "generic class");
+    testNotEs6Typed("class Foo<T> {}", "generics");
   }
 
   public void testGenericFunction() {
@@ -501,7 +512,7 @@ public final class TypeSyntaxTest extends TestCase {
     expectErrors("Parse error. primary expression expected");
     parse("var x = <T>((p:T) => 3);");
 
-    testNotEs6Typed("function foo<T>() {}", "generic function");
+    testNotEs6Typed("function foo<T>() {}", "generics");
   }
 
   public void testImplements() {
@@ -537,7 +548,7 @@ public final class TypeSyntaxTest extends TestCase {
     parse("declare function foo() {}");
     expectErrors("Parse error. Semi-colon expected");
     parse("if (true) { declare var x; }");
-    expectErrors("Parse error. ';' expected");
+    expectErrors("Parse error. Semi-colon expected");
     parse("declare class Foo {\n  constructor() {}\n};");
 
     testNotEs6Typed("declare var x;", "ambient declaration");
@@ -551,6 +562,121 @@ public final class TypeSyntaxTest extends TestCase {
     expectErrors("Parse error. 'identifier' expected");
     parse("var x : typeof Foo.Bar.");
     testNotEs6Typed("var x: typeof y;", "type annotation");
+  }
+
+  public void testAccessibilityModifier() {
+    parse("class Foo {\n  private constructor() {\n  }\n}");
+    parse("class Foo {\n  protected static bar: number;\n}");
+    parse("class Foo {\n  protected bar() {\n  }\n}");
+    parse("class Foo {\n  private get() {\n  }\n}");
+    parse("class Foo {\n  private set() {\n  }\n}");
+    parse("class Foo {\n  private ['foo']() {\n  }\n}");
+    parse("class Foo {\n  private [Symbol.iterator]() {\n  }\n}");
+    parse("class Foo {\n  private ['foo'];\n}");
+
+    // TODO(moz): Enable this
+    //parse("class Foo {\n  constructor(public bar) {}}");
+
+    expectErrors("Parse error. primary expression expected");
+    parse("public var x;");
+    expectErrors("Parse error. primary expression expected");
+    parse("public function foo() {}");
+    expectErrors("Parse error. Semi-colon expected");
+    parse("class Foo { static private constructor() {}}");
+
+
+    testNotEs6TypedFullError(
+        "class Foo { private constructor() {} }",
+        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+    testNotEs6TypedFullError(
+        "class Foo { protected bar; }",
+        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+    testNotEs6TypedFullError(
+        "class Foo { protected bar() {} }",
+        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+    testNotEs6TypedFullError(
+        "class Foo { private get() {} }",
+        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+    testNotEs6TypedFullError(
+        "class Foo { private set() {} }",
+        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+    testNotEs6TypedFullError(
+        "class Foo { private [Symbol.iterator]() {} }",
+        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+  }
+
+  public void testOptionalProperty() {
+    parse("interface I {\n  foo?: number;\n}");
+    parse("interface I {\n  foo?(): number;\n}");
+    parse("type I = {foo?: number};");
+    parse("var x: {foo?: number};");
+
+    expectErrors("Parse error. Semi-colon expected");
+    parse("class C { foo?: number; }");
+  }
+
+  public void testParamNoInitializer() {
+    expectErrors("Parse error. ',' expected");
+    parse("declare function foo(bar = 3);");
+    expectErrors("Parse error. ',' expected");
+    parse("interface I { foo(bar = 3); }");
+    expectErrors("Parse error. ',' expected");
+    parse("declare class C { foo(bar = 3); }");
+  }
+
+  public void testParamDestructuring() {
+    parse("declare function foo([bar]);");
+    parse("declare function foo({bar:bar});");
+
+    expectErrors("Parse error. ',' expected");
+    parse("interface I { foo(bar = 3); }");
+    expectErrors("Parse error. ',' expected");
+    parse("declare class C { foo(bar = 3); }");
+
+    expectErrors("Parse error. Unexpected token '[' in type expression");
+    parse("var x: ([foo]) => number;");
+    expectErrors("Parse error. Semi-colon expected");
+    parse("var x: ({foo:foo}) => number;");
+  }
+
+  public void testIndexSignature() {
+    parse("interface I {\n  [foo: number]: number;\n}");
+    parse("var i: {[foo: number]: number;};");
+    parse("class C {\n  [foo: number]: number;\n}");
+
+    expectErrors("Parse error. ':' expected");
+    parse("interface I { [foo: number]; }");
+    expectErrors("Parse error. ':' expected");
+    parse("interface I { [foo]: number; }");
+    expectErrors("Parse error. Index signature parameter type must be 'string' or 'number'");
+    parse("interface I {\n  [foo: any]: number;\n}");
+
+    testNotEs6Typed("class C {\n  [foo: number]: number;\n}",
+        "index signature", "type annotation", "type annotation");
+  }
+
+  public void testCallSignature() {
+    parse("interface I {\n  (foo: number): number;\n}");
+    parse("interface I {\n  <T>(foo: number): number;\n}");
+    parse("var i: {(foo: number): number;};");
+
+    testNotEs6Typed("interface I { (foo); }", "interface", "call signature");
+  }
+
+  public void testConstructSignature() {
+    parse("interface I {\n  new (foo: number): number;\n}");
+    parse("interface I {\n  new <T>(foo: number): number;\n}");
+    parse("var i: {new (foo: number): number;};");
+
+    testNotEs6Typed("interface I { new (foo); }", "interface", "constructor signature");
+  }
+
+  public void testSpecializedSignature() {
+    parse("declare function foo(bar: 'string');");
+    parse("interface I {\n  foo(bar: 'string'): number;\n}");
+
+    expectErrors("Parse error. Unexpected token 'string literal' in type expression");
+    parse("var x: 'string'");
   }
 
   private void assertVarType(String message, TypeDeclarationNode expectedType, String source) {

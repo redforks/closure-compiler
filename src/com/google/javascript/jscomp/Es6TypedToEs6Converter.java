@@ -20,6 +20,7 @@ import com.google.javascript.jscomp.Es6ToEs3Converter.ClassDeclarationMetadata;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
@@ -50,6 +51,15 @@ public final class Es6TypedToEs6Converter
       "JSC_TYPE_QUERY_NOT_SUPPORTED",
       "Type query is currently not supported.");
 
+  static final DiagnosticType UNSUPPORTED_RECORD_TYPE = DiagnosticType.error(
+      "JSC_UNSUPPORTED_RECORD_TYPE",
+      "Currently only member variables are supported in record types, please consider "
+          + "using interfaces instead.");
+
+  static final DiagnosticType COMPUTED_PROP_ACCESS_MODIFIER = DiagnosticType.error(
+      "JSC_UNSUPPORTED_ACCESS_MODIFIER",
+      "Accessibility is not checked on computed properties");
+
   private final AbstractCompiler compiler;
 
   Es6TypedToEs6Converter(AbstractCompiler compiler) {
@@ -58,6 +68,7 @@ public final class Es6TypedToEs6Converter
 
   @Override
   public void process(Node externs, Node scriptRoot) {
+    NodeTraversal.traverse(compiler, externs, this);
     NodeTraversal.traverse(compiler, scriptRoot, this);
   }
 
@@ -97,7 +108,7 @@ public final class Es6TypedToEs6Converter
         visitTypeAlias(t, n, parent);
         break;
       case Token.DECLARE:
-        visitAmbientDeclaration(n, parent);
+        visitAmbientDeclaration(n);
         break;
       default:
     }
@@ -116,29 +127,34 @@ public final class Es6TypedToEs6Converter
           return;
         }
       }
-      name.putProp(Node.GENERIC_TYPE_LIST, null);
+      name.removeProp(Node.GENERIC_TYPE_LIST);
       jsDocNode.setJSDocInfo(doc.build());
     }
   }
 
   private void visitClass(Node n, Node parent) {
+    JSDocInfoBuilder doc = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
     Node interfaces = (Node) n.getProp(Node.IMPLEMENTS);
     if (interfaces != null) {
-      JSDocInfoBuilder doc = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
       for (Node child : interfaces.children()) {
         Node type = convertWithLocation(child);
         doc.recordImplementedInterface(new JSTypeExpression(type, n.getSourceFileName()));
       }
-      n.putProp(Node.IMPLEMENTS, null);
-      n.setJSDocInfo(doc.build());
+      n.removeProp(Node.IMPLEMENTS);
     }
 
     Node classMembers = n.getLastChild();
     ClassDeclarationMetadata metadata = ClassDeclarationMetadata.create(n, parent);
 
     for (Node member : classMembers.children()) {
+      if (member.isIndexSignature()) {
+        doc.recordImplementedInterface(createIObject(member));
+        continue;
+      }
+
       // Functions are handled by the regular Es6ToEs3Converter
       if (!member.isMemberVariableDef() && !member.getBooleanProp(Node.COMPUTED_PROP_VARIABLE)) {
+        maybeAddVisibility(member);
         continue;
       }
 
@@ -150,6 +166,8 @@ public final class Es6TypedToEs6Converter
       metadata.insertNodeAndAdvance(createPropertyDefinition(member, metadata.fullClassName));
       compiler.reportCodeChange();
     }
+
+    n.setJSDocInfo(doc.build());
   }
 
   private void visitInterface(Node n) {
@@ -163,7 +181,6 @@ public final class Es6TypedToEs6Converter
         doc.recordExtendedInterface(new JSTypeExpression(type, n.getSourceFileName()));
       }
     }
-    n.setJSDocInfo(doc.build());
 
     Node insertionPoint = n;
     Node members = n.getLastChild();
@@ -174,11 +191,15 @@ public final class Es6TypedToEs6Converter
         function.getLastChild().setType(Token.BLOCK);
         continue;
       }
-
+      if (member.isIndexSignature()) {
+        doc.recordExtendedInterface(createIObject(member));
+        continue;
+      }
       Node newNode = createPropertyDefinition(member, name.getString());
       insertionPoint.getParent().addChildAfter(newNode, insertionPoint);
       insertionPoint = newNode;
     }
+    n.setJSDocInfo(doc.build());
 
     // Convert interface to class
     n.setType(Token.CLASS);
@@ -186,6 +207,20 @@ public final class Es6TypedToEs6Converter
     n.replaceChild(superTypes, empty);
     members.setType(Token.CLASS_MEMBERS);
     compiler.reportCodeChange();
+  }
+
+  private JSTypeExpression createIObject(Node indexSignature) {
+    Node indexType = convertWithLocation(indexSignature.getFirstChild()
+        .getDeclaredTypeExpression());
+    Node declaredType = convertWithLocation(indexSignature.getDeclaredTypeExpression());
+    Node block = new Node(Token.BLOCK, indexType, declaredType);
+    Node iObject = IR.string("IObject");
+    iObject.addChildrenToFront(block);
+    JSTypeExpression bang = new JSTypeExpression(new Node(Token.BANG, iObject)
+        .useSourceInfoIfMissingFromForTree(indexSignature), indexSignature.getSourceFileName());
+    indexSignature.detachFromParent();
+    compiler.reportCodeChange();
+    return bang;
   }
 
   private Node createPropertyDefinition(Node member, String name) {
@@ -197,6 +232,8 @@ public final class Es6TypedToEs6Converter
             prototypeAcess);
     // Copy type information.
     maybeVisitColonType(member, member);
+    maybeAddVisibility(member);
+
     qualifiedMemberAccess.setJSDocInfo(member.getJSDocInfo());
     Node newNode = NodeUtil.newExpr(qualifiedMemberAccess);
     return newNode.useSourceInfoIfMissingFromForTree(member);
@@ -232,10 +269,16 @@ public final class Es6TypedToEs6Converter
     compiler.reportCodeChange();
   }
 
-  private void maybeClearColonType(Node n, boolean hasColonType) {
-    if (hasColonType) {
-      n.setDeclaredTypeExpression(null);
-      compiler.reportCodeChange();
+  private void maybeAddVisibility(Node n) {
+    Visibility access = (Visibility) n.getProp(Node.ACCESS_MODIFIER);
+    if (access != null) {
+      if (n.isComputedProp()) {
+        compiler.report(JSError.make(n, COMPUTED_PROP_ACCESS_MODIFIER));
+      }
+      JSDocInfoBuilder memberDoc = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
+      memberDoc.recordVisibility(access);
+      n.setJSDocInfo(memberDoc.build());
+      n.removeProp(Node.ACCESS_MODIFIER);
     }
   }
 
@@ -252,8 +295,6 @@ public final class Es6TypedToEs6Converter
     }
 
     JSDocInfo info = jsDocNode.getJSDocInfo();
-    Preconditions.checkState(info == null || info.getType() == null,
-        "Nodes must not have both type declarations and JSDoc types");
     JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(info);
 
     JSTypeExpression typeExpression = new JSTypeExpression(type, n.getSourceFileName());
@@ -272,7 +313,10 @@ public final class Es6TypedToEs6Converter
     info = builder.build();
     jsDocNode.setJSDocInfo(info);
 
-    maybeClearColonType(n, hasColonType);
+    if (hasColonType) {
+      n.setDeclaredTypeExpression(null);
+      compiler.reportCodeChange();
+    }
   }
 
   private void visitTypeAlias(NodeTraversal t, Node n, Node parent) {
@@ -290,10 +334,9 @@ public final class Es6TypedToEs6Converter
     compiler.reportCodeChange();
   }
 
-  private void visitAmbientDeclaration(Node n, Node parent) {
+  private void visitAmbientDeclaration(Node n) {
     Node child = n.removeFirstChild();
     JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(child.getJSDocInfo());
-    builder.addSuppression("duplicate");
     switch (child.getType()) {
       case Token.FUNCTION:
         child.replaceChild(child.getLastChild(), IR.block().useSourceInfoFrom(child));
@@ -308,6 +351,10 @@ public final class Es6TypedToEs6Converter
           }
         }
         break;
+      case Token.ENUM:
+      case Token.VAR:
+        builder.addSuppression("duplicate");
+        break;
       case Token.LET:
         child.setType(Token.VAR);
         break;
@@ -318,7 +365,8 @@ public final class Es6TypedToEs6Converter
     }
     child.setJSDocInfo(builder.build());
 
-    parent.replaceChild(n, child);
+    n.detachFromParent();
+    compiler.getSynthesizedExternsInput().getAstRoot(compiler).addChildToBack(child);
     compiler.reportCodeChange();
   }
 
@@ -327,8 +375,8 @@ public final class Es6TypedToEs6Converter
   }
 
   private Node maybeProcessOptionalParameter(Node n, Node type) {
-    if (n.getBooleanProp(Node.OPT_PARAM_ES6_TYPED)) {
-      n.putBooleanProp(Node.OPT_PARAM_ES6_TYPED, false);
+    if (n.getBooleanProp(Node.OPT_ES6_TYPED)) {
+      n.putBooleanProp(Node.OPT_ES6_TYPED, false);
       type = maybeCreateAnyType(n, type);
       return new Node(Token.EQUALS, convertWithLocation(type));
     } else {
@@ -406,11 +454,18 @@ public final class Es6TypedToEs6Converter
         return pipe;
       case Token.RECORD_TYPE:
         Node lb = new Node(Token.LB);
-        for (Node stringKey : type.children()) {
+        for (Node memberVar : type.children()) {
+          if (!memberVar.isMemberVariableDef()) {
+            compiler.report(JSError.make(type, UNSUPPORTED_RECORD_TYPE));
+            continue;
+          }
           Node colon = new Node(Token.COLON);
-          Node original = stringKey.removeFirstChild();
-          colon.addChildToBack(stringKey.detachFromParent());
-          colon.addChildToBack(convertWithLocation(original));
+          memberVar.setType(Token.STRING_KEY);
+          Node memberType = convertWithLocation(
+              maybeCreateAnyType(memberVar, memberVar.getDeclaredTypeExpression()));
+          memberVar.setDeclaredTypeExpression(null);
+          colon.addChildToBack(memberVar.detachFromParent());
+          colon.addChildToBack(memberType);
           lb.addChildrenToBack(colon);
         }
         return new Node(Token.LC, lb);

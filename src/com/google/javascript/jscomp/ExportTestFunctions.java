@@ -16,6 +16,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.jscomp.parsing.parser.util.format.SimpleFormat;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 
@@ -90,13 +91,23 @@ class ExportTestFunctions implements CompilerPass {
         }
       } else if (n.isObjectLit()
           && isCallTargetQName(n.getParent(), "goog.testing.testSuite")) {
-        for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
+        for (Node c : n.children()) {
           if (c.isStringKey() && !c.isQuotedString()) {
             c.setQuotedString();
             compiler.reportCodeChange();
+          } else if (c.isMemberFunctionDef()) {
+            rewriteMemberDefInObjLit(c, n);
           }
         }
       }
+    }
+
+    private void rewriteMemberDefInObjLit(Node memberDef, Node objLit) {
+      String name = memberDef.getString();
+      Node stringKey = IR.stringKey(name, memberDef.getFirstChild().detachFromParent());
+      objLit.replaceChild(memberDef, stringKey);
+      stringKey.setQuotedString();
+      compiler.reportCodeChange();
     }
 
     // TODO(johnlenz): move test suite declaration into the
@@ -159,7 +170,7 @@ class ExportTestFunctions implements CompilerPass {
         NodeUtil.getPrototypePropertyName(node.getFirstChild());
     String objectName = fullyQualifiedFunctionName.substring(0,
         fullyQualifiedFunctionName.lastIndexOf('.'));
-    String exportCallStr = String.format("%s(%s, '%s', %s);",
+    String exportCallStr = SimpleFormat.format("%s(%s, '%s', %s);",
         exportPropertyFunction, objectName, testFunctionName,
         fullyQualifiedFunctionName);
 

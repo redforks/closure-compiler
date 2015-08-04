@@ -282,7 +282,6 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @constructor */ function Foo(x) {}",
         "new Foo(function() { return this.p; })"));
 
-    // TODO(dimvar): Will be fixed once we handle any JSType as a receiver type
     typeCheck(Joiner.on('\n').join(
         "/**",
         " * @template T",
@@ -291,8 +290,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         " */",
         "function f(x) {",
         "  this.p = 123;",
-        "}"),
-        CheckGlobalThis.GLOBAL_THIS);
+        "}"));
 
     typeCheck(Joiner.on('\n').join(
         "/** @this {Object} */",
@@ -860,8 +858,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     typeCheck(Joiner.on('\n').join(
         "/** @type {function():number} */",
-        "function /** number */ f() { return 1; }"),
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+        "function /** number */ f() { return 1; }"));
 
     typeCheck(Joiner.on('\n').join(
         "function f(/** function(number) */ fnum, floose, cond) {",
@@ -1465,6 +1462,24 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @return {!Bar} */ Bar.prototype.clone = goog.abstractMethod;",
         "var /** null */ n = (new Bar).clone();"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @type {function(number)} */",
+        "Foo.prototype.m = goog.nullFunction;",
+        "/** @enum {function(string)} */",
+        "var e = {",
+        "  A: goog.nullFunction",
+        "};"));
+
+    typeCheck(Joiner.on('\n').join(
+        "function f() {}",
+        "/** @type {function(number)} */",
+        "var g = f;",
+        "/** @type {function(string)} */",
+        "var h = f;"));
   }
 
   public void testDifficultObjectSpecialization() {
@@ -1863,25 +1878,29 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         NewTypeInference.NULLABLE_DEREFERENCE,
         NewTypeInference.INVALID_ARGUMENT_TYPE);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** ?{ p : number } */ o) {",
         "  goog.asserts.assert(o);",
         "  return o.p;",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** ?{ p : number } */ o) {",
         "  goog.asserts.assertObject(o);",
         "  return o.p;",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** ?Array<string> */ a) {",
         "  goog.asserts.assertArray(a);",
         "  return a.length;",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */ function Foo() {}",
         "Foo.prototype.p = function(){};",
         "function g(/** ?Foo */ f) {",
@@ -1889,7 +1908,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  f.p();",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */ function Foo() {}",
         "/** @constructor */ function Bar() {}",
         "function g(/** !Bar */ o) {",
@@ -1897,14 +1917,16 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"),
         NewTypeInference.ASSERT_FALSE);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */ function Foo() {}",
         "function g(/** !Foo */ o) {",
         "  goog.asserts.assertInstanceof(o, 42);",
         "}"),
         NewTypeInference.UNKNOWN_ASSERTION_TYPE);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */ function Foo() {}",
         "function Bar() {}",
         "function g(/** !Foo */ o) {",
@@ -1912,7 +1934,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"),
         NewTypeInference.UNKNOWN_ASSERTION_TYPE);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */ function Foo() {}",
         "/** @interface */ function Bar() {}",
         "function g(/** !Foo */ o) {",
@@ -1923,14 +1946,16 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
   public void testAsserts() {
     typeCheck(
-        CLOSURE_BASE + Joiner.on('\n').join(
+        Joiner.on('\n').join(
+            CLOSURE_BASE,
             "function f(/** ({ p : string }|null|undefined) */ o) {",
             "  goog.asserts.assert(o);",
             "  o.p - 5;",
             "}"),
         NewTypeInference.INVALID_OPERAND_TYPE);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */ function Foo() {}",
         "function f(/** (Array<string>|Foo) */ o) {",
         "  goog.asserts.assert(o instanceof Array);",
@@ -1938,7 +1963,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */ function Foo() {}",
         "Foo.prototype.p = function(/** number */ x){};",
         "function f(/** (function(new:Foo)) */ ctor,",
@@ -3233,13 +3259,11 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @type {string} */ Foo.bar = 'str';"),
         GlobalTypeInfo.CTOR_IN_DIFFERENT_SCOPE);
 
-    // TODO(dimvar): warn about redeclared property
     typeCheck(Joiner.on('\n').join(
         "/** @constructor */ function Foo() {}",
         "/** @type {number} */ Foo.n = 1;",
         "Foo.n = 1;"));
 
-    // TODO(dimvar): warn about redeclared property
     typeCheck(Joiner.on('\n').join(
         "/** @constructor */ function Foo() {}",
         "/** @type {number} */ Foo.n;",
@@ -3344,16 +3368,15 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         TypeCheck.WRONG_ARGUMENT_COUNT);
 
     typeCheck(
-        "/** @type {function()} */ function f(x) {}",
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+        "/** @type {number|function()} */ function f(x) {}",
+        GlobalTypeInfo.WRONG_PARAMETER_COUNT);
 
     typeCheck(
-        "/** @type {function(number)} */ function f() {}",
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+        "/** @type {number|function(number)} */ function f() {}",
+        GlobalTypeInfo.WRONG_PARAMETER_COUNT);
 
     typeCheck(
-        "/** @type {function(number)} */ function f(/** number */ x) {}",
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+        "/** @type {function(number)} */ function f(/** number */ x) {}");
 
     typeCheck(Joiner.on('\n').join(
         "/**",
@@ -3380,10 +3403,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @return {number} */ function /** number */ f() { return 1; }",
         RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
 
-    typeCheck(Joiner.on('\n').join(
-        "/** @type {function(): number} */",
-        "function /** number */ f() { return 1; }"),
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+    typeCheck(
+        "/** @type {function(): number} */ function /** number */ f() { return 1; }");
 
     typeCheck(Joiner.on('\n').join(
         "/** @type {function(...number)} */ function f() {}",
@@ -3396,8 +3417,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         NewTypeInference.INVALID_ARGUMENT_TYPE);
 
     typeCheck(
-        "/** @type {function(...number)} */ function f(x) {}",
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+        "/** @type {function(...number)} */ function f(x) {}");
 
     typeCheck(Joiner.on('\n').join(
         "/**",
@@ -3839,20 +3859,13 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
   }
 
   public void testInheritanceImplicitObjectSubtyping() {
-    String objectExterns = DEFAULT_EXTERNS
-        + "/** @return {string} */ Object.prototype.toString = function() {};";
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */ function Foo() {}",
+        "/** @override */ Foo.prototype.toString = function(){ return ''; };"));
 
-    typeCheckCustomExterns(
-        objectExterns,
-        Joiner.on('\n').join(
-            "/** @constructor */ function Foo() {}",
-            "/** @override */ Foo.prototype.toString = function(){ return ''; };"));
-
-    typeCheckCustomExterns(
-        objectExterns,
-        Joiner.on('\n').join(
-            "/** @constructor */ function Foo() {}",
-            "/** @override */ Foo.prototype.toString = function(){ return 5; };"),
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */ function Foo() {}",
+        "/** @override */ Foo.prototype.toString = function(){ return 5; };"),
         NewTypeInference.RETURN_NONDECLARED_TYPE);
   }
 
@@ -4032,6 +4045,11 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
   public void testPrototypeOnNonCtorFunction() {
     typeCheck("function Foo() {}; Foo.prototype.y = 5;");
+
+    typeCheck(Joiner.on('\n').join(
+        "function f(/** Function */ x) {",
+        "  var y = x != null ? x.prototype : null;",
+        "}"));
   }
 
   public void testInvalidTypeReference() {
@@ -4610,22 +4628,72 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         NewTypeInference.MISTYPED_ASSIGN_RHS);
   }
 
-  public void testDontInferNamespaces() {
+  public void testSimpleInferNamespaces() {
     typeCheck(Joiner.on('\n').join(
         "/** @const */ var ns = {};",
-        "/** @const */ var x = ns;"),
-        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+        "/** @const */ ns.numprop = 123;",
+        "/** @const */ var x = ns;",
+        "function f() { var /** string */ s = x.numprop; }"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
 
     typeCheck(Joiner.on('\n').join(
         "/** @enum {number} */ var e = { FOO : 5 };",
-        "/** @const */ var x = e;"),
-        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+        "/** @const */ e.numprop = 123;",
+        "/** @const */ var x = e;",
+        "function f() { var /** string */ s = x.numprop; }"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
 
     typeCheck(Joiner.on('\n').join(
         "/** @const */ var ns = {};",
         "/** @type {number} */ ns.n = 5;",
-        "/** @const */ var x = ns.n;"),
-        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+        "/** @const */ var x = ns.n;"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @const */",
+        "var Bar = Foo;",
+        "function g() { Bar(); }"),
+        TypeCheck.CONSTRUCTOR_NOT_CALLABLE);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @constructor */",
+        "ns.Foo = function() {};",
+        "/** @type {string} */",
+        "ns.Foo.prop = 'asdf';",
+        "/** @const */ var Foo = ns.Foo;",
+        "function g() { Foo.prop - 5; }"),
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @constructor */",
+        "ns.Foo = function() {};",
+        "/** @const */ var Foo = ns.Foo;",
+        "function g() { Foo(); }"),
+        TypeCheck.CONSTRUCTOR_NOT_CALLABLE);
+
+    typeCheck(Joiner.on('\n').join(
+        "function /** string */ f(/** string */ x) { return x; }",
+        "/** @const */",
+        "var g = f;",
+        "function h() { g('asdf') - 1; }"),
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */ var ns = {};",
+        "/** @type {number} */ ns.n = 5;",
+        "/** @const */ var x = ns.n;",
+        "/** @type {string} */ ns.s = 'str';"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */ function Foo() {}",
+        "/** @type {number} */ Foo.n = 5;",
+        "/** @const */ var x = Foo.n;",
+        "/** @type {string} */ Foo.s = 'str';"));
   }
 
   public void testDontInferUndeclaredFunctionReturn() {
@@ -7635,7 +7703,9 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
   }
 
   public void testCasts() {
-    typeCheck("(/** @type {number} */ ('asdf'));", TypeValidator.INVALID_CAST);
+    typeCheck(
+        "(/** @type {number} */ ('asdf'));",
+        NewTypeInference.INVALID_CAST);
 
     typeCheck(Joiner.on('\n').join(
         "function f(/** (number|string) */ x) {",
@@ -7646,13 +7716,28 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     typeCheck("(/** @type {number} */ (/** @type {?} */ ('asdf')))");
 
-    // Ignore null when checking whether we are casting to a subtype
     typeCheck(Joiner.on('\n').join(
         "/** @constructor */",
         "function Parent() {}",
         "/** @constructor @extends {Parent} */",
         "function Child() {}",
         "/** @type {Child|null} */ (new Parent);"));
+
+    typeCheck(Joiner.on('\n').join(
+        "function f(/** (number|string) */ x) {",
+        "  return /** @type {number|boolean} */ (x);",
+        "}"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function High() {}",
+        "/** @constructor @extends {High} */",
+        "function Low() {}",
+        "/** @constructor */",
+        "function Foo() {}",
+        "function f(/** (!Foo|!Low) */ x) {",
+        "  return /** @type {!High} */ (x);",
+        "}"));
   }
 
   public void testOverride() {
@@ -8348,7 +8433,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
   }
 
   public void testSpecializeLooseFunctionDoesntCrash() {
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** !Function */ func) {};",
         "function g(obj) {",
         "    if (goog.isFunction(obj)) {",
@@ -9017,6 +9103,68 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
   //       VarCheck.UNDEFINED_VAR_ERROR);
   // }
 
+   public void testFunctionUnions() {
+     typeCheck("/** @type {?function()} */ function f() {};");
+
+     typeCheck(
+         "/** @type {?function()} */ function f() {}; f = 7;",
+         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+     typeCheck("/** @type {?function()} */ function f() {}; f = null;");
+
+     typeCheck(
+         "/** @const */ var ns = {}; /** @type {?function()} */ ns.f = function() {}; ns.f = 7;",
+         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+     typeCheck(
+         "/** @const */var ns = {}; /** @type {?function()} */ns.f = function(){}; ns.f = null;");
+
+     typeCheck(
+         "/** @type {?function(string)} */ function f(x) { x-5; };",
+         NewTypeInference.INVALID_OPERAND_TYPE);
+
+     typeCheck(
+         "/** @const */var ns = {}; /** @type {?function(string)} */ns.f = function(x){ x-5; };",
+         NewTypeInference.INVALID_OPERAND_TYPE);
+
+     typeCheck(Joiner.on('\n').join(
+         "/** @constructor */ function Foo(){}",
+         "/** @type {?function()} */ Foo.prototype.f;",
+         "(new Foo).f = 7;"),
+         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+     typeCheck(Joiner.on('\n').join(
+         "/** @constructor */ function Foo(){}",
+         "/** @type {?function()} */ Foo.prototype.f;",
+         "(new Foo).f = null;"));
+
+     typeCheck(Joiner.on('\n').join(
+         "/** @constructor */ function Foo(){}",
+         "/** @type {?function()} */ Foo.prototype.f = function() {};",
+         "(new Foo).f = 7;"),
+         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+     typeCheck(Joiner.on('\n').join(
+         "/** @constructor */ function Foo(){}",
+         "/** @type {?function()} */ Foo.prototype.f = function() {};",
+         "(new Foo).f = null;"));
+   }
+
+   public void testFunctionTypedefs() {
+     typeCheck("/** @typedef {function()} */ var Fun; /** @type {Fun} */ function f() {};");
+
+     typeCheck(Joiner.on('\n').join(
+         "/** @typedef {function(string)} */ var TakesString;",
+         "/** @type {TakesString} */ function f(x) {}",
+         "f(123);"),
+         NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+     typeCheck(Joiner.on('\n').join(
+        "/** @typedef {number|function()} */ var FunctionUnion;",
+        "/** @type {FunctionUnion} */ function f(x) {}"),
+        GlobalTypeInfo.WRONG_PARAMETER_COUNT);
+   }
+
   public void testGetters() {
     typeCheck(
         "var x = { /** @return {string} */ get a() { return 1; } };",
@@ -9079,16 +9227,12 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
   public void testSetters() {
     typeCheck(
-        "var x = { /** @return {string} */ set a(b) {} };",
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+        "var x = { /** @return {string} */ set a(b) { return ''; } };",
+        GlobalTypeInfo.SETTER_WITH_RETURN);
 
     typeCheck(
-        "var x = { /** @type{function(number):number} */ set a(b) {} };",
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
-
-    typeCheck(
-        "var x = { set /** string */ a(b) {} };",
-        RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+        "var x = { /** @type{function(number):number} */ set a(b) { return 5; } };",
+        GlobalTypeInfo.SETTER_WITH_RETURN);
 
     typeCheck(Joiner.on('\n').join(
         "var x = {",
@@ -9208,6 +9352,12 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "   */",
         "  this.Bar = function() {};",
         "}"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @enum */",
+        "ns.e = {/** @const */ A:1};"));
   }
 
   public void testConstVarsDontReassign() {
@@ -9640,6 +9790,11 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         " */",
         "var Foo = function() {};",
         "Foo = /** @type {?} */ (function() {});"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var x = whatever.prop;"),
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
   }
 
   public void testSuppressions() {
@@ -10478,7 +10633,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         + "function f(x) { if (goog.isNull(x)) { var /** undefined */ y = x; } }",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @param {number=} x */",
         "function f(x) {",
         "  if (goog.isDef(x)) {",
@@ -10488,7 +10644,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"),
         NewTypeInference.INVALID_OPERAND_TYPE);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */",
         "function Foo() {}",
         "/** @param {Foo=} x */",
@@ -10501,7 +10658,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (Array<number>|number) */ x) {",
         "  var /** Array<number> */ a;",
         "  if (goog.isArray(x)) {",
@@ -10511,7 +10669,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @param {null|function(number)} x */ ",
         "function f(x) {",
         "  if (goog.isFunction(x)) {",
@@ -10520,32 +10679,37 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"),
         NewTypeInference.INVALID_ARGUMENT_TYPE);
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(x) {",
         "  if (goog.isObject(x)) {",
         "    var /** null */ y = x;",
         "  }",
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
         "  if (goog.isString(x)) {",
         "    x < 'str';",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
         "  if (goog.isNumber(x)) {",
         "    x - 5;",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|boolean) */ x) {",
         "  if (goog.isBoolean(x)) {",
         "    var /** boolean */ b = x;",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/**",
         " * @param {number|string} x",
         " * @return {string}",
@@ -10553,7 +10717,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "function f(x) {",
         "  return goog.isString(x) && (1 < 2) ? x : 'a';",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/**",
         " * @param {*} o1",
         " * @param {*} o2",
@@ -10570,7 +10735,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
   }
 
   public void testGoogIsPredicatesFalse() {
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */",
         "function Foo() {}",
         "function f(/** Foo */ x) {",
@@ -10581,14 +10747,16 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  y = x;",
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @param {number=} x */",
         "function f(x) {",
         "  if (!goog.isDef(x)) {",
         "    var /** undefined */ u = x;",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */",
         "function Foo() {}",
         "/** @param {Foo=} x */",
@@ -10597,46 +10765,53 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "    var /** (null|undefined) */ y = x;",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
         "  if (!goog.isString(x)) {",
         "    x - 5;",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
         "  if (!goog.isNumber(x)) {",
         "    x < 'str';",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|boolean) */ x) {",
         "  if (!goog.isBoolean(x)) {",
         "    x - 5;",
         "  }",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|!Array<number>) */ x) {",
         "  if (!goog.isArray(x)) {",
         "    x - 5;",
         "  }",
         "}"));
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(x) {",
         "  if (goog.isArray(x)) {",
         "    return x[0] - 5;",
         "  }",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|function(number)) */ x) {",
         "  if (!goog.isFunction(x)) {",
         "    x - 5;",
         "  }",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @constructor */",
         "function Foo() {}",
         "/** @param {?Foo} x */",
@@ -10648,7 +10823,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
   }
 
   public void testGoogTypeof() {
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
         "  if (goog.typeOf(x) === 'number') {",
         "    var /** number */ n = x;",
@@ -10657,21 +10833,24 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  }",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
         "  if ('number' === goog.typeOf(x)) {",
         "    var /** number */ n = x;",
         "  }",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
         "  if (goog.typeOf(x) == 'number') {",
         "    var /** number */ n = x;",
         "  }",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @param {number=} x */",
         "function f(x) {",
         "  if (goog.typeOf(x) === 'undefined') {",
@@ -10681,7 +10860,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  }",
         "}"));
 
-    typeCheck(CLOSURE_BASE + Joiner.on('\n').join(
+    typeCheck(Joiner.on('\n').join(
+        CLOSURE_BASE,
         "/** @param {string} x */",
         "function f(x, other) {",
         "  if (goog.typeOf(x) === other) {",
@@ -11242,8 +11422,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @type {number} */",
         "e.prop = 123;",
         "/** @const */",
-        "var x = e.prop;"),
-        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+        "var x = e.prop;"));
   }
 
   private static final String FORWARD_DECLARATION_DEFINITIONS = Joiner.on('\n').join(
@@ -11252,7 +11431,6 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "goog.forwardDeclare = function(name){};");
 
   public void testForwardDeclarations() {
-
     typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
         "goog.addDependency('', ['Foo'], []);",
         "goog.forwardDeclare('Bar');",
@@ -11336,6 +11514,32 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "function f(/** !ns.Foo */ x) {}",
         "/** @constructor */ function Bar(){}",
         "f(new Bar);"));
+
+    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
+        "goog.forwardDeclare('ns.Foo');",
+        "/** @const */",
+        "var ns = {};",
+        "/** @const */",
+        "var c = ns;"),
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+
+    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
+            "goog.forwardDeclare('ns.ns2.Foo');",
+            "/** @const */",
+            "var ns = {};",
+            "/** @const */",
+            "ns.ns2 = {};",
+            "/** @const */",
+            "var c = ns;",
+            "var x = new ns.ns2.Foo();"),
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE,
+        TypeCheck.INEXISTENT_PROPERTY);
+
+    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
+            "goog.forwardDeclare('Foo.Bar');",
+            "/** @constructor */",
+            "function Foo() {}",
+            "var x = new Foo.Bar()"));
   }
 
   public void testDontLookupInParentScopeForNamesWithoutDeclaredType() {
@@ -11514,7 +11718,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
     typeCheck(Joiner.on('\n').join(
         "/** @constructor */",
         "function Foo() {}",
-        "Foo.prototype.toString = function() {};",
+        "Foo.prototype.toString = function() { return ''; };",
         "function f(/** (number|!Foo) */ x) {",
         "  return x.toString();",
         "}"));
@@ -12855,5 +13059,463 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     // Don't crash when ns.Foo is not defined.
     typeCheck("ns.Foo.prototype.m = function() {};");
+  }
+
+  public void testUnknownNewAndThisFunctionAnnotations() {
+    // Don't warn for unknown this
+    typeCheck(Joiner.on('\n').join(
+        "/** @this {Number|String} */",
+        "function f() {",
+        "  return this.toString();",
+        "}"));
+
+    // Don't warn for unknown this
+    typeCheck(Joiner.on('\n').join(
+        "/** @type {function(this:(Number|String))} */",
+        "function f() {",
+        "  return this.toString();",
+        "}"));
+
+    // Don't warn that f isn't a constructor
+    typeCheck(Joiner.on('\n').join(
+        "/** @type {function(new:(Number|String))} */",
+        "function f() {}",
+        "var x = new f();"));
+  }
+
+  public void testDontAddPropsToNamespacesAfterEarlyFinalization() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @const */",
+        "var Bar = Foo;",
+        "Foo.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @constructor @extends {Foo} */",
+        "function Bar() {}",
+        "/** @const */",
+        "var Baz = Bar;",
+        "Foo.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function Foo() {}",
+        "/** @constructor @implements {Foo} */",
+        "function Bar() {}",
+        "/** @const */",
+        "var Baz = Bar;",
+        "Foo.prototype.prop = function() {};"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @const */",
+        "var Bar = Foo;",
+        "Foo.prototype.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function Foo() {}",
+        "/** @constructor @implements {Foo} */",
+        "function Bar() {}",
+        "/** @const */",
+        "var Baz = Bar;",
+        "Foo.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {}",
+        "/** @const */",
+        "var x = ns;",
+        "ns.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @enum */",
+        "var e = { A: 1 }",
+        "/** @const */",
+        "var x = e;",
+        "e.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @constructor */",
+        "ns.Foo = function() {};",
+        "/** @const */",
+        "var x = ns;",
+        "/** @type {number} */",
+        "ns.Foo.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Bar() {}",
+        "/** @constructor */",
+        "Bar.Foo = function() {};",
+        "/** @const */",
+        "var x = Bar;",
+        "/** @type {number} */",
+        "Bar.Foo.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @enum */",
+        "var e = {A:1};",
+        "/** @constructor */",
+        "e.Foo = function() {};",
+        "/** @const */",
+        "var x = e;",
+        "/** @type {number} */",
+        "e.Foo.prop = 123;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+  }
+
+  public void testFixAdditionOfStaticCtorProps() {
+    // TODO(dimvar): The expected formal type is string if g appears before f
+    // and number o/w. Also, we allow adding named types to ctors in any scope,
+    // but other properties only in the same scope where the ctor is defined.
+    // 1) Must warn about redeclared prop.
+    // 2) Must be consistent about which scopes can add new props.
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "function g() {",
+        "  /**",
+        "   * @constructor",
+        "   * @param {string} x",
+        "   */",
+        "  Foo.Bar = function(x) {};",
+        "}",
+        "function f() {",
+        "  /**",
+        "   * @constructor",
+        "   * @param {number} x",
+        "   */",
+        "  Foo.Bar = function(x) {};",
+        "}",
+        "function h() {",
+        "  return new Foo.Bar(true);",
+        "}"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+  }
+
+  public void testAddingPropsToNominalTypesAfterFinalization() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {",
+        "  /** @type {number} */",
+        "  this.prop = 123;",
+        "}",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f() {",
+        "  var /** string */ s = (new Foo).prop;",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @const */",
+        "var exports = Foo;",
+        "Foo.prototype.method = function() {",
+        "  /** @type {number} */",
+        "  this.prop = 123;",
+        "};",
+        "function f() {",
+        "  var /** string */ s = (new Foo).prop;",
+        "}"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f(/** !Foo */ x) {",
+        "  /** @type {number} */",
+        "  x.prop = 123;",
+        "}",
+        "function g(/** !Foo */ x) {",
+        "  var /** string */ s = x.prop;",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "Foo.prop = 123;",
+        "/** @const */",
+        "var exports = Foo;",
+        "Foo.prop = 234;"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "Foo.prop = 123;",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f() {",
+        "  Foo.prop = 234;",
+        "}"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "Foo.prop = 123;",
+        "/** @const */",
+        "var exports = Foo;",
+        "Foo.prop2 = 234;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "Foo.prop = 123;",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f() {",
+        "  /** @type {number} */",
+        "  Foo.prop = 234;",
+        "}"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @const */",
+        "var exports = Foo;",
+        "Foo.prototype.method = function() {",
+        "  /** @type {number} */",
+        "  this.prop = 123;",
+        "};",
+        "function f() {",
+        "  var /** string */ s = (new Foo).prop;",
+        "}"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testSubnamespacesNotFinalized() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @constructor @implements {Parent} */",
+        "ns.Child = function() {}",
+        "/** @const */",
+        "var exports = ns;",
+        "/** @interface */",
+        "function Parent() {}"),
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @const */",
+        "ns.ns2 = {};",
+        "/** @constructor @implements {Parent} */",
+        "ns.ns2.Child = function() {}",
+        "/** @const */",
+        "var exports = ns;",
+        "/** @interface */",
+        "function Parent() {}"),
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @enum */",
+        "ns.e = {A:1};",
+        "/** @constructor @implements {Parent} */",
+        "ns.e.Child = function() {}",
+        "/** @const */",
+        "var exports = ns;",
+        "/** @interface */",
+        "function Parent() {}"),
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+  }
+
+  public void testFinalizationOfImplementedInterfaces() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function I1() {}",
+        "/** @return {number} */",
+        "I1.prototype.method = function() {};",
+        "/**",
+        " * @constructor",
+        " * @implements {I1}",
+        " */",
+        "function Foo() {}",
+        "Foo.prototype.method = function() { return 1; };",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f() {",
+        "  var /** string */ s = (new exports).method();",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(Joiner.on('\n').join(
+        "/**",
+        " * @constructor",
+        " * @implements {I1}",
+        " */",
+        "function Foo() {}",
+        "Foo.prototype.method = function() { return 1; };",
+        "/** @const */",
+        "var exports = Foo;",
+        "/** @interface */",
+        "function I1() {}",
+        "/** @return {number} */",
+        "I1.prototype.method = function() {};"),
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
+  }
+
+  public void testImprecisePrototypeDueToEarlyFinalization() {
+    // Can't find the type mismatch because the prototype property of
+    // exports was created before finalizing Foo.
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function Parent() {}",
+        "/** @return {number} */",
+        "Parent.prototype.method = function() {};",
+        "/** @constructor @implements {Parent} */",
+        "function Foo() {}",
+        "Foo.prototype.method = function() { return 1; };",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f() {",
+        "  var /** null */ x = exports.prototype.method.call(new Foo);",
+        "}"));
+
+    // The exports object itself does have the newest type information
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function Parent() {}",
+        "/** @return {number} */",
+        "Parent.prototype.method = function() {};",
+        "/** @constructor @implements {Parent} */",
+        "function Foo() {}",
+        "Foo.prototype.method = function() { return 1; };",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f() {",
+        "  var /** null */ x = (new exports).method();",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    // The exports object itself does have the newest type information
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function Parent() {}",
+        "/** @return {number} */",
+        "Parent.prototype.method = function() {};",
+        "/** @constructor @implements {Parent} */",
+        "function Foo() {}",
+        "Foo.prototype.method = function() { return 1; };",
+        "/** @const */",
+        "var exports = new Foo;",
+        "function f() {",
+        "  var /** null */ x = exports.method();",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    // Can't find the type mismatch because the prototype property of
+    // exports was created before finalizing Foo.
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function I1() {}",
+        "/** @return {number|string} */",
+        "I1.prototype.method = function() {};",
+        "/** @interface */",
+        "function I2() {}",
+        "/** @return {number|boolean} */",
+        "I2.prototype.method = function() {};",
+        "/**",
+        " * @constructor",
+        " * @implements {I1}",
+        " * @implements {I2}",
+        " */",
+        "function Foo() {}",
+        "Foo.prototype.method = function() { return 1; };",
+        "/** @const */",
+        "var exports = Foo;",
+        "function f() {",
+        "  var /** null */ x = exports.prototype.method.call(new Foo);",
+        "}"));
+  }
+
+  public void testFinalizingRecursiveSubnamespaces() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @constructor */",
+        "ns.Foo = function() {};",
+        "/** @const */",
+        "ns.Foo.ns2 = ns;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @const */",
+        "Foo.alias = Foo;"),
+        GlobalTypeInfo.NAMESPACE_MODIFIED_AFTER_FINALIZATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @interface */",
+        "function Foo() {}",
+        "/** @constructor @implements {Foo} */",
+        "Foo.Bar = function() {};",
+        "/** @const */",
+        "var exports = Foo;"));
+  }
+
+  public void testAddingPropsToTypedefs() {
+    typeCheckCustomExterns(
+        Joiner.on('\n').join(
+            DEFAULT_EXTERNS,
+            "/** @typedef {number} */",
+            "var num2;",
+            "/** @type {number} */",
+            "num2.prop;"),
+        "/** empty code */",
+        GlobalTypeInfo.CANNOT_ADD_PROPERTIES_TO_TYPEDEF);
+
+    typeCheckCustomExterns(
+        Joiner.on('\n').join(
+            DEFAULT_EXTERNS,
+            "/** @const */ var ns = {};",
+            "/** @typedef {number} */",
+            "ns.num2;",
+            "/** @type {number} */",
+            "ns.num2.prop;"),
+        "/** empty code */",
+        GlobalTypeInfo.CANNOT_ADD_PROPERTIES_TO_TYPEDEF);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @typedef {number} */",
+        "var num2;",
+        "/** @type {number} */",
+        "num2.prop;"),
+        GlobalTypeInfo.CANNOT_ADD_PROPERTIES_TO_TYPEDEF);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */ var ns = {};",
+        "/** @typedef {number} */",
+        "ns.num2;",
+        "/** @type {number} */",
+        "ns.num2.prop = 123;"),
+        GlobalTypeInfo.CANNOT_ADD_PROPERTIES_TO_TYPEDEF);
   }
 }

@@ -46,14 +46,26 @@ public final class CheckRequiresAndProvidesSorted extends AbstractShallowCallbac
           "JSC_PROVIDES_AFTER_REQUIRES",
           "goog.provide() statements should be before goog.require() statements.");
 
+  public static final DiagnosticType MULTIPLE_MODULES_IN_FILE =
+      DiagnosticType.warning(
+          "JSC_MULTIPLE_MODULES_IN_FILE",
+          "There should only be a single goog.module() statement per file.");
+
+  public static final DiagnosticType MODULE_AND_PROVIDES =
+      DiagnosticType.warning(
+          "JSC_MODULE_AND_PROVIDES",
+          "A file using goog.module() may not also use goog.provide() statements.");
+
   private List<String> requiredNamespaces;
   private List<String> providedNamespaces;
+  private List<String> moduleNamespaces;
   private final AbstractCompiler compiler;
 
   public CheckRequiresAndProvidesSorted(AbstractCompiler compiler) {
     this.compiler = compiler;
     this.requiredNamespaces = new ArrayList<>();
     this.providedNamespaces = new ArrayList<>();
+    this.moduleNamespaces = new ArrayList<>();
   }
 
   @Override
@@ -71,21 +83,34 @@ public final class CheckRequiresAndProvidesSorted extends AbstractShallowCallbac
         if (!Ordering.natural().isOrdered(providedNamespaces)) {
           t.report(n, PROVIDES_NOT_SORTED);
         }
+        if (!moduleNamespaces.isEmpty() && !providedNamespaces.isEmpty()) {
+          t.report(n, MODULE_AND_PROVIDES);
+        }
+        if (moduleNamespaces.size() > 1) {
+          t.report(n, MULTIPLE_MODULES_IN_FILE);
+        }
 
         requiredNamespaces.clear();
         providedNamespaces.clear();
+        moduleNamespaces.clear();
         break;
       case Token.CALL:
-        String req = compiler.getCodingConvention().extractClassNameIfRequire(n, parent);
-        if (req != null) {
-          requiredNamespaces.add(req);
-        }
-        String prov = compiler.getCodingConvention().extractClassNameIfProvide(n, parent);
-        if (prov != null) {
-          if (!requiredNamespaces.isEmpty()) {
-            t.report(n, PROVIDES_AFTER_REQUIRES);
+        if (parent.isExprResult() && parent.getParent().isScript()) {
+          String req = compiler.getCodingConvention().extractClassNameIfRequire(n, parent);
+          if (req != null) {
+            requiredNamespaces.add(req);
           }
-          providedNamespaces.add(prov);
+          String prov = compiler.getCodingConvention().extractClassNameIfProvide(n, parent);
+          if (prov != null) {
+            if (!requiredNamespaces.isEmpty()) {
+              t.report(n, PROVIDES_AFTER_REQUIRES);
+            }
+            if (n.getFirstChild().matchesQualifiedName("goog.module")) {
+              moduleNamespaces.add(prov);
+            } else {
+              providedNamespaces.add(prov);
+            }
+          }
         }
         break;
     }

@@ -23,7 +23,13 @@ import com.google.javascript.rhino.Token;
  * Converts ES6 arrow functions to standard anonymous ES3 functions.
  */
 public class Es6RewriteArrowFunction extends NodeTraversal.AbstractPreOrderCallback
-    implements CompilerPass {
+    implements HotSwapCompilerPass {
+
+  static final DiagnosticType THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT = DiagnosticType.warning(
+      "JSC_THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT",
+      "You have 'this' reference in an arrow function inside an object literal. "
+      + "The reference may refer to an unintended target after rewrite.");
+
   private final AbstractCompiler compiler;
 
   // The name of the vars that capture 'this' and 'arguments'
@@ -37,7 +43,13 @@ public class Es6RewriteArrowFunction extends NodeTraversal.AbstractPreOrderCallb
 
   @Override
   public void process(Node externs, Node root) {
+    NodeTraversal.traverse(compiler, externs, this);
     NodeTraversal.traverse(compiler, root, this);
+  }
+
+  @Override
+  public void hotSwapScript(Node scriptRoot, Node originalRoot) {
+    NodeTraversal.traverse(compiler, scriptRoot, this);
   }
 
   @Override
@@ -53,6 +65,10 @@ public class Es6RewriteArrowFunction extends NodeTraversal.AbstractPreOrderCallb
   }
 
   private void visitArrowFunction(NodeTraversal t, Node n) {
+    if (n.getParent().isStringKey() && NodeUtil.referencesThis(n)) {
+      compiler.report(JSError.make(n, THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT));
+    }
+
     n.setIsArrowFunction(false);
     Node body = n.getLastChild();
     if (!body.isBlock()) {

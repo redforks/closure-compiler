@@ -146,6 +146,8 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
+    Preconditions.checkArgument(
+        NodeUtil.isValidCfgRoot(root), "Unexpected control flow graph root %s", root);
     this.root = root;
     astPositionCounter = 0;
     astPosition = new HashMap<>();
@@ -247,6 +249,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
     if (parent != null) {
       switch (parent.getType()) {
         case Token.FOR:
+        case Token.FOR_OF:
           // Only traverse the body of the for loop.
           return n == parent.getLastChild();
 
@@ -264,11 +267,13 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         case Token.LABEL:
           return n != parent.getFirstChild();
         case Token.FUNCTION:
-          return n == parent.getFirstChild().getNext().getNext();
+          return n == parent.getLastChild();
         case Token.CONTINUE:
         case Token.BREAK:
         case Token.EXPR_RESULT:
         case Token.VAR:
+        case Token.LET:
+        case Token.CONST:
         case Token.RETURN:
         case Token.THROW:
           return false;
@@ -300,6 +305,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       case Token.DO:
         handleDo(n);
         return;
+      case Token.FOR_OF:
       case Token.FOR:
         handleFor(n);
         return;
@@ -390,7 +396,21 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   }
 
   private void handleFor(Node forNode) {
-    if (forNode.getChildCount() == 4) {
+    if (NodeUtil.isForIn(forNode) || forNode.isForOf()) {
+      // We have:  for (index in collection) { body }
+      // or:       for (item of collection) { body }
+      Node item = forNode.getFirstChild();
+      Node collection = item.getNext();
+      Node body = collection.getNext();
+      // The collection behaves like init.
+      createEdge(collection, Branch.UNCOND, forNode);
+      // The edge that transfer control to the beginning of the loop body.
+      createEdge(forNode, Branch.ON_TRUE, computeFallThrough(body));
+      // The edge to end of the loop.
+      createEdge(forNode, Branch.ON_FALSE,
+          computeFollowNode(forNode, this));
+      connectToPossibleExceptionHandler(forNode, collection);
+    } else {
       // We have for (init; cond; iter) { body }
       Node init = forNode.getFirstChild();
       Node cond = init.getNext();
@@ -414,19 +434,6 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       connectToPossibleExceptionHandler(init, init);
       connectToPossibleExceptionHandler(forNode, cond);
       connectToPossibleExceptionHandler(iter, iter);
-    } else {
-      // We have for (item in collection) { body }
-      Node item = forNode.getFirstChild();
-      Node collection = item.getNext();
-      Node body = collection.getNext();
-      // The collection behaves like init.
-      createEdge(collection, Branch.UNCOND, forNode);
-      // The edge that transfer control to the beginning of the loop body.
-      createEdge(forNode, Branch.ON_TRUE, computeFallThrough(body));
-      // The edge to end of the loop.
-      createEdge(forNode, Branch.ON_FALSE,
-          computeFollowNode(forNode, this));
-      connectToPossibleExceptionHandler(forNode, collection);
     }
   }
 
@@ -523,9 +530,10 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
 
   private void handleFunction(Node node) {
     // A block transfer control to its first child if it is not empty.
-    Preconditions.checkState(node.getChildCount() >= 3);
+    Preconditions.checkState(node.isFunction());
+    Preconditions.checkState(node.getChildCount() == 3);
     createEdge(node, Branch.UNCOND,
-        computeFallThrough(node.getFirstChild().getNext().getNext()));
+        computeFallThrough(node.getLastChild()));
     Preconditions.checkState(exceptionHandler.peek() == node);
     exceptionHandler.pop();
   }
@@ -734,7 +742,8 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
           return computeFollowNode(fromNode, parent, cfa);
         }
       case Token.FOR:
-        if (NodeUtil.isForIn(parent)) {
+      case Token.FOR_OF:
+        if (parent.isForOf() || NodeUtil.isForIn(parent)) {
           return parent;
         } else {
           return parent.getFirstChild().getNext().getNext();
@@ -795,7 +804,8 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       case Token.DO:
         return computeFallThrough(n.getFirstChild());
       case Token.FOR:
-        if (NodeUtil.isForIn(n)) {
+      case Token.FOR_OF:
+        if (n.isForOf() || NodeUtil.isForIn(n)) {
           return n.getFirstChild().getNext();
         }
         return computeFallThrough(n.getFirstChild());
@@ -918,6 +928,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   public static boolean mayThrowException(Node n) {
     switch (n.getType()) {
       case Token.CALL:
+      case Token.TAGGED_TEMPLATELIT:
       case Token.GETPROP:
       case Token.GETELEM:
       case Token.THROW:
@@ -945,6 +956,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   static boolean isBreakStructure(Node n, boolean labeled) {
     switch (n.getType()) {
       case Token.FOR:
+      case Token.FOR_OF:
       case Token.DO:
       case Token.WHILE:
       case Token.SWITCH:
@@ -964,6 +976,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   static boolean isContinueStructure(Node n) {
     switch (n.getType()) {
       case Token.FOR:
+      case Token.FOR_OF:
       case Token.DO:
       case Token.WHILE:
         return true;

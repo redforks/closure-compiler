@@ -184,6 +184,13 @@ md.$toast.prototype.show = function(options) {};
 
 
 /**
+ * @param {string} text
+ * @return {angular.$q.Promise}
+ */
+md.$toast.prototype.showSimple = function(text) {};
+
+
+/**
  * @type {function(*=)}
  */
 md.$toast.prototype.hide = function() {};
@@ -349,3 +356,9 @@ md.$mdIconProvider.prototype.defaultIconSet = function(url, iconSize) {};
  * @return {md.$mdIconProvider}
  */
 md.$mdIconProvider.prototype.defaultIconSize = function(iconSize) {};
+
+/**
+ * @param {string} name
+ * @return {md.$mdIconProvider}
+ */
+md.$mdIconProvider.prototype.defaultFontSet = function(name) {};

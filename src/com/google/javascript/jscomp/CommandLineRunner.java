@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
@@ -51,6 +52,7 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import java.lang.reflect.AnnotatedElement;
+import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
@@ -112,6 +114,7 @@ import java.util.zip.ZipInputStream;
  *
  * @author bolinfest@google.com (Michael Bolin)
  */
+@GwtIncompatible("Unnecessary")
 public class CommandLineRunner extends
     AbstractCommandLineRunner<Compiler, CompilerOptions> {
 
@@ -312,7 +315,7 @@ public class CommandLineRunner extends
         hidden = true,
         handler = WarningGuardErrorOptionHandler.class,
         usage = "Make the named class of warnings an error. Options:" +
-        DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES)
+        DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES + ". '*' adds all supported.")
     private List<String> jscompError = new ArrayList<>();
 
     // Used to define the flag, values are stored by the handler.
@@ -321,7 +324,8 @@ public class CommandLineRunner extends
         hidden = true,
         handler = WarningGuardWarningOptionHandler.class,
         usage = "Make the named class of warnings a normal warning. " +
-        "Options:" + DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES)
+        "Options:" + DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES +
+        ". '*' adds all supported.")
     private List<String> jscompWarning = new ArrayList<>();
 
     // Used to define the flag, values are stored by the handler.
@@ -330,7 +334,7 @@ public class CommandLineRunner extends
         hidden = true,
         handler = WarningGuardOffOptionHandler.class,
         usage = "Turn off the named class of warnings. Options:" +
-        DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES)
+        DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES + ". '*' adds all supported.")
     private List<String> jscompOff = new ArrayList<>();
 
     @Option(name = "--define",
@@ -412,16 +416,20 @@ public class CommandLineRunner extends
         usage = "Process CommonJS modules to a concatenable form.")
     private boolean processCommonJsModules = false;
 
-    @Option(name = "--transpile_only",
-        hidden = true,
-        usage = "Run ES6 to ES3 transpilation only, skip other passes.")
-    private boolean transpileOnly = false;
+    @Option(
+      name = "--common_js_module_path_prefix",
+      hidden = true,
+      usage = "Path prefix to be removed from CommonJS module names."
+    )
+    private List<String> commonJsPathPrefix =
+        ImmutableList.of(ES6ModuleLoader.DEFAULT_FILENAME_PREFIX);
 
-    @Option(name = "--common_js_module_path_prefix",
-        hidden = true,
-        usage = "Path prefix to be removed from CommonJS module names.")
-    private String commonJsPathPrefix =
-        ProcessCommonJSModules.DEFAULT_FILENAME_PREFIX;
+    @Option(
+      name = "--js_module_root",
+      hidden = true,
+      usage = "Path prefixes to be removed from ES6 & CommonJS modules."
+    )
+    private List<String> moduleRoot = ImmutableList.of(ES6ModuleLoader.DEFAULT_FILENAME_PREFIX);
 
     @Option(name = "--common_js_entry_module",
         hidden = true,
@@ -507,11 +515,6 @@ public class CommandLineRunner extends
         usage = "Prints out a JSON file of dependencies between modules.")
     private String outputModuleDependencies = "";
 
-    @Option(name = "--accept_const_keyword",
-        hidden = true,
-        usage = "Allows usage of const keyword.")
-    private boolean acceptConstKeyword = false;
-
     // TODO(tbreisacher): Remove the "(experimental)" for ES6 when it's stable enough.
     @Option(name = "--language_in",
         hidden = true,
@@ -528,14 +531,6 @@ public class CommandLineRunner extends
         + "Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT, "
         + "ECMASCRIPT6_TYPED (experimental)")
     private String languageOut = "";
-
-    @Option(name = "--allow_es6_out",
-        hidden = true,
-        usage = "Experimental: Allows ES6 language_out, for compiling "
-        + "ES6 to ES6 as well as transpiling to ES6 from lower versions. "
-        + "Enabling this flag may cause the compiler to crash or produce "
-        + "incorrect output.")
-    private boolean allowEs6Out = false;
 
     @Option(name = "--version",
         hidden = true,
@@ -1020,8 +1015,8 @@ public class CommandLineRunner extends
       if (flags.commonJsEntryModule == null) {
         reportError("Please specify --common_js_entry_module.");
       }
-      flags.closureEntryPoint = ImmutableList.of(
-          ProcessCommonJSModules.toModuleName(flags.commonJsEntryModule));
+      flags.closureEntryPoint =
+          ImmutableList.of(ES6ModuleLoader.toModuleName(URI.create(flags.commonJsEntryModule)));
     }
 
     if (flags.outputWrapperFile != null && !flags.outputWrapperFile.isEmpty()) {
@@ -1062,6 +1057,10 @@ public class CommandLineRunner extends
         conv = new ClosureCodingConvention();
       }
 
+      // For backwards compatibility, allow both commonJsPathPrefix and jsModuleRoot.
+      List<String> moduleRoots = new ArrayList<>(flags.commonJsPathPrefix);
+      moduleRoots.addAll(flags.moduleRoot);
+
       getCommandLineConfig()
           .setPrintTree(flags.printTree)
           .setPrintAst(flags.printAst)
@@ -1092,12 +1091,10 @@ public class CommandLineRunner extends
           .setClosureEntryPoints(flags.closureEntryPoint)
           .setOutputManifest(ImmutableList.of(flags.outputManifest))
           .setOutputModuleDependencies(flags.outputModuleDependencies)
-          .setAcceptConstKeyword(flags.acceptConstKeyword)
           .setLanguageIn(flags.languageIn)
           .setLanguageOut(flags.languageOut)
           .setProcessCommonJSModules(flags.processCommonJsModules)
-          .setTranspileOnly(flags.transpileOnly)
-          .setCommonJSModulePathPrefix(flags.commonJsPathPrefix)
+          .setModuleRoots(moduleRoots)
           .setTransformAMDToCJSModules(flags.transformAmdModules)
           .setWarningsWhitelistFile(flags.warningsWhitelistFile)
           .setAngularPass(flags.angularPass)
@@ -1122,7 +1119,6 @@ public class CommandLineRunner extends
       options.setCodingConvention(new ClosureCodingConvention());
     }
 
-    options.setAllowEs6Out(flags.allowEs6Out);
     options.setExtraAnnotationNames(flags.extraAnnotationName);
 
     CompilationLevel level = flags.compilationLevelParsed;

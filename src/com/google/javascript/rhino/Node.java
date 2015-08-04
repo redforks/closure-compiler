@@ -58,7 +58,7 @@ import java.util.Set;
  *
  */
 
-public class Node implements Cloneable, Serializable {
+public class Node implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
@@ -132,9 +132,12 @@ public class Node implements Cloneable, Serializable {
                                   //
       TYPE_BEFORE_CAST = 79,      // The type of an expression before the cast.
                                   // This will be present only if the expression is casted.
-      OPT_PARAM_ES6_TYPED = 80,   // The node is an optional parameter in ES6 Typed syntax.
+      OPT_ES6_TYPED = 80,         // The node is an optional parameter or property
+                                  // in ES6 Typed syntax.
       GENERIC_TYPE_LIST = 81,     // Generic type list in ES6 typed syntax.
-      IMPLEMENTS = 82;            // "implements" clause in ES6 typed syntax.
+      IMPLEMENTS = 82,            // "implements" clause in ES6 typed syntax.
+      CONSTRUCT_SIGNATURE = 83,   // This node is a TypeScript ConstructSignature
+      ACCESS_MODIFIER = 84;       // TypeScript accessibility modifiers (public, protected, private)
 
   public static final int   // flags for INCRDECR_PROP
       DECR_FLAG = 0x1,
@@ -186,9 +189,11 @@ public class Node implements Cloneable, Serializable {
         case CONSTANT_PROPERTY_DEF: return "constant_property_def";
         case DECLARED_TYPE_EXPR: return "declared_type_expr";
         case TYPE_BEFORE_CAST: return "type_before_cast";
-        case OPT_PARAM_ES6_TYPED: return "opt_param_es6_typed";
+        case OPT_ES6_TYPED:    return "opt_es6_typed";
         case GENERIC_TYPE_LIST:       return "generic_type";
         case IMPLEMENTS:       return "implements";
+        case CONSTRUCT_SIGNATURE: return "construct_signature";
+        case ACCESS_MODIFIER: return "access_modifier";
         default:
           throw new IllegalStateException("unexpected prop id " + propType);
       }
@@ -200,6 +205,12 @@ public class Node implements Cloneable, Serializable {
   public static class TypeDeclarationNode extends Node {
 
     private static final long serialVersionUID = 1L;
+    private String str; // This is used for specialized signatures.
+
+    public TypeDeclarationNode(int nodeType, String str) {
+      super(nodeType);
+      this.str = str;
+    }
 
     public TypeDeclarationNode(int nodeType) {
       super(nodeType);
@@ -215,6 +226,20 @@ public class Node implements Cloneable, Serializable {
 
     public TypeDeclarationNode(int nodeType, Node left, Node mid, Node right) {
       super(nodeType, left, mid, right);
+    }
+
+    /**
+     * returns the string content.
+     * @return non null.
+     */
+    @Override
+    public String getString() {
+      return str;
+    }
+
+    @Override
+    public TypeDeclarationNode cloneNode() {
+      return copyNodeFields(new TypeDeclarationNode(type, str));
     }
   }
 
@@ -258,6 +283,11 @@ public class Node implements Cloneable, Serializable {
     }
 
     private double number;
+
+    @Override
+    public NumberNode cloneNode() {
+      return copyNodeFields(new NumberNode(number));
+    }
   }
 
   private static class StringNode extends Node {
@@ -328,6 +358,11 @@ public class Node implements Cloneable, Serializable {
     }
 
     private String str;
+
+    @Override
+    public StringNode cloneNode() {
+      return copyNodeFields(new StringNode(type, str));
+    }
   }
 
   // PropListItems must be immutable so that they can be shared.
@@ -942,10 +977,10 @@ public class Node implements Cloneable, Serializable {
   }
 
   /**
-   * TODO(alexeagle): this should take a TypeDeclarationNode
+   * Sets the syntactical type specified on this node.
    * @param typeExpression
    */
-  public void setDeclaredTypeExpression(Node typeExpression) {
+  public void setDeclaredTypeExpression(TypeDeclarationNode typeExpression) {
     putProp(DECLARED_TYPE_EXPR, typeExpression);
   }
 
@@ -1423,6 +1458,10 @@ public class Node implements Cloneable, Serializable {
 
   PropListItem getPropListHeadForTesting() {
     return propListHead;
+  }
+
+  void setPropListHead(PropListItem propListHead) {
+    this.propListHead = propListHead;
   }
 
   public Node getParent() {
@@ -1920,19 +1959,14 @@ public class Node implements Cloneable, Serializable {
    * @return A detached clone of the Node, specifically excluding its children.
    */
   public Node cloneNode() {
-    Node result;
-    try {
-      result = (Node) super.clone();
-      // PropListItem lists are immutable and can be shared so there is no
-      // need to clone them here.
-      result.next = null;
-      result.first = null;
-      result.last = null;
-      result.parent = null;
-    } catch (CloneNotSupportedException e) {
-      throw new RuntimeException(e.getMessage());
-    }
-    return result;
+    return copyNodeFields(new Node(type));
+  }
+
+  <T extends Node> T copyNodeFields(T dst) {
+    dst.setSourceEncodedPosition(this.sourcePosition);
+    dst.setTypeI(this.typei);
+    dst.setPropListHead(this.propListHead);
+    return dst;
   }
 
   /**
@@ -2679,6 +2713,14 @@ public class Node implements Cloneable, Serializable {
 
   public boolean isInterfaceMembers() {
     return this.getType() == Token.INTERFACE_MEMBERS;
+  }
+
+  public boolean isRecordType() {
+    return this.getType() == Token.RECORD_TYPE;
+  }
+
+  public boolean isIndexSignature() {
+    return this.getType() == Token.INDEX_SIGNATURE;
   }
 
   public boolean isLabel() {

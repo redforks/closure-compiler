@@ -798,6 +798,10 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
       // time and specifically not properties only defined on subtypes.
       return type.hasProperty(propertyName);
     } else {
+      if (!type.isEmptyType() && !type.isUnknownType()
+          && type.hasProperty(propertyName)) {
+        return true;
+      }
       if (typesIndexedByProperty.containsKey(propertyName)) {
         for (JSType alt :
                  typesIndexedByProperty.get(propertyName).getAlternates()) {
@@ -1694,6 +1698,9 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
               // TODO(dimvar): Address this issue by removing bad template
               // annotations on non-templatized classes.
               if (++templateNodeIndex > nAllowedTypes) {
+                reporter.warning(
+                    "Too many template parameters",
+                    sourceName, templateNode.getLineno(), templateNode.getCharno());
                 break;
               }
               templateTypes.add(createFromTypeNodesInternal(

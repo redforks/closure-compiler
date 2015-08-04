@@ -23,6 +23,7 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   protected void setUp() throws Exception {
     super.setUp();
     setAcceptedLanguage(LanguageMode.ECMASCRIPT6_TYPED);
+    enableCompareAsTree(true);
   }
 
   @Override
@@ -46,21 +47,30 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   }
 
   public void testMemberVariable() {
-    test(
+    test(LINE_JOINER.join(
+        "class C {",
+        "  mv: number;",
+        "  constructor() {",
+        "    this.f = 1;",
+        "  }",
+        "}"),
         LINE_JOINER.join(
-            "class C {",
-            "  mv: number;",
-            "  constructor() {",
-            "    this.f = 1;",
-            "  }",
-            "}"),
+        "class C {",
+        "  constructor() {",
+        "    this.f = 1;",
+        "  }",
+        "}",
+        "/** @type {number} */ C.prototype.mv;"));
+
+    test(LINE_JOINER.join(
+        "class C {",
+        "  on: {",
+        "    p: string;",
+        "  }",
+        "}"),
         LINE_JOINER.join(
-            "class C {",
-            "  constructor() {",
-            "    this.f = 1;",
-            "  }",
-            "}",
-            "/** @type {number} */ C.prototype.mv;"));
+        "class C {}",
+        "/** @type {{p: string}} */ C.prototype.on;"));
   }
 
   public void testMemberVariable_noCtor() {
@@ -151,6 +161,7 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
 
   public void testArrayType() {
     test("var x: string[];", "var /** !Array.<string> */ x;");
+    test("var x: string[][];", "var /** !Array.<!Array.<string>> */ x;");
     test("var x: test.Type[];", "var /** !Array.<!test.Type> */ x;");
   }
 
@@ -159,6 +170,15 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
     test("var x: {p: string, q: number};", "var /** {p: string, q: number} */ x;");
     test("var x: {p: string; q: {p: string; q: number}};",
          "var /** {p: string, q: {p: string, q: number}}*/ x;");
+
+    test(LINE_JOINER.join(
+        "var x: {",
+        "  p: string;",
+        "};"),
+        "var /** {p: string} */ x;");
+
+    testError("var x: {constructor(); q: number};",
+        Es6TypedToEs6Converter.UNSUPPORTED_RECORD_TYPE);
   }
 
   public void testParameterizedType() {
@@ -233,13 +253,42 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   }
 
   public void testAmbientDeclaration() {
-    test("declare var x;", "/** @suppress {duplicate} */ var x;");
-    test("declare let x;", "/** @suppress {duplicate} */ var x;");
-    test("declare const x;", "/** @suppress {duplicate} @const */ var x;");
-    test("declare function f();", "/** @suppress {duplicate} */ function f() {}");
-    test("declare enum Foo {}", "/** @suppress {duplicate} @enum {number} */ var Foo = {}");
-    test("declare class C { constructor(); };",
-         "/** @suppress {duplicate} */ class C { constructor() {} }");
+    enableCompareAsTree(false);
+    testExternChanges(
+        "declare var x: number;",
+        "/** @suppress {duplicate} */ var /** number */ x;");
+    testExternChanges("declare let x;", "var x;");
+    testExternChanges("declare const x;", "/** @const */ var x;");
+    testExternChanges("declare function f(): number;", "/** @return {number} */ function f() {}");
+    testExternChanges(
+        "declare enum Foo {}",
+        "/** @suppress {duplicate} @enum {number} */ var Foo = {}");
+    testExternChanges("declare class C { constructor(); };", "class C { constructor() {} }");
+  }
 
+  public void testIndexSignature() {
+    test("interface I { [foo: string]: Bar<Baz>; }",
+         "/** @interface @extends {IObject<string, !Bar<!Baz>>} */ class I {}");
+    test("interface I extends J { [foo: string]: Bar<Baz>; }",
+        "/** @interface @extends {J} @extends {IObject<string, !Bar<!Baz>>} */ class I {}");
+    test("class C implements D { [foo: string]: number; }",
+        "/** @implements {D} @implements {IObject<string, number>} */ class C {}");
+
+    testError("var x: { [foo: string]: number; };",
+        Es6TypedToEs6Converter.UNSUPPORTED_RECORD_TYPE);
+  }
+
+  public void testAccessibilityModifier() {
+    test("class Foo { private constructor() {} }",
+         "class Foo { /** @private */ constructor() {} }");
+    test("class Foo { protected bar() {} }", "class Foo { /** @protected */ bar() {} }");
+    test("class Foo { protected static bar: number; }",
+         "class Foo {} /** @protected @type {number} */ Foo.bar;");
+    test("class Foo { private get() {} }", "class Foo { /** @private */ get() {} }");
+    test("class Foo { public set() {} }", "class Foo { /** @public */ set() {} }");
+    testError("class Foo { private ['foo']() {} }",
+        Es6TypedToEs6Converter.COMPUTED_PROP_ACCESS_MODIFIER);
+    testError("class Foo { private ['foo']; }",
+        Es6TypedToEs6Converter.COMPUTED_PROP_ACCESS_MODIFIER);
   }
 }

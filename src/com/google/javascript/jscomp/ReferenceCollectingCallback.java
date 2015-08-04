@@ -647,7 +647,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
     private static boolean isDeclarationHelper(Node node) {
       Node parent = node.getParent();
 
-      // Special case for class B extends A, A is not a redeclaration.
+      // Special case for class B extends A, A is not a declaration.
       if (parent.isClass() && node != parent.getFirstChild()) {
         return false;
       }
@@ -672,6 +672,11 @@ class ReferenceCollectingCallback implements ScopedCallback,
         return isDeclarationHelper(parent);
       }
 
+      // Special case for arrow function
+      if (parent.isArrowFunction()) {
+        return node == parent.getFirstChild();
+      }
+
       return DECLARATION_PARENTS.contains(parent.getType());
     }
 
@@ -687,6 +692,10 @@ class ReferenceCollectingCallback implements ScopedCallback,
       return getParent().isConst();
     }
 
+    boolean isClassDeclaration() {
+      return getParent().isClass() && getNode() == getParent().getFirstChild();
+    }
+
     boolean isHoistedFunction() {
       return NodeUtil.isHoistedFunctionDeclaration(getParent());
     }
@@ -695,11 +704,10 @@ class ReferenceCollectingCallback implements ScopedCallback,
      * Determines whether the variable is initialized at the declaration.
      */
     boolean isInitializingDeclaration() {
-      // VAR is the only type of variable declaration that may not initialize
-      // its variable. Catch blocks, named functions, and parameters all do.
-      return isDeclaration() &&
-          !getParent().isVar() ||
-          nameNode.getFirstChild() != null;
+      // VAR and LET are the only types of variable declarations that may not initialize
+      // their variables. Catch blocks, named functions, and parameters all do.
+      return (isDeclaration() && !getParent().isVar() && !getParent().isLet())
+        || nameNode.getFirstChild() != null;
     }
 
    /**
@@ -725,12 +733,12 @@ class ReferenceCollectingCallback implements ScopedCallback,
       return parent == null ? null : parent.getParent();
     }
 
-    private static boolean isLhsOfForInExpression(Node n) {
+    private static boolean isLhsOfEnhancedForExpression(Node n) {
       Node parent = n.getParent();
-      if (parent.isVar()) {
-        return isLhsOfForInExpression(parent);
+      if (NodeUtil.isNameDeclaration(parent)) {
+        return isLhsOfEnhancedForExpression(parent);
       }
-      return NodeUtil.isForIn(parent) && parent.getFirstChild() == n;
+      return NodeUtil.isEnhancedFor(parent) && parent.getFirstChild() == n;
     }
 
     boolean isSimpleAssignmentToName() {
@@ -747,9 +755,9 @@ class ReferenceCollectingCallback implements ScopedCallback,
           || (parentType == Token.CONST && nameNode.getFirstChild() != null)
           || parentType == Token.INC
           || parentType == Token.DEC
-          || (NodeUtil.isAssignmentOp(parent)
-              && parent.getFirstChild() == nameNode)
-          || isLhsOfForInExpression(nameNode);
+          || parentType == Token.CATCH
+          || (NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == nameNode)
+          || isLhsOfEnhancedForExpression(nameNode);
     }
 
     Scope getScope() {

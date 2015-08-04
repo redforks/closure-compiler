@@ -18,8 +18,10 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
+import com.google.javascript.jscomp.lint.CheckForInOverArray;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
@@ -28,6 +30,7 @@ import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Named groups of DiagnosticTypes exposed by Compiler.
@@ -36,6 +39,9 @@ import java.util.Map;
 public class DiagnosticGroups {
   static final DiagnosticType UNUSED =
       DiagnosticType.warning("JSC_UNUSED", "{0}");
+
+  public static final Set<String> wildcardExcludedGroups =
+      ImmutableSet.of("reportUnknownTypes");
 
   public DiagnosticGroups() {}
 
@@ -267,6 +273,7 @@ public class DiagnosticGroups {
           NewTypeInference.FORIN_EXPECTS_STRING_KEY,
 //           NewTypeInference.GOOG_BIND_EXPECTS_FUNCTION,
 //           NewTypeInference.INVALID_ARGUMENT_TYPE,
+//           NewTypeInference.INVALID_CAST,
           NewTypeInference.INVALID_INFERRED_RETURN_TYPE,
 //           NewTypeInference.INVALID_OBJLIT_PROPERTY_TYPE,
 //           NewTypeInference.INVALID_OPERAND_TYPE,
@@ -289,7 +296,6 @@ public class DiagnosticGroups {
           TypeCheck.NOT_CALLABLE,
 //           TypeCheck.WRONG_ARGUMENT_COUNT,
 //           TypeValidator.ILLEGAL_PROPERTY_ACCESS,
-//           TypeValidator.INVALID_CAST,
           TypeValidator.UNKNOWN_TYPEOF_VALUE);
   }
 
@@ -426,14 +432,16 @@ public class DiagnosticGroups {
           CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
           CheckJSDocStyle.MISSING_PARAM_JSDOC,
           CheckJSDocStyle.MUST_BE_PRIVATE,
-          CheckJSDocStyle.OPTIONAL_NAME_NOT_MARKED_OPTIONAL,
+          CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL,
           CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
+          CheckForInOverArray.FOR_IN_OVER_ARRAY,
           CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
           ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC,
           RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
-          TypeCheck.NON_STRINGIFIABLE_OBJECT_KEY);
+          RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,
+          RhinoErrorReporter.TOO_MANY_TEMPLATE_PARAMS);
 
   public static final DiagnosticGroup USE_OF_GOOG_BASE =
       DiagnosticGroups.registerGroup("useOfGoogBase",
@@ -464,6 +472,9 @@ public class DiagnosticGroups {
     // For internal use only, so there is no constant for it.
     DiagnosticGroups.registerGroup("invalidProvide",
         ProcessClosurePrimitives.INVALID_PROVIDE_ERROR);
+
+    DiagnosticGroups.registerGroup("es6Typed",
+        RhinoErrorReporter.MISPLACED_TYPE_SYNTAX);
   }
 
   /**

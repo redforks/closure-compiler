@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.javascript.jscomp.parsing.parser.util.format.SimpleFormat;
 import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.ObjectTypeI;
 import com.google.javascript.rhino.TypeI;
@@ -252,6 +253,10 @@ public abstract class JSType implements TypeI {
   @Override
   public boolean isBottom() {
     return BOTTOM_MASK == getMask();
+  }
+
+  public boolean isUndefined() {
+    return UNDEFINED_MASK == getMask();
   }
 
   public boolean isUnknown() {
@@ -763,6 +768,10 @@ public abstract class JSType implements TypeI {
     return makeType(newMask, newObjs, newTypevar, enumBuilder.build());
   }
 
+  public static boolean haveCommonSubtype(JSType lhs, JSType rhs) {
+    return lhs.isBottom() || rhs.isBottom() || !meet(lhs, rhs).isBottom();
+  }
+
   private JSType makeTruthy() {
     if (this.isTop() || this.isUnknown()) {
       return this;
@@ -895,7 +904,7 @@ public abstract class JSType implements TypeI {
     return fromObjectType(ot.withFunction(ft, fnNominal));
   }
 
-  private ObjectType getObjTypeIfSingletonObj() {
+  public ObjectType getObjTypeIfSingletonObj() {
     if (getMask() != NON_SCALAR_MASK || getObjs().size() > 1) {
       return null;
     }
@@ -908,14 +917,13 @@ public abstract class JSType implements TypeI {
   }
 
   public FunctionType getFunType() {
-    if (getObjs().size() <= 1) { // The common case is fast
-      return getFunTypeIfSingletonObj();
-    }
-    FunctionType result = FunctionType.TOP_FUNCTION;
     for (ObjectType obj : getObjs()) {
-      result = FunctionType.meet(result, obj.getFunType());
+      FunctionType ft = obj.getFunType();
+      if (ft != null) {
+        return ft;
+      }
     }
-    return result;
+    return null;
   }
 
   public NominalType getNominalTypeIfSingletonObj() {
@@ -1201,7 +1209,7 @@ final class UnionType extends JSType {
     this.mask = mask;
 
     if (!isValidType()) {
-      throw new IllegalStateException(String.format(
+      throw new IllegalStateException(SimpleFormat.format(
           "Cannot create type with bits <<<%x>>>, "
           + "objs <<<%s>>>, typeVar <<<%s>>>, enums <<<%s>>>",
           mask, objs, typeVar, enums));
