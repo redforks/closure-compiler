@@ -85,7 +85,7 @@ public class NodeTraversal {
 
   /** Callback for passes that iterate over a list of functions */
   public interface FunctionCallback {
-    void visit(AbstractCompiler compiler, Node fnRoot);
+    void enterFunction(AbstractCompiler compiler, Node fnRoot);
   }
 
   /**
@@ -529,7 +529,7 @@ public class NodeTraversal {
         @Override
         public final boolean shouldTraverse(NodeTraversal t, Node n, Node p) {
           if ((n == jsRoot || n.isFunction()) && comp.hasScopeChanged(n)) {
-            cb.visit(comp, n);
+            cb.enterFunction(comp, n);
           }
           return true;
         }
@@ -542,6 +542,15 @@ public class NodeTraversal {
    */
   public static void traverse(AbstractCompiler compiler, Node root, Callback cb) {
     NodeTraversal t = new NodeTraversal(compiler, cb);
+    t.traverse(root);
+  }
+
+  /**
+   * Traverses using the ES6SyntacticScopeCreator
+   */
+  // TODO (stephshi): rename to "traverse" when the old traverse method is no longer used
+  public static void traverseEs6(AbstractCompiler compiler, Node root, Callback cb) {
+    NodeTraversal t = new NodeTraversal(compiler, cb, new Es6SyntacticScopeCreator(compiler));
     t.traverse(root);
   }
 

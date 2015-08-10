@@ -30,7 +30,6 @@ import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.ObjectType;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -123,8 +122,8 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testTypeCheck6() throws Exception {
     testTypes(
-        "/**@return {void}*/function foo(){" +
-        "/** @type {undefined|number} */var a;if (a == foo())return;}");
+        "/**@return {void}*/function foo(){"
+        + "/** @type {undefined|number} */var a;if (a == foo())return;}");
   }
 
   public void testTypeCheck8() throws Exception {
@@ -140,12 +139,12 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testTypeCheck11() throws Exception {
-    testTypes("/**@type {!Number} */var a;" +
-        "/**@type {!String} */var b;" +
-        "a = b;",
-        "assignment\n" +
-        "found   : String\n" +
-        "required: Number");
+    testTypes("/**@type {!Number} */var a;"
+        + "/**@type {!String} */var b;"
+        + "a = b;",
+        "assignment\n"
+        + "found   : String\n"
+        + "required: Number");
   }
 
   public void testTypeCheck12() throws Exception {
@@ -10183,15 +10182,31 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testInterfaceExtendsLoop() throws Exception {
-    // TODO(nicksantos): This should emit a warning. This test is still
-    // useful to ensure the compiler doesn't crash.
     testClosureTypesMultipleWarnings(
         suppressMissingProperty("foo") +
             "/** @interface \n * @extends {F} */var G = function() {};" +
             "/** @interface \n * @extends {G} */var F = function() {};" +
             "/** @constructor \n * @implements {F} */var H = function() {};" +
         "alert((new H).foo);",
-        new ArrayList<String>());
+        ImmutableList.of(
+            "extends loop involving F, "
+            + "loop: F -> G -> F",
+            "extends loop involving G, "
+            + "loop: G -> F -> G"));
+  }
+
+  public void testInterfaceExtendsLoop2() throws Exception {
+    testClosureTypesMultipleWarnings(
+        suppressMissingProperty("foo") +
+            "/** @record \n * @extends {F} */var G = function() {};" +
+            "/** @record \n * @extends {G} */var F = function() {};" +
+            "/** @constructor \n * @implements {F} */var H = function() {};" +
+        "alert((new H).foo);",
+        ImmutableList.of(
+            "extends loop involving F, "
+            + "loop: F -> G -> F",
+            "extends loop involving G, "
+            + "loop: G -> F -> G"));
   }
 
   public void testConversionFromInterfaceToRecursiveConstructor()
@@ -16015,6 +16030,233 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "assignment",
             "found   : {prop1: (A|null|undefined)}",
             "required: {prop1: (A|null)}"));
+  }
+
+  public void testDuplicateVariableDefinition1() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "/**",
+            " * @record",
+            " */",
+            "function A() {}",
+            "/** @type {number} */",
+            "A.prototype.prop;",
+            "/**",
+            " * @record",
+            " */",
+            "function B() {}",
+            "/** @type {number} */",
+            "B.prototype.prop;",
+            "/**",
+            " * @constructor",
+            " */",
+            "function C() {}",
+            "/** @type {number} */",
+            "C.prototype.prop;",
+            "/** @return {(A|B|C)} */",
+            "function fun () {}",
+            "/** @return {(B|A|C)} */",
+            "function fun () {}"),
+        "",
+        "variable fun redefined, original definition at [externs]:87");
+  }
+
+  public void testDuplicateVariableDefinition3() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {};",
+            "/** @type {{x:number}} @suppress {duplicate} */ ns.x;",
+            "/** @type {{x:number}} @suppress {duplicate} */ ns.x;"),
+        "");
+  }
+
+  public void testDuplicateVariableDefinition3_1() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {};",
+            "/** @type {{x:number}} @suppress {duplicate} */ ns.x;",
+            "/** @type {{x:string}} @suppress {duplicate} */ ns.x;"),
+        "",
+        "variable ns.x redefined with type {x: string}, original definition "
+        + "at [externs]:69 with type {x: number}");
+  }
+
+  public void testDuplicateVariableDefinition3_2() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {};",
+            "/** @type {{x:number}} @suppress {duplicate} */ ns.x;",
+            "/** @type {{x:number, y:boolean}} @suppress {duplicate} */ ns.x;"),
+        "",
+        "variable ns.x redefined with type {x: number, y: boolean}, "
+        + "original definition at [externs]:69 with type {x: number}");
+  }
+
+  public void testDuplicateVariableDefinition4() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {};",
+            "/** @record */ var rec3;",
+            "/** @record */ var rec4;",
+            "/** @type {!rec3} @suppress {duplicate} */ ns.x;",
+            "/** @type {!rec4} @suppress {duplicate} */ ns.x;"),
+        "");
+  }
+
+  public void testDuplicateVariableDefinition5() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {};",
+            "/** @record */ var rec3;",
+            "/** @record */ var rec4;",
+            "/** @type {number} */ rec4.prototype.prop;",
+            "/** @type {!rec3} @suppress {duplicate} */ ns.x;",
+            "/** @type {!rec4} @suppress {duplicate} */ ns.x;"),
+        "",
+        "variable ns.x redefined with type rec4, original definition at "
+        + "[externs]:72 with type rec3");
+  }
+
+  public void testDuplicateVariableDefinition6() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {};",
+            "/** @record */ var rec3;",
+            "/** @type {number} */ rec3.prototype.prop;",
+            "/** @record */ var rec4;",
+            "/** @type {!rec3} @suppress {duplicate} */ ns.x;",
+            "/** @type {!rec4} @suppress {duplicate} */ ns.x;"),
+        "",
+        "variable ns.x redefined with type rec4, original definition at "
+        + "[externs]:72 with type rec3");
+  }
+
+  /**
+   * check bug fix 22713201 (the first case)
+   */
+  public void testDuplicateVariableDefinition7() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "/** @typedef {{prop:TD2}} */",
+            "  var TD1;",
+            "",
+            "  /** @typedef {{prop:TD1}} */",
+            "  var TD2;",
+            "",
+            "  var /** TD1 */ td1;",
+            "  var /** TD2 */ td2;",
+            "",
+            "  td1 = td2;"),
+        "");
+  }
+
+  public void testDuplicateVariableDefinition8() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {}",
+            "/** @record */ var rec;",
+            "/** @type {number} */ rec.prototype.prop;",
+            "",
+            "/** @type {!rec} @suppress {duplicate} */ ns.x;",
+            "/** @type {{prop:number}} @suppress {duplicate} */ ns.x;",
+            "",
+            "/** @type {{prop:number}} @suppress {duplicate} */ ns.y;",
+            "/** @type {!rec} @suppress {duplicate} */ ns.y;"),
+        "");
+  }
+
+  public void testDuplicateVariableDefinition8_2() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {}",
+            "/** @record */ var rec;",
+            "/** @type {number} */ rec.prototype.prop;",
+            "",
+            "/** @type {!rec} @suppress {duplicate} */ ns.x;",
+            "/** @type {{prop:string}} @suppress {duplicate} */ ns.x;",
+            "",
+            "/** @type {{prop:number}} @suppress {duplicate} */ ns.y;",
+            "/** @type {!rec} @suppress {duplicate} */ ns.y;"),
+        "",
+        "variable ns.x redefined with type {prop: string}, original "
+        + "definition at [externs]:72 with type rec");
+  }
+
+  public void testDuplicateVariableDefinition8_3() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "var ns = {}",
+            "/** @record */ var rec;",
+            "/** @type {string} */ rec.prototype.prop;",
+            "",
+            "/** @type {!rec} @suppress {duplicate} */ ns.x;",
+            "/** @type {{prop:string}} @suppress {duplicate} */ ns.x;",
+            "",
+            "/** @type {{prop:number}} @suppress {duplicate} */ ns.y;",
+            "/** @type {!rec} @suppress {duplicate} */ ns.y;"),
+        "",
+        "variable ns.y redefined with type rec, original definition at "
+        + "[externs]:75 with type {prop: number}");
+  }
+
+  public void testDuplicateVariableDefinition8_4() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "/** @record @template T */ function I() {}",
+            "/** @type {T} */ I.prototype.prop;",
+            "var ns = {}",
+            "/** @record */ var rec;",
+            "/** @type {I} */ rec.prototype.prop;",
+            "",
+            "/** @type {!rec} @suppress {duplicate} */ ns.x;",
+            "/** @type {{prop:I}} @suppress {duplicate} */ ns.x;"),
+        "");
+  }
+
+  public void testDuplicateVariableDefinition8_5() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "/** @record @template T */ function I() {}",
+            "/** @type {T} */ I.prototype.prop;",
+            "var ns = {}",
+            "/** @record */ var rec;",
+            "/** @type {I<number>} */ rec.prototype.prop;",
+            "",
+            "/** @type {!rec} @suppress {duplicate} */ ns.x;",
+            "/** @type {{prop:I<number>}} @suppress {duplicate} */ ns.x;"),
+        "");
+  }
+
+  public void testDuplicateVariableDefinition8_6() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "/** @record @template T */ function I() {}",
+            "/** @type {T} */ I.prototype.prop;",
+            "var ns = {}",
+            "/** @record */ var rec;",
+            "/** @type {I<number>} */ rec.prototype.prop;",
+            "",
+            "/** @type {!rec} @suppress {duplicate} */ ns.x;",
+            "/** @type {{prop:I<string>}} @suppress {duplicate} */ ns.x;"),
+        "",
+        "variable ns.x redefined with type {prop: (I<string>|null)}, "
+        + "original definition at [externs]:74 with type rec");
+  }
+
+  // should have no warning, need to handle equivalence checking for
+  // structural types with template types
+  public void testDuplicateVariableDefinition8_7() throws Exception {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+            "/** @record @template T */",
+            "function rec(){}",
+            "/** @type {T} */ rec.prototype.value;",
+            "",
+            "/** @type {rec<string>} @suppress {duplicate} */ ns.x;",
+            "/** @type {{value: string}} @suppress {duplicate} */ ns.x;"),
+        "",
+        "variable ns.x redefined with type {value: string}, "
+        + "original definition at [externs]:72 with type (null|rec<string>)");
   }
 
   private void testTypes(String js) throws Exception {

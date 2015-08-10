@@ -110,19 +110,17 @@ final class ObjectType implements TypeWithProperties {
     return ObjectType.makeObjectType(cl, null, null, false, cl.getObjectKind());
   }
 
-  /** Construct an object with the given declared non-optional properties. */
-  static ObjectType fromProperties(Map<String, JSType> propTypes) {
-    PersistentMap<String, Property> props = PersistentMap.create();
-    for (Map.Entry<String, JSType> propTypeEntry : propTypes.entrySet()) {
-      String propName = propTypeEntry.getKey();
-      JSType propType = propTypeEntry.getValue();
-      if (propType.isBottom()) {
+  /** Construct an object with the given declared properties. */
+  static ObjectType fromProperties(Map<String, Property> oldProps) {
+    PersistentMap<String, Property> newProps = PersistentMap.create();
+    for (Map.Entry<String, Property> entry : oldProps.entrySet()) {
+      Property prop = entry.getValue();
+      if (prop.getDeclaredType().isBottom()) {
         return BOTTOM_OBJECT;
       }
-      props = props.with(propName, Property.make(propType, propType));
+      newProps = newProps.with(entry.getKey(), prop);
     }
-    return new ObjectType(
-        null, props, null, false, ObjectKind.UNRESTRICTED);
+    return new ObjectType(null, newProps, null, false, ObjectKind.UNRESTRICTED);
   }
 
   static void setObjectType(NominalType builtinObject) {
@@ -209,8 +207,7 @@ final class ObjectType implements TypeWithProperties {
       newProps = newProps.with(pname, prop.withRequired());
     }
     // No need to call makeObjectType; we know that the new object is inhabitable.
-    return new ObjectType(
-        nominalType, newProps, fn, true, this.objectKind);
+    return new ObjectType(nominalType, newProps, fn, true, this.objectKind);
   }
 
   ObjectType withFunction(FunctionType ft, NominalType fnNominal) {
@@ -575,39 +572,34 @@ final class ObjectType implements TypeWithProperties {
     if (this == TOP_OBJECT) {
       return other;
     }
-    NominalType resultNominalType =
+    NominalType resultNomType =
         NominalType.pickSubclass(this.nominalType, other.nominalType);
-    if (resultNominalType != null && resultNominalType.isClassy()) {
+    ObjectKind ok = ObjectKind.meet(this.objectKind, other.objectKind);
+    if (resultNomType != null && resultNomType.isClassy()) {
       Preconditions.checkState(this.fn == null && other.fn == null);
       PersistentMap<String, Property> newProps =
-          meetPropsHelper(true, resultNominalType, this.props, other.props);
+          meetPropsHelper(true, resultNomType, this.props, other.props);
       if (newProps == BOTTOM_MAP) {
         return BOTTOM_OBJECT;
       }
-      return new ObjectType(
-          resultNominalType,
-          newProps,
-          null,
-          false,
-          ObjectKind.meet(this.objectKind, other.objectKind));
+      return new ObjectType(resultNomType, newProps, null, false, ok);
     }
     FunctionType thisFn = this.fn;
     boolean isLoose = this.isLoose;
-    if (resultNominalType != null && resultNominalType.isFunction() && this.fn == null) {
+    if (resultNomType != null && resultNomType.isFunction() && this.fn == null) {
       thisFn = other.fn;
       isLoose = other.fn.isLoose();
     }
     PersistentMap<String, Property> newProps =
-        meetPropsHelper(true, resultNominalType, this.props, other.props);
+        meetPropsHelper(true, resultNomType, this.props, other.props);
     if (newProps == BOTTOM_MAP) {
       return BOTTOM_OBJECT;
     }
-    return new ObjectType(
-        resultNominalType,
-        newProps,
-        thisFn == null ? null : thisFn.specialize(other.fn),
-        isLoose,
-        ObjectKind.meet(this.objectKind, other.objectKind));
+    FunctionType newFn = thisFn == null ? null : thisFn.specialize(other.fn);
+    if (!FunctionType.isInhabitable(newFn)) {
+      return BOTTOM_OBJECT;
+    }
+    return new ObjectType(resultNomType, newProps, newFn, isLoose, ok);
   }
 
   static ObjectType meet(ObjectType obj1, ObjectType obj2) {
@@ -617,14 +609,14 @@ final class ObjectType implements TypeWithProperties {
     } else if (obj2 == TOP_OBJECT) {
       return obj1;
     }
-    NominalType resultNominalType =
+    NominalType resultNomType =
         NominalType.pickSubclass(obj1.nominalType, obj2.nominalType);
     FunctionType fn = FunctionType.meet(obj1.fn, obj2.fn);
     if (!FunctionType.isInhabitable(fn)) {
       return BOTTOM_OBJECT;
     }
     boolean isLoose = obj1.isLoose && obj2.isLoose || fn != null && fn.isLoose();
-    if (resultNominalType != null && resultNominalType.isFunction() && fn == null) {
+    if (resultNomType != null && resultNomType.isFunction() && fn == null) {
       fn = obj1.fn == null ? obj2.fn : obj1.fn;
       isLoose = fn.isLoose();
     }
@@ -632,17 +624,13 @@ final class ObjectType implements TypeWithProperties {
     if (isLoose) {
       props = joinPropsLoosely(obj1.props, obj2.props);
     } else {
-      props = meetPropsHelper(false, resultNominalType, obj1.props, obj2.props);
+      props = meetPropsHelper(false, resultNomType, obj1.props, obj2.props);
     }
     if (props == BOTTOM_MAP) {
       return BOTTOM_OBJECT;
     }
-    return new ObjectType(
-        resultNominalType,
-        props,
-        fn,
-        isLoose,
-        ObjectKind.meet(obj1.objectKind, obj2.objectKind));
+    ObjectKind ok = ObjectKind.meet(obj1.objectKind, obj2.objectKind);
+    return new ObjectType(resultNomType, props, fn, isLoose, ok);
   }
 
   static ObjectType join(ObjectType obj1, ObjectType obj2) {

@@ -16,8 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import static java.nio.charset.StandardCharsets.US_ASCII;
-
 import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
@@ -26,8 +24,6 @@ import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -49,7 +45,7 @@ class CodeGenerator {
 
   private final CodeConsumer cc;
 
-  private final CharsetEncoder outputCharsetEncoder;
+  private final OutputCharsetEncoder outputCharsetEncoder;
 
   private final boolean preferSingleQuotes;
   private final boolean preserveTypeAnnotations;
@@ -74,16 +70,7 @@ class CodeGenerator {
       CompilerOptions options) {
     cc = consumer;
 
-    Charset outputCharset = options.getOutputCharset();
-    if (outputCharset == null || outputCharset == US_ASCII) {
-      // If we want our default (pretending to be UTF-8, but escaping anything
-      // outside of straight ASCII), then don't use the encoder, but
-      // just special-case the code.  This keeps the normal path through
-      // the code identical to how it's been for years.
-      this.outputCharsetEncoder = null;
-    } else {
-      this.outputCharsetEncoder = outputCharset.newEncoder();
-    }
+    this.outputCharsetEncoder = new OutputCharsetEncoder(options);
     this.preferSingleQuotes = options.preferSingleQuotes;
     this.trustedStrings = options.trustedStrings;
     this.languageMode = options.getLanguageOut();
@@ -382,14 +369,6 @@ class CodeGenerator {
         cc.endStatement();
         break;
 
-      case Token.MODULE:
-        add("module");
-        add(first);
-        add("from");
-        add(last);
-        cc.endStatement();
-        break;
-
       case Token.IMPORT:
         add("import");
 
@@ -484,6 +463,7 @@ class CodeGenerator {
 
       case Token.CLASS_MEMBERS:
       case Token.INTERFACE_MEMBERS:
+      case Token.MODULE_ELEMENTS:
         cc.beginBlock();
         for (Node c = first; c != null; c = c.getNext()) {
           add(c);
@@ -1166,6 +1146,15 @@ class CodeGenerator {
           add(members);
           break;
         }
+      case Token.MODULE: {
+        Preconditions.checkState(childCount == 2);
+        Node name = first;
+        Node elements = last;
+        add("module");
+        add(name);
+        add(elements);
+        break;
+      }
       case Token.TYPE_ALIAS:
         add("type");
         add(n.getString());
@@ -1690,7 +1679,7 @@ class CodeGenerator {
   }
 
   /** Escapes regular expression */
-  String regexpEscape(String s, CharsetEncoder outputCharsetEncoder) {
+  String regexpEscape(String s, OutputCharsetEncoder outputCharsetEncoder) {
     return strEscape(s, '/', "\"", "'", "\\", outputCharsetEncoder, false, true);
   }
 
@@ -1708,7 +1697,7 @@ class CodeGenerator {
       String doublequoteEscape,
       String singlequoteEscape,
       String backslashEscape,
-      CharsetEncoder outputCharsetEncoder,
+      OutputCharsetEncoder outputCharsetEncoder,
       boolean useSlashV,
       boolean isRegexp) {
     StringBuilder sb = new StringBuilder(s.length() + 2);
@@ -1799,27 +1788,18 @@ class CodeGenerator {
           }
           break;
         default:
-          // If we're given an outputCharsetEncoder, then check if the
-          //  character can be represented in this character set.
-          if (outputCharsetEncoder != null) {
-            if (outputCharsetEncoder.canEncode(c)) {
-              sb.append(c);
-            } else {
-              // Unicode-escape the character.
-              appendHexJavaScriptRepresentation(sb, c);
-            }
+          if (outputCharsetEncoder != null && outputCharsetEncoder.canEncode(c)
+              || c > 0x1f && c < 0x7f) {
+            // If we're given an outputCharsetEncoder, then check if the character can be
+            // represented in this character set. If no charsetEncoder provided - pass straight
+            // Latin characters through, and escape the rest. Doing the explicit character check is
+            // measurably faster than using the CharsetEncoder.
+            sb.append(c);
           } else {
-            // No charsetEncoder provided - pass straight Latin characters
-            // through, and escape the rest.  Doing the explicit character
-            // check is measurably faster than using the CharsetEncoder.
-            if (c > 0x1f && c < 0x7f) {
-              sb.append(c);
-            } else {
-              // Other characters can be misinterpreted by some JS parsers,
-              // or perhaps mangled by proxies along the way,
-              // so we play it safe and Unicode escape them.
-              appendHexJavaScriptRepresentation(sb, c);
-            }
+            // Other characters can be misinterpreted by some JS parsers,
+            // or perhaps mangled by proxies along the way,
+            // so we play it safe and Unicode escape them.
+            appendHexJavaScriptRepresentation(sb, c);
           }
       }
     }

@@ -204,22 +204,6 @@ public final class DefaultPassConfig extends PassConfig {
     // Verify JsDoc annotations
     checks.add(checkJsDoc);
 
-    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
-        && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
-      checks.add(convertEs6TypedToEs6);
-    }
-
-    // Early ES6 transpilation.
-    // Includes ES6 features that are straightforward to transpile.
-    // We won't handle them natively in the rest of the compiler, so we always
-    // transpile them, even if the output language is also ES6.
-    if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
-      checks.add(es6RewriteArrowFunction);
-      checks.add(es6RenameVariablesInParamLists);
-      checks.add(es6SplitVariableDeclarations);
-      checks.add(es6RewriteDestructuring);
-    }
-
     // goog.module rewrite must happen even if options.skipNonTranspilationPasses is set.
     if (options.closurePass) {
       checks.add(closureRewriteModule);
@@ -234,6 +218,22 @@ public final class DefaultPassConfig extends PassConfig {
     if (!options.skipNonTranspilationPasses && options.closurePass) {
       checks.add(closureGoogScopeAliases);
       checks.add(closureRewriteClass);
+    }
+
+    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
+        && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
+      checks.add(convertEs6TypedToEs6);
+    }
+
+    // Early ES6 transpilation.
+    // Includes ES6 features that are straightforward to transpile.
+    // We won't handle them natively in the rest of the compiler, so we always
+    // transpile them, even if the output language is also ES6.
+    if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
+      checks.add(es6RewriteArrowFunction);
+      checks.add(es6RenameVariablesInParamLists);
+      checks.add(es6SplitVariableDeclarations);
+      checks.add(es6RewriteDestructuring);
     }
 
     if (options.enables(DiagnosticGroups.MISSING_REQUIRE)
@@ -342,10 +342,13 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(newTypeInference);
     }
 
-    if (options.checkTypes || options.inferTypes) {
+    if (options.checkTypes || options.inferTypes
+        // With NTI, we still need OTI to run because the later passes that use
+        // types only understand OTI types at the moment.
+        || options.useNewTypeInference) {
       checks.add(resolveTypes);
       checks.add(inferTypes);
-      if (options.checkTypes) {
+      if (options.checkTypes || options.useNewTypeInference) {
         checks.add(checkTypes);
       } else {
         checks.add(inferJsDocInfo);
@@ -785,6 +788,7 @@ public final class DefaultPassConfig extends PassConfig {
     if (options.getLanguageOut().isEs6OrHigher()) {
       passes.add(optimizeToEs6);
       passes.add(objectLitAssignmentShortening);
+      passes.add(rewriteBindThis);
     }
 
     return passes;
@@ -2709,6 +2713,14 @@ public final class DefaultPassConfig extends PassConfig {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new ObjectLitAssignmentShortening(compiler);
+    }
+  };
+
+  private final PassFactory rewriteBindThis =
+      new PassFactory("rewriteBindThis", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      return new RewriteBindThis(compiler);
     }
   };
 }

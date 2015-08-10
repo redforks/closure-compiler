@@ -951,7 +951,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
    * have signatures, two interfaces are equal if their names match.
    */
   boolean checkFunctionEquivalenceHelper(
-      FunctionType that, EquivalenceMethod eqMethod) {
+      FunctionType that, EquivalenceMethod eqMethod, EqCache eqCache) {
     if (isConstructor()) {
       if (that.isConstructor()) {
         return this == that;
@@ -960,7 +960,16 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     }
     if (isInterface()) {
       if (that.isInterface()) {
-        return getReferenceName().equals(that.getReferenceName());
+        if (getReferenceName().equals(that.getReferenceName())) {
+          return true;
+        } else {
+          if (this.isStructuralInterface()
+              && that.isStructuralInterface()) {
+            return checkStructuralInterfaceEquivalenceHelper(
+                that, eqMethod, eqCache);
+          }
+          return false;
+        }
       }
       return false;
     }
@@ -968,8 +977,45 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
       return false;
     }
 
-    return typeOfThis.checkEquivalenceHelper(that.typeOfThis, eqMethod) &&
-        call.checkArrowEquivalenceHelper(that.call, eqMethod);
+    return typeOfThis.checkEquivalenceHelper(that.typeOfThis, eqMethod, eqCache) &&
+        call.checkArrowEquivalenceHelper(that.call, eqMethod, eqCache);
+  }
+
+  boolean checkStructuralInterfaceEquivalenceHelper(
+      final JSType that, EquivalenceMethod eqMethod, EqCache eqCache) {
+    Preconditions.checkState(eqCache.isStructuralTyping());
+    Preconditions.checkState(this.isStructuralInterface());
+    Preconditions.checkState(that.isRecordType() || that.isFunctionType());
+
+    MatchStatus result = eqCache.checkCache(this, that);
+    if (result != null) {
+      return result.subtypeValue();
+    }
+
+    if (this.hasAnyTemplateTypes() || that.hasAnyTemplateTypes()) {
+      return false;
+    }
+    Map<String, JSType> thisPropList = getPropertyTypeMap(this);
+    Map<String, JSType> thatPropList = that.isRecordType()
+        ? that.toMaybeRecordType().getOwnPropertyTypeMap()
+        : getPropertyTypeMap(that.toMaybeFunctionType());
+
+    if (thisPropList.size() != thatPropList.size()) {
+      eqCache.updateCache(this, that, MatchStatus.NOT_MATCH);
+      return false;
+    }
+    for (String propName : thisPropList.keySet()) {
+      JSType typeInInterface = thisPropList.get(propName);
+      JSType typeInFunction = thatPropList.get(propName);
+      if (typeInFunction == null
+          || !typeInFunction.checkEquivalenceHelper(
+              typeInInterface, eqMethod, eqCache)) {
+        eqCache.updateCache(this, that, MatchStatus.NOT_MATCH);
+        return false;
+      }
+    }
+    eqCache.updateCache(this, that, MatchStatus.MATCH);
+    return true;
   }
 
   @Override
@@ -979,7 +1025,12 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
 
   public boolean hasEqualCallType(FunctionType otherType) {
     return this.call.checkArrowEquivalenceHelper(
-        otherType.call, EquivalenceMethod.IDENTITY);
+        otherType.call, EquivalenceMethod.IDENTITY, EqCache.create());
+  }
+
+  public boolean hasEqualCallType(FunctionType otherType, EqCache eqCache) {
+    return this.call.checkArrowEquivalenceHelper(
+        otherType.call, EquivalenceMethod.IDENTITY, eqCache);
   }
 
   /**
@@ -1195,6 +1246,12 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     this.source = source;
   }
 
+  void addSubTypeIfNotPresent(FunctionType subType) {
+    if (subTypes == null || !subTypes.contains(subType)) {
+      addSubType(subType);
+    }
+  }
+
   /** Adds a type to the list of subtypes for this type. */
   private void addSubType(FunctionType subType) {
     if (subTypes == null) {
@@ -1397,8 +1454,14 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     isStructuralInterface = flag;
   }
 
+  @Override
   public boolean isStructuralInterface() {
     return isInterface() && isStructuralInterface;
+  }
+
+  @Override
+  public boolean isStructuralType() {
+    return isStructuralInterface();
   }
 
   /**
@@ -1408,12 +1471,15 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   @Override
   public Map<String, JSType> getPropertyTypeMap() {
     Map<String, JSType> propTypeMap = new HashMap<String, JSType>();
-    updatePropertyTypeMap(this, propTypeMap);
+    updatePropertyTypeMap(this, propTypeMap, new HashSet<FunctionType>());
     return propTypeMap;
   }
 
+  // cache is added to prevent infinite recursion when retrieving
+  // the super type: see testInterfaceExtendsLoop in TypeCheckTest.java
   private static void updatePropertyTypeMap(
-      FunctionType type, Map<String, JSType> propTypeMap) {
+      FunctionType type, Map<String, JSType> propTypeMap,
+      HashSet<FunctionType> cache) {
     if (type == null) { return; }
     // retrieve all property types on the prototype of this class
     ObjectType prototype = type.getPrototype();
@@ -1430,8 +1496,54 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     Iterable<ObjectType> iterable = type.getExtendedInterfaces();
     if (iterable != null) {
       for (ObjectType interfaceType : iterable) {
-        updatePropertyTypeMap(interfaceType.getConstructor(), propTypeMap);
+        FunctionType superConstructor = interfaceType.getConstructor();
+        if (superConstructor == null
+            || cache.contains(superConstructor)) { continue; }
+        cache.add(superConstructor);
+        updatePropertyTypeMap(superConstructor, propTypeMap, cache);
+        cache.remove(superConstructor);
       }
     }
+  }
+
+  /**
+   * check if there is a loop in the type extends chain
+   * @return an array of all functions in the loop chain if
+   * a loop exists, otherwise returns null
+   */
+  public List<FunctionType> checkExtendsLoop() {
+    return checkExtendsLoop(new HashSet<FunctionType>(),
+        new ArrayList<FunctionType>());
+  }
+
+  public List<FunctionType> checkExtendsLoop(HashSet<FunctionType> cache,
+      List<FunctionType> path) {
+    Iterable<ObjectType> iterable = this.getExtendedInterfaces();
+    if (iterable != null) {
+      for (ObjectType interfaceType : iterable) {
+        FunctionType superConstructor = interfaceType.getConstructor();
+        if (superConstructor == null) { continue; }
+        if (cache.contains(superConstructor)) {
+          // after detecting a loop, prune and return the path, e.g.,:
+          // A -> B -> C -> D -> C, will be pruned into:
+          // c -> D -> C
+          path.add(superConstructor);
+          while (path.get(0) != superConstructor) {
+            path.remove(0);
+          }
+          return path;
+        }
+        cache.add(superConstructor);
+        path.add(superConstructor);
+        List<FunctionType> result =
+            superConstructor.checkExtendsLoop(cache, path);
+        if (result != null) {
+          return result;
+        }
+        cache.remove(superConstructor);
+        path.remove(path.size() - 1);
+      }
+    }
+    return null;
   }
 }

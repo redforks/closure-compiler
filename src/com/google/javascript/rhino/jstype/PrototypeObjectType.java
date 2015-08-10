@@ -88,7 +88,7 @@ public class PrototypeObjectType extends ObjectType {
   // by printing all properties.
   private boolean prettyPrint = false;
 
-  private static final int MAX_PRETTY_PRINTED_PROPERTIES = 4;
+  private static final int MAX_PRETTY_PRINTED_PROPERTIES = 10;
 
   /**
    * Creates an object type.
@@ -482,6 +482,15 @@ public class PrototypeObjectType extends ObjectType {
     if (implicitPrototype != null) {
       implicitPrototypeFallback =
           (ObjectType) implicitPrototype.resolve(t, scope);
+      FunctionType ctor = getConstructor();
+      if (ctor != null) {
+        FunctionType superCtor = ctor.getSuperClassConstructor();
+        if (superCtor != null) {
+          // If the super ctor of this prototype object was not known before resolution, then the
+          // subTypes would not have been set. Update them.
+          superCtor.addSubTypeIfNotPresent(ctor);
+        }
+      }
     }
     for (Property prop : properties.values()) {
       prop.setType(safeResolve(prop.getType(), t, scope));

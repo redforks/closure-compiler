@@ -818,7 +818,7 @@ public final class NodeUtil {
       Node init = name.getFirstChild();
       JSDocInfo jsdoc = getBestJSDocInfo(n);
       return jsdoc != null
-          && (jsdoc.isConstructor() || jsdoc.isInterface())
+          && jsdoc.isConstructorOrInterface()
           && init != null
           && init.isQualifiedName();
     }
@@ -827,7 +827,7 @@ public final class NodeUtil {
         && parent.isAssign() && parent.getParent().isExprResult()) {
       JSDocInfo jsdoc = getBestJSDocInfo(n);
       return jsdoc != null
-          && (jsdoc.isConstructor() || jsdoc.isInterface())
+          && jsdoc.isConstructorOrInterface()
           && parent.getLastChild().isQualifiedName();
     }
     return false;
@@ -3380,11 +3380,6 @@ public final class NodeUtil {
     // Function NODE: [ FUNCTION -> NAME, LP -> ARG1, ARG2, ... ]
     Preconditions.checkArgument(fnNode.isFunction());
     return fnNode.getFirstChild().getNext();
-  }
-
-  static boolean hasConstAnnotation(Node node) {
-    JSDocInfo jsdoc = getBestJSDocInfo(node);
-    return jsdoc != null && jsdoc.isConstant() && !jsdoc.isDefine();
   }
 
   static boolean isConstantVar(Node node, Scope scope) {
