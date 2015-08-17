@@ -24,13 +24,11 @@ import static com.google.javascript.jscomp.PolymerPass.POLYMER_UNEXPECTED_PARAMS
 import static com.google.javascript.jscomp.PolymerPass.POLYMER_UNQUALIFIED_BEHAVIOR;
 import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
 
-import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
-
 /**
  * Unit tests for PolymerPass
  * @author jlklein@google.com (Jeremy Klein)
  */
-public class PolymerPassTest extends CompilerTestCase {
+public class PolymerPassTest extends Es6CompilerTestCase {
   private static final String EXTERNS =
       LINE_JOINER.join(
           "/** @constructor */",
@@ -123,8 +121,8 @@ public class PolymerPassTest extends CompilerTestCase {
               "var Polymera_BInterface = function() {};",
               "/** @type {!Array<string>} */",
               "Polymera_BInterface.prototype.pets;",
-              "/** @type {string} */",
-              "Polymera_BInterface.prototype.name;",
+              "/** @private {string} */",
+              "Polymera_BInterface.prototype.name_;",
               "/** @param {!Array<string>} pets **/",
               "Polymera_BInterface.prototype._setPets;");
 
@@ -154,7 +152,6 @@ public class PolymerPassTest extends CompilerTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT5);
     allowExternsChanges(true);
     enableTypeCheck(CheckLevel.WARNING);
     runTypeCheckAfterProcessing = true;
@@ -182,9 +179,8 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testLetTarget() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
     disableTypeCheck();
-    testError(
+    testErrorEs6(
         LINE_JOINER.join(
             "let X = Polymer({",
             "  is: 'x-element',",
@@ -192,9 +188,8 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testConstTarget() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
     disableTypeCheck();
-    testError(
+    testErrorEs6(
         LINE_JOINER.join(
             "const X = Polymer({",
             "  is: 'x-element',",
@@ -237,9 +232,8 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testComputedPropName() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
     disableTypeCheck(); // TypeCheck cannot grab a name from a complicated computedPropName
-    test("var X = Polymer({is:'x-element', [name + (() => 42)]: function() {return 42;}});",
+    testEs6("var X = Polymer({is:'x-element', [name + (() => 42)]: function() {return 42;}});",
         LINE_JOINER.join(
             "/** @constructor @extends {PolymerElement} @implements {PolymerXInterface} */",
             "var X = function() {}",
@@ -365,8 +359,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testShorthandConstructorExtraction() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "var X = Polymer({",
             "  is: 'x-element',",
@@ -604,8 +597,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testPropertiesDefaultValueShortHandFunction() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "/** @constructor */",
             "var User = function() {};",
@@ -654,7 +646,8 @@ public class PolymerPassTest extends CompilerTestCase {
             "      type: Array,",
             "      readOnly: true,",
             "    },",
-            "    name: String,",
+            "    /** @private */",
+            "    name_: String,",
             "  },",
             "});");
 
@@ -666,8 +659,8 @@ public class PolymerPassTest extends CompilerTestCase {
             "a.B = function() {};",
             "/** @type {!Array<string>} */",
             "a.B.prototype.pets;",
-            "/** @type {string} */",
-            "a.B.prototype.name;",
+            "/** @private {string} */",
+            "a.B.prototype.name_;",
             "/** @override */",
             "a.B.prototype._setPets = function(pets) {};",
             "a.B = Polymer(/** @lends {a.B.prototype} */ {",
@@ -677,7 +670,7 @@ public class PolymerPassTest extends CompilerTestCase {
             "      type: Array,",
             "      readOnly: true,",
             "    },",
-            "    name: String,",
+            "    name_: String,",
             "  },",
             "});"));
 
@@ -685,8 +678,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testShorthandFunctionDefinition() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "var ES6Test = Polymer({",
             "  is: 'x-element',",
@@ -711,8 +703,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testArrowFunctionDefinition() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "var ES6Test = Polymer({",
             "  is: 'x-element',",
@@ -733,8 +724,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testShorthandLifecycleCallbacks() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "var ES6Test = Polymer({",
             "  is: 'x-element',",
@@ -760,8 +750,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testShorthandFunctionDefinitionWithReturn() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "var ESTest = Polymer({",
             "  is: 'x-element',",
@@ -890,8 +879,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testDollarSignPropsInShorthandFunctionConvertedToBrackets() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "/** @constructor */",
             "var SomeType = function() {};",
@@ -1157,8 +1145,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testBehaviorShorthandFunctionOverriddenByElement() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "/** @polymerBehavior */",
             "var FunBehavior = {",
@@ -1585,8 +1572,7 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testBehaviorShorthandFunctionOverriding() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    test(
+    testEs6(
         LINE_JOINER.join(
             "/** @polymerBehavior */",
             "var FunBehavior = {",
@@ -1953,9 +1939,8 @@ public class PolymerPassTest extends CompilerTestCase {
     testWarning("var x = Polymer('foo-bar', {});", POLYMER_DESCRIPTOR_NOT_VALID);
     testError("var x = Polymer({},'blah');", POLYMER_UNEXPECTED_PARAMS);
     testError("var x = Polymer({});", POLYMER_MISSING_IS);
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    testError("var x = Polymer({is});", POLYMER_MISSING_IS);
-    testError("var x = Polymer({is: 'x-element', shortHand,});",
+    testErrorEs6("var x = Polymer({is});", POLYMER_MISSING_IS);
+    testErrorEs6("var x = Polymer({is: 'x-element', shortHand,});",
         POLYMER_SHORTHAND_NOT_SUPPORTED);
   }
 
@@ -2092,9 +2077,8 @@ public class PolymerPassTest extends CompilerTestCase {
   }
 
   public void testES6FeaturesInFunctionBody() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
     disableTypeCheck();
-    test(
+    testEs6(
         LINE_JOINER.join(
             "var X = Polymer({",
             "  is: 'x-element',",

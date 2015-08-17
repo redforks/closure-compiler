@@ -53,10 +53,6 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   private boolean preserveGoogRequires;
   private boolean banGoogBase;
 
-  public ProcessClosurePrimitivesTest() {
-    enableLineNumberCheck(true);
-  }
-
   @Override protected void setUp() {
     additionalCode = null;
     additionalEndCode = null;
@@ -170,12 +166,23 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
          "var foo = {a: 0};");
     test("goog.provide('foo'); foo = function(){};",
          "var foo = function(){};");
+    testEs6("goog.provide('foo'); foo = ()=>{};",
+            "var foo = ()=>{};");
+
     test("goog.provide('foo'); var foo = 0;",
          "var foo = 0;");
+    testEs6("goog.provide('foo'); let foo = 0;",
+            "let foo = 0;");
+    testEs6("goog.provide('foo'); const foo = 0;",
+            "const foo = 0;");
+
     test("goog.provide('foo'); var foo = {a: 0};",
          "var foo = {a: 0};");
     test("goog.provide('foo'); var foo = function(){};",
          "var foo = function(){};");
+    testEs6("goog.provide('foo'); var foo = ()=>{};",
+            "var foo = ()=>{};");
+
     test("goog.provide('foo.bar.Baz'); foo.bar.Baz=function(){};",
          "var foo={}; foo.bar={}; foo.bar.Baz=function(){};");
     test("goog.provide('foo.bar.moo'); foo.bar.moo={E:1,S:2};",
@@ -202,11 +209,15 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   public void testRemovalMultipleAssignment2() {
     test("goog.provide('foo'); var foo = 0; foo = 1",
          "var foo = 0; foo = 1;");
+    testEs6("goog.provide('foo'); let foo = 0; let foo = 1",
+        "let foo = 0; let foo = 1;");
   }
 
   public void testRemovalMultipleAssignment3() {
     test("goog.provide('foo'); foo = 0; var foo = 1",
          "foo = 0; var foo = 1;");
+    testEs6("goog.provide('foo'); foo = 0; let foo = 1",
+        "foo = 0; let foo = 1;");
   }
 
   public void testRemovalMultipleAssignment4() {
@@ -222,6 +233,11 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   public void testNoRemovalFunction2() {
     test("goog.provide('foo'); function f(){var foo = 0}",
          "var foo = {}; function f(){var foo = 0}");
+  }
+
+  public void testNoRemovalFunction3() {
+    testEs6("goog.provide('foo'); function f(foo = 0){}",
+         "var foo = {}; function f(foo = 0){}");
   }
 
   public void testRemovalMultipleAssignmentInIf1() {
@@ -252,25 +268,31 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   }
 
   public void testMultipleDeclarationError2() {
-    test("goog.provide('foo.bar');" +
-         "if (true) { var foo = {}; foo.bar = 0 } else { foo.bar = 1 }",
-         "var foo = {};" +
-         "if (true) {" +
-         "  var foo = {}; foo.bar = 0" +
-         "} else {" +
-         "  foo.bar = 1" +
-         "}");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('foo.bar');",
+            "if (true) { var foo = {}; foo.bar = 0 } else { foo.bar = 1 }"),
+        LINE_JOINER.join(
+            "var foo = {};",
+            "if (true) {",
+            "  var foo = {}; foo.bar = 0",
+            "} else {",
+            "  foo.bar = 1",
+            "}"));
   }
 
   public void testMultipleDeclarationError3() {
-    test("goog.provide('foo.bar');" +
-         "if (true) { foo.bar = 0 } else { var foo = {}; foo.bar = 1 }",
-         "var foo = {};" +
-         "if (true) {" +
-         "  foo.bar = 0" +
-         "} else {" +
-         "  var foo = {}; foo.bar = 1" +
-         "}");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('foo.bar');",
+            "if (true) { foo.bar = 0 } else { var foo = {}; foo.bar = 1 }"),
+        LINE_JOINER.join(
+            "var foo = {};",
+            "if (true) {",
+            "  foo.bar = 0",
+            "} else {",
+            "  var foo = {}; foo.bar = 1",
+            "}"));
   }
 
   public void testProvideAfterDeclarationError() {
@@ -586,15 +608,18 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
     // TODO(johnlenz):  This test confirms that the constructor (a.b) isn't
     // improperly removed, but this result isn't really what we want as the
     // reassign of a.b removes the definition of "a.b.c".
-    test("goog.provide('a.b');" +
-         "goog.provide('a.b.c');" +
-         "a.b.c;" +
-         "a.b = function(x,y) {};",
-         "var a = {};" +
-         "a.b = {};" +
-         "a.b.c = {};" +
-         "a.b.c;" +
-         "a.b = function(x,y) {};");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('a.b');",
+            "goog.provide('a.b.c');",
+            "a.b.c;",
+            "a.b = function(x,y) {};"),
+        LINE_JOINER.join(
+            "var a = {};",
+            "a.b = {};",
+            "a.b.c = {};",
+            "a.b.c;",
+            "a.b = function(x,y) {};"));
   }
 
   // Provide a name after the definition of the class providing the
@@ -605,77 +630,90 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
     // TODO(johnlenz):  This test confirms that the constructor (a.b) isn't
     // improperly removed, but this result isn't really what we want as
     // namespace placeholders for a.b and a.b.c remain.
-    test("goog.provide('a.b');" +
-         "goog.provide('a.b.c');" +
-         "a.b = function(x,y) {};" +
-         "a.b.c;",
-         "var a = {};" +
-         "a.b = {};" +
-         "a.b.c = {};" +
-         "a.b = function(x,y) {};" +
-         "a.b.c;");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('a.b');",
+            "goog.provide('a.b.c');",
+            "a.b = function(x,y) {};",
+            "a.b.c;"),
+        LINE_JOINER.join(
+            "var a = {};",
+            "a.b = {};",
+            "a.b.c = {};",
+            "a.b = function(x,y) {};",
+            "a.b.c;"));
   }
 
   // Provide a name after the definition of the class providing the
   // parent namespace.
   public void testProvideOrder3a() {
-    test("goog.provide('a.b');" +
-         "a.b = function(x,y) {};" +
-         "goog.provide('a.b.c');" +
-         "a.b.c;",
-         "var a = {};" +
-         "a.b = function(x,y) {};" +
-         "a.b.c = {};" +
-         "a.b.c;");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('a.b');",
+            "a.b = function(x,y) {};",
+            "goog.provide('a.b.c');",
+            "a.b.c;"),
+        LINE_JOINER.join(
+            "var a = {};",
+            "a.b = function(x,y) {};",
+            "a.b.c = {};",
+            "a.b.c;"));
   }
 
   public void testProvideOrder3b() {
     additionalEndCode = "";
     addAdditionalNamespace = false;
     // This tests a cleanly provided name, below a function namespace.
-    test("goog.provide('a.b');" +
-         "a.b = function(x,y) {};" +
-         "goog.provide('a.b.c');" +
-         "a.b.c;",
-         "var a = {};" +
-         "a.b = function(x,y) {};" +
-         "a.b.c = {};" +
-         "a.b.c;");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('a.b');",
+            "a.b = function(x,y) {};",
+            "goog.provide('a.b.c');",
+            "a.b.c;"),
+        LINE_JOINER.join(
+            "var a = {};",
+            "a.b = function(x,y) {};",
+            "a.b.c = {};",
+            "a.b.c;"));
   }
 
   public void testProvideOrder4a() {
-    test("goog.provide('goog.a');" +
-         "goog.provide('goog.a.b');" +
-         "if (x) {" +
-         "  goog.a.b = 1;" +
-         "} else {" +
-         "  goog.a.b = 2;" +
-         "}",
-
-         "goog.a={};" +
-         "if(x)" +
-         "  goog.a.b=1;" +
-         "else" +
-         "  goog.a.b=2;");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('goog.a');",
+            "goog.provide('goog.a.b');",
+            "if (x) {",
+            "  goog.a.b = 1;",
+            "} else {",
+            "  goog.a.b = 2;",
+            "}"),
+        LINE_JOINER.join(
+            "goog.a={};",
+            "if(x)",
+            "  goog.a.b=1;",
+            "else",
+            "  goog.a.b=2;"));
   }
 
   public void testProvideOrder4b() {
     additionalEndCode = "";
     addAdditionalNamespace = false;
     // This tests a cleanly provided name, below a namespace.
-    test("goog.provide('goog.a');" +
-         "goog.provide('goog.a.b');" +
-         "if (x) {" +
-         "  goog.a.b = 1;" +
-         "} else {" +
-         "  goog.a.b = 2;" +
-         "}",
-
-         "goog.a={};" +
-         "if(x)" +
-         "  goog.a.b=1;" +
-         "else" +
-         "  goog.a.b=2;");
+    test(
+        LINE_JOINER.join(
+            "goog.provide('goog.a');",
+            "goog.provide('goog.a.b');",
+            "if (x) {",
+            "  goog.a.b = 1;",
+            "} else {",
+            "  goog.a.b = 2;",
+            "}"),
+        LINE_JOINER.join(
+            "goog.a={};",
+            "if(x)",
+            "  goog.a.b=1;",
+            "else",
+            "  goog.a.b=2;"));
   }
 
   public void testInvalidProvide() {
@@ -688,10 +726,12 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
 
   public void testInvalidRequire() {
     test("goog.provide('a.b'); goog.require('a.b');", "var a = {}; a.b = {};");
-    testError("goog.provide('a.b'); var x = x || goog.require('a.b');", INVALID_CLOSURE_CALL_ERROR);
-    testError("goog.provide('a.b'); x = goog.require('a.b');", INVALID_CLOSURE_CALL_ERROR);
-    testError(
-        "goog.provide('a.b'); function f() { goog.require('a.b'); }", INVALID_CLOSURE_CALL_ERROR);
+    testError("goog.provide('a.b'); var x = x || goog.require('a.b');",
+        INVALID_CLOSURE_CALL_ERROR);
+    testError("goog.provide('a.b'); x = goog.require('a.b');",
+        INVALID_CLOSURE_CALL_ERROR);
+    testError("goog.provide('a.b'); function f() { goog.require('a.b'); }",
+        INVALID_CLOSURE_CALL_ERROR);
   }
 
   public void testValidGoogMethod() {
@@ -756,7 +796,8 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   }
 
   public void testInvalidGoogBase9() {
-    testError("var goog = {}; goog.Foo = function() { goog.base(this); }", GOOG_BASE_CLASS_ERROR);
+    testError("var goog = {}; goog.Foo = function() { goog.base(this); }",
+        GOOG_BASE_CLASS_ERROR);
   }
 
   public void testInvalidGoogBase10() {

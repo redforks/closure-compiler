@@ -76,7 +76,7 @@ public final class CompileTask
   private String encoding = "UTF-8";
   private String outputEncoding = "UTF-8";
   private CompilationLevel compilationLevel;
-  private boolean customExternsOnly;
+  private CompilerOptions.Environment environment;
   private boolean manageDependencies;
   private boolean prettyPrint;
   private boolean printInputDelimiter;
@@ -104,7 +104,7 @@ public final class CompileTask
     this.warningLevel = WarningLevel.DEFAULT;
     this.debugOptions = false;
     this.compilationLevel = CompilationLevel.SIMPLE_OPTIMIZATIONS;
-    this.customExternsOnly = false;
+    this.environment = CompilerOptions.Environment.BROWSER;
     this.manageDependencies = false;
     this.prettyPrint = false;
     this.printInputDelimiter = false;
@@ -114,12 +114,12 @@ public final class CompileTask
     this.forceRecompile = false;
     this.angularPass = false;
     this.replacePropertiesPrefix = "closure.define.";
-    this.defineParams = new LinkedList();
-    this.entryPointParams = new LinkedList();
-    this.externFileLists = new LinkedList();
-    this.sourceFileLists = new LinkedList();
-    this.sourcePaths = new LinkedList();
-    this.warnings = new LinkedList();
+    this.defineParams = new LinkedList<>();
+    this.entryPointParams = new LinkedList<>();
+    this.externFileLists = new LinkedList<>();
+    this.sourceFileLists = new LinkedList<>();
+    this.sourcePaths = new LinkedList<>();
+    this.warnings = new LinkedList<>();
   }
 
   /**
@@ -173,6 +173,25 @@ public final class CompileTask
   }
 
   /**
+   * Set the environment which determines the builtin extern set.
+   * @param value The name of the environment.
+   *     (BROWSER, CUSTOM).
+   */
+  public void setEnvironment(String value) {
+    switch (value) {
+      case "BROWSER":
+        this.environment = CompilerOptions.Environment.BROWSER;
+        break;
+      case "CUSTOM":
+        this.environment = CompilerOptions.Environment.CUSTOM;
+        break;
+      default:
+        throw new BuildException(
+            "Unrecognized 'environment' option value (" + value + ")");
+    }
+  }
+
+  /**
    * Enable debugging options.
    * @param value True if debug mode is enabled.
    */
@@ -200,13 +219,6 @@ public final class CompileTask
 
   public void setManageDependencies(boolean value) {
     this.manageDependencies = value;
-  }
-
-  /**
-   * Use only custom externs.
-   */
-  public void setCustomExternsOnly(boolean value) {
-    this.customExternsOnly = value;
   }
 
   /**
@@ -352,7 +364,7 @@ public final class CompileTask
     CompilerOptions options = createCompilerOptions();
     Compiler compiler = createCompiler(options);
 
-    List<SourceFile> externs = findExternFiles();
+    List<SourceFile> externs = findExternFiles(options);
     List<SourceFile> sources = findSourceFiles();
 
     if (isStale() || forceRecompile) {
@@ -420,6 +432,8 @@ public final class CompileTask
     if (this.debugOptions) {
       this.compilationLevel.setDebugOptionsForCompilationLevel(options);
     }
+
+    options.setEnvironment(this.environment);
 
     options.setPrettyPrint(this.prettyPrint);
     options.setPrintInputDelimiter(this.printInputDelimiter);
@@ -513,7 +527,7 @@ public final class CompileTask
    * replacements.
    */
   private void convertEntryPointParameters(CompilerOptions options) {
-    List<String> entryPoints = new LinkedList();
+    List<String> entryPoints = new LinkedList<>();
     for (Parameter p : entryPointParams) {
       String key = p.getName();
       entryPoints.add(key);
@@ -597,11 +611,9 @@ public final class CompileTask
     return compiler;
   }
 
-  private List<SourceFile> findExternFiles() {
-    List<SourceFile> files = new LinkedList();
-    if (!this.customExternsOnly) {
-      files.addAll(getDefaultExterns());
-    }
+  private List<SourceFile> findExternFiles(CompilerOptions options) {
+    List<SourceFile> files = new LinkedList<>();
+    files.addAll(getBuiltinExterns(options));
 
     for (FileList list : this.externFileLists) {
       files.addAll(findJavaScriptFiles(list));
@@ -611,7 +623,7 @@ public final class CompileTask
   }
 
   private List<SourceFile> findSourceFiles() {
-    List<SourceFile> files = new LinkedList();
+    List<SourceFile> files = new LinkedList<>();
 
     for (FileList list : this.sourceFileLists) {
       files.addAll(findJavaScriptFiles(list));
@@ -629,7 +641,7 @@ public final class CompileTask
    * the compiler expects.
    */
   private List<SourceFile> findJavaScriptFiles(ResourceCollection rc) {
-    List<SourceFile> files = new LinkedList();
+    List<SourceFile> files = new LinkedList<>();
     Iterator<Resource> iter = rc.iterator();
     while (iter.hasNext()) {
       FileResource fr = (FileResource) iter.next();
@@ -648,9 +660,9 @@ public final class CompileTask
    *
    * Adapted from {@link CommandLineRunner}.
    */
-  private List<SourceFile> getDefaultExterns() {
+  private List<SourceFile> getBuiltinExterns(CompilerOptions options) {
     try {
-      return CommandLineRunner.getDefaultExterns();
+      return CommandLineRunner.getBuiltinExterns(options);
     } catch (IOException e) {
       throw new BuildException(e);
     }

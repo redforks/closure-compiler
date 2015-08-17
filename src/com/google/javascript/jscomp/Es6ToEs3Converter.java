@@ -96,13 +96,13 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, externs, this);
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, externs, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 
   /**
@@ -199,7 +199,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
   private void visitStringKey(Node n) {
     if (!n.hasChildren()) {
       Node name = IR.name(n.getString());
-      name.copyInformationFrom(n);
+      name.useSourceInfoIfMissingFrom(n);
       n.addChildToBack(name);
       compiler.reportCodeChange();
     }
@@ -264,7 +264,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
       return;
     }
     CheckClassAssignments checkAssigns = new CheckClassAssignments(name);
-    NodeTraversal.traverse(compiler, enclosingFunction, checkAssigns);
+    NodeTraversal.traverseEs6(compiler, enclosingFunction, checkAssigns);
   }
 
   /**
@@ -315,7 +315,8 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
           typeNode.getType() == Token.ELLIPSIS
               ? typeNode.getFirstChild().cloneNode()
               : typeNode.cloneNode();
-      arrayType.addChildToFront(new Node(Token.BLOCK, memberType).copyInformationFrom(typeNode));
+      arrayType.addChildToFront(
+          new Node(Token.BLOCK, memberType).useSourceInfoIfMissingFrom(typeNode));
       JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
       builder.recordType(
           new JSTypeExpression(new Node(Token.BANG, arrayType), restParam.getSourceFileName()));
@@ -443,7 +444,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
             result);
       } else {
         if (!propdef.hasChildren()) {
-          Node name = IR.name(propdef.getString()).copyInformationFrom(propdef);
+          Node name = IR.name(propdef.getString()).useSourceInfoIfMissingFrom(propdef);
           propdef.addChildToBack(name);
         }
         Node val = propdef.removeFirstChild();

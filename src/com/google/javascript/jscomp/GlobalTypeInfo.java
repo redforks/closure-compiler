@@ -29,6 +29,7 @@ import com.google.javascript.jscomp.newtypes.Declaration;
 import com.google.javascript.jscomp.newtypes.DeclaredFunctionType;
 import com.google.javascript.jscomp.newtypes.EnumType;
 import com.google.javascript.jscomp.newtypes.FunctionType;
+import com.google.javascript.jscomp.newtypes.FunctionTypeBuilder;
 import com.google.javascript.jscomp.newtypes.JSType;
 import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
 import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc.FunctionAndSlotType;
@@ -304,9 +305,9 @@ class GlobalTypeInfo implements CompilerPass {
     //   defined in the global scope.
     CollectNamedTypes rootCnt = new CollectNamedTypes(globalScope);
     if (externs != null) {
-      NodeTraversal.traverse(compiler, externs, rootCnt);
+      NodeTraversal.traverseEs6(compiler, externs, rootCnt);
     }
-    NodeTraversal.traverse(compiler, root, rootCnt);
+    NodeTraversal.traverseEs6(compiler, root, rootCnt);
     // (2) Determine the type represented by each typedef and each enum
     globalScope.resolveTypedefs(typeParser);
     globalScope.resolveEnums(typeParser);
@@ -314,7 +315,7 @@ class GlobalTypeInfo implements CompilerPass {
     for (int i = 1; i < scopes.size(); i++) {
       NTIScope s = scopes.get(i);
       CollectNamedTypes cnt = new CollectNamedTypes(s);
-      NodeTraversal.traverse(compiler, s.getBody(), cnt);
+      NodeTraversal.traverseEs6(compiler, s.getBody(), cnt);
       s.resolveTypedefs(typeParser);
       s.resolveEnums(typeParser);
       if (NewTypeInference.measureMem) {
@@ -334,9 +335,9 @@ class GlobalTypeInfo implements CompilerPass {
     //     - Declare properties on types
     ProcessScope rootPs = new ProcessScope(globalScope);
     if (externs != null) {
-      NodeTraversal.traverse(compiler, externs, rootPs);
+      NodeTraversal.traverseEs6(compiler, externs, rootPs);
     }
-    NodeTraversal.traverse(compiler, root, rootPs);
+    NodeTraversal.traverseEs6(compiler, root, rootPs);
     // (5) Things that must happen after the traversal of the scope
     rootPs.finishProcessingScope();
     for (String name : globalScope.getUnknownTypeNames()) {
@@ -347,7 +348,7 @@ class GlobalTypeInfo implements CompilerPass {
     for (int i = 1; i < scopes.size(); i++) {
       NTIScope s = scopes.get(i);
       ProcessScope ps = new ProcessScope(s);
-      NodeTraversal.traverse(compiler, s.getBody(), ps);
+      NodeTraversal.traverseEs6(compiler, s.getBody(), ps);
       ps.finishProcessingScope();
       if (NewTypeInference.measureMem) {
         NewTypeInference.updatePeakMem();
@@ -1118,6 +1119,9 @@ class GlobalTypeInfo implements CompilerPass {
         case Token.OBJECTLIT:
           visitObjectLit(n, parent);
           break;
+        case Token.CALL:
+          visitCall(n);
+          break;
       }
     }
 
@@ -1149,10 +1153,10 @@ class GlobalTypeInfo implements CompilerPass {
       if (parent.isCatch()) {
         this.currentScope.addLocal(name, JSType.UNKNOWN, false, false);
       } else {
-        boolean isConst = isConst(parent);
+        boolean isConst = isConst(nameNode);
         JSType declType = getVarTypeFromAnnotation(nameNode);
-        if (isConst && !mayWarnAboutNoInit(nameNode) && declType == null) {
-          declType = inferConstTypeFromRhs(nameNode);
+        if (declType == null) {
+          declType = mayInferFromRhsIfConst(nameNode);
         }
         this.currentScope.addLocal(name, declType, isConst, nameNode.isFromExterns());
       }
@@ -1182,6 +1186,22 @@ class GlobalTypeInfo implements CompilerPass {
             warnings.add(JSError.make(prop, MISPLACED_CONST_ANNOTATION));
           }
         }
+      }
+    }
+
+    private void visitCall(Node call) {
+      String className = convention.getSingletonGetterClassName(call);
+      if (className == null) {
+        return;
+      }
+      QualifiedName qname = QualifiedName.fromQualifiedString(className);
+      RawNominalType rawType = this.currentScope.getNominalType(qname);
+      if (rawType != null) {
+        JSType instanceType = rawType.getInstanceAsJSType();
+        FunctionType getInstanceFunType =
+            (new FunctionTypeBuilder()).addRetType(instanceType).buildFunction();
+        JSType getInstanceType = commonTypes.fromFunctionType(getInstanceFunType);
+        convention.applySingletonGetterNew(rawType, getInstanceType, instanceType);
       }
     }
 
@@ -1328,8 +1348,8 @@ class GlobalTypeInfo implements CompilerPass {
                   pname, classType.toString()));
           return;
         }
-        if (isConst && !mayWarnAboutNoInit(getProp) && propDeclType == null) {
-          propDeclType = inferConstTypeFromRhs(getProp);
+        if (propDeclType == null) {
+          propDeclType = mayInferFromRhsIfConst(getProp);
         }
         classType.addCtorProperty(pname, getProp, propDeclType, isConst);
         getProp.putBooleanProp(Node.ANALYZED_DURING_GTI, true);
@@ -1375,8 +1395,8 @@ class GlobalTypeInfo implements CompilerPass {
                   pname, ns.toString()));
           return;
         }
-        if (isConst && !mayWarnAboutNoInit(declNode) && propDeclType == null) {
-          propDeclType = inferConstTypeFromRhs(declNode);
+        if (propDeclType == null) {
+          propDeclType = mayInferFromRhsIfConst(declNode);
         }
         ns.addProperty(pname, declNode, propDeclType, isConst);
         declNode.putBooleanProp(Node.ANALYZED_DURING_GTI, true);
@@ -1413,8 +1433,8 @@ class GlobalTypeInfo implements CompilerPass {
         // Intentionally, we keep going even if we warned for redeclared prop.
         // The reason is that if a prop is defined on a class and on its proto
         // with conflicting types, we prefer the type of the class.
-        if (isConst && !mayWarnAboutNoInit(getProp) && declType == null) {
-          declType = inferConstTypeFromRhs(getProp);
+        if (declType == null) {
+          declType = mayInferFromRhsIfConst(getProp);
         }
         if (mayAddPropToType(getProp, rawNominalType)) {
           rawNominalType.addClassProperty(pname, getProp, declType, isConst);
@@ -1479,6 +1499,17 @@ class GlobalTypeInfo implements CompilerPass {
         return true;
       }
       return false;
+    }
+
+    private JSType mayInferFromRhsIfConst(Node lvalueNode) {
+      JSDocInfo info = NodeUtil.getBestJSDocInfo(lvalueNode);
+      if (info != null && info.containsFunctionDeclaration()) {
+        return null;
+      }
+      if (isConst(lvalueNode) && !mayWarnAboutNoInit(lvalueNode)) {
+        return inferConstTypeFromRhs(lvalueNode);
+      }
+      return null;
     }
 
     // If a @const doesn't have a declared type, we use the initializer to
@@ -1880,9 +1911,8 @@ class GlobalTypeInfo implements CompilerPass {
         if (mayWarnAboutExistingProp(rawType, pname, defSite, propDeclType)) {
           return;
         }
-        if (defSite.isGetProp() && propDeclType == null
-            && isConst && !mayWarnAboutNoInit(defSite)) {
-          propDeclType = inferConstTypeFromRhs(defSite);
+        if (propDeclType == null) {
+          propDeclType = mayInferFromRhsIfConst(defSite);
         }
         rawType.addProtoProperty(pname, defSite, propDeclType, isConst);
         if (defSite.isGetProp()) { // Don't bother saving for @lends
@@ -1959,13 +1989,11 @@ class GlobalTypeInfo implements CompilerPass {
   }
 
   private static Node fromDefsiteToName(Node defSite) {
-    if (defSite.isVar()) {
-      return defSite.getFirstChild();
-    }
     if (defSite.isGetProp()) {
       return defSite.getLastChild();
     }
-    if (defSite.isStringKey() || defSite.isGetterDef() || defSite.isSetterDef()) {
+    if (defSite.isName() || defSite.isStringKey()
+        || defSite.isGetterDef() || defSite.isSetterDef()) {
       return defSite;
     }
     throw new RuntimeException("Unknown defsite: "
@@ -1974,8 +2002,13 @@ class GlobalTypeInfo implements CompilerPass {
 
   private boolean isConst(Node defSite) {
     return isAnnotatedAsConst(defSite)
-        || NodeUtil.isConstantByConvention(
-            this.convention, fromDefsiteToName(defSite));
+        // Don't consider an all-caps variable in externs to be constant.
+        // 1) External code may not follow the coding convention.
+        // 2) We generate synthetic externs to export local properties,
+        //    which may be in all caps.
+        || (!defSite.isFromExterns()
+            && NodeUtil.isConstantByConvention(
+                this.convention, fromDefsiteToName(defSite)));
   }
 
   private static class PropertyDef {

@@ -16,17 +16,15 @@
 
 package com.google.javascript.jscomp;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.io.CharStreams;
 import com.google.debugging.sourcemap.proto.Mapping.OriginalMapping;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.JSModuleGraph.MissingModuleException;
@@ -51,8 +49,8 @@ import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.file.FileSystems;
 import java.util.ArrayList;
@@ -66,13 +64,6 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -183,8 +174,6 @@ public class Compiler extends AbstractCompiler {
    */
   private int uniqueNameId = 0;
 
-  private int timeout = 0;
-
   /**
    * Whether to assume there are references to the RegExp Global object
    * properties.
@@ -231,40 +220,12 @@ public class Compiler extends AbstractCompiler {
       DiagnosticType.error("JSC_OPTIMIZE_LOOP_ERROR",
           "Exceeded max number of code motion iterations: {0}");
 
-  // We use many recursive algorithms that use O(d) memory in the depth
-  // of the tree.
-  private static final long COMPILER_STACK_SIZE = (1 << 21); // About 2MB
-
-  /**
-   * Under JRE 1.6, the JS Compiler overflows the stack when running on some
-   * large or complex JS code. When threads are available, we run all compile
-   * jobs on a separate thread with a larger stack.
-   *
-   * That way, we don't have to increase the stack size for *every* thread
-   * (which is what -Xss does).
-   */
-  private static final ExecutorService compilerExecutor =
-      Executors.newCachedThreadPool(new ThreadFactory() {
-    @Override public Thread newThread(Runnable r) {
-      Thread t = new Thread(null, r, "jscompiler", COMPILER_STACK_SIZE);
-      t.setDaemon(true);  // Do not prevent the JVM from exiting.
-      return t;
-    }
-  });
-
-  /**
-   * Use a dedicated compiler thread per Compiler instance.
-   */
-  private Thread compilerThread = null;
-
-  /** Whether to use threads. */
-  private boolean useThreads = true;
-
+  private final CompilerExecutor compilerExecutor = new CompilerExecutor();
 
   /**
    * Logger for the whole com.google.javascript.jscomp domain -
    * setting configuration for this logger affects all loggers
-   *  in other classes within the compiler.
+   * in other classes within the compiler.
    */
   private static final Logger logger =
       Logger.getLogger("com.google.javascript.jscomp");
@@ -277,6 +238,8 @@ public class Compiler extends AbstractCompiler {
   private String lastPassName;
 
   private Set<String> externProperties = null;
+
+  private static final Joiner pathJoiner = Joiner.on(File.separator);
 
   /**
    * Creates a Compiler that reports errors and warnings to its logger.
@@ -506,6 +469,13 @@ public class Compiler extends AbstractCompiler {
   }
 
   /**
+   * Creates an OS specific path string from parts
+   */
+  public static String joinPathParts(String... pathParts) {
+    return pathJoiner.join(pathParts);
+  }
+
+  /**
    * Fill any empty modules with a place holder file. It makes any cross module
    * motion easier.
    */
@@ -565,7 +535,8 @@ public class Compiler extends AbstractCompiler {
     return FileSystems.getDefault().getPath(base)
         .resolveSibling(relative)
         .normalize()
-        .toString();
+        .toString()
+        .replace(File.separator, "/");
   }
 
   /**
@@ -666,7 +637,7 @@ public class Compiler extends AbstractCompiler {
    * don't have threads.
    */
   public void disableThreads() {
-    useThreads = false;
+    compilerExecutor.disableThreads();
   }
 
   /**
@@ -674,70 +645,11 @@ public class Compiler extends AbstractCompiler {
    * @param timeout seconds to wait before timeout
    */
   public void setTimeout(int timeout) {
-    this.timeout = timeout;
+    compilerExecutor.setTimeout(timeout);
   }
 
-  @SuppressWarnings("unchecked")
-  <T> T runInCompilerThread(final Callable<T> callable) {
-    T result = null;
-    final Throwable[] exception = new Throwable[1];
-
-    Preconditions.checkState(
-        compilerThread == null || compilerThread == Thread.currentThread(),
-        "Please do not share the Compiler across threads");
-
-    // If the compiler thread is available, use it.
-    if (useThreads && compilerThread == null) {
-      try {
-        final boolean dumpTraceReport =
-            options != null && options.tracer.isOn();
-        Callable<T> bootCompilerThread = new Callable<T>() {
-          @Override
-          public T call() {
-            try {
-              compilerThread = Thread.currentThread();
-              if (dumpTraceReport) {
-                Tracer.initCurrentThreadTrace();
-              }
-              return callable.call();
-            } catch (Throwable e) {
-              exception[0] = e;
-            } finally {
-              compilerThread = null;
-              if (dumpTraceReport) {
-                Tracer.logCurrentThreadTrace();
-              }
-              Tracer.clearCurrentThreadTrace();
-            }
-            return null;
-          }
-        };
-
-        Future<T> future = compilerExecutor.submit(bootCompilerThread);
-        if (timeout > 0) {
-          result = future.get(timeout, TimeUnit.SECONDS);
-        } else {
-          result = future.get();
-        }
-      } catch (InterruptedException | TimeoutException | ExecutionException e) {
-        throw Throwables.propagate(e);
-      }
-    } else {
-      try {
-        result = callable.call();
-      } catch (Exception e) {
-        exception[0] = e;
-      } finally {
-        Tracer.clearCurrentThreadTrace();
-      }
-    }
-
-    // Pass on any exception caught by the runnable object.
-    if (exception[0] != null) {
-      Throwables.propagate(exception[0]);
-    }
-
-    return result;
+  <T> T runInCompilerThread(Callable<T> callable) {
+    return compilerExecutor.runInCompilerThread(callable, options != null && options.tracer.isOn());
   }
 
   private void compileInternal() {
@@ -2617,21 +2529,12 @@ public class Compiler extends AbstractCompiler {
   /** Load a library as a resource */
   @VisibleForTesting
   Node loadLibraryCode(String resourceName, boolean normalizeAndUniquifyNames) {
-    String originalCode;
-    try {
-      originalCode = CharStreams.toString(new InputStreamReader(
-          Compiler.class.getResourceAsStream(
-              String.format("js/%s.js", resourceName)),
-          UTF_8));
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+    String originalCode = ResourceLoader.loadTextResource(
+        Compiler.class, "js/" + resourceName + ".js");
 
     Node ast = parseSyntheticCode(originalCode);
     if (normalizeAndUniquifyNames) {
-      Normalize.normalizeSyntheticCode(
-          this, ast,
-          String.format("jscomp_%s_", resourceName));
+      Normalize.normalizeSyntheticCode(this, ast, "jscomp_" + resourceName + "_");
     }
     return ast;
   }

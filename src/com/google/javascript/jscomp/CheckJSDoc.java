@@ -45,6 +45,10 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
       DiagnosticType.warning("JSC_DISALLOWED_MEMBER_JSDOC",
           "Class level JSDocs (@interface, @extends, etc.) are not allowed on class members");
 
+  static final DiagnosticType ARROW_FUNCTION_AS_CONSTRUCTOR = DiagnosticType.error(
+      "JSC_ARROW_FUNCTION_AS_CONSTRUCTOR",
+      "Arrow functions cannot be used as constructors");
+
   private final AbstractCompiler compiler;
 
   CheckJSDoc(AbstractCompiler compiler) {
@@ -53,8 +57,8 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, externs, this);
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, externs, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
@@ -66,6 +70,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
     validateDeprecatedJsDoc(t, n, info);
     validateNoCollapse(t, n, info);
     validateClassLevelJsDoc(t, n, info);
+    validateArrowFunction(n);
   }
 
 
@@ -109,13 +114,14 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
       }
       return;
     }
-    JSDocInfo bestInfo = NodeUtil.getBestJSDocInfo(n);
-    if (bestInfo != null && bestInfo.isNoCollapse()
-        && (n.getType() == Token.GETELEM || n.getType() == Token.GETPROP)
-        && NodeUtil.isPrototypeProperty(n)) {
-      t.getCompiler().report(t.makeError(n, MISPLACED_ANNOTATION,
-          "@nocollapse", "This JSDoc has no effect on prototype"
-              + "properties."));
+    if (!NodeUtil.isPrototypePropertyDeclaration(n.getParent())) {
+      return;
+    }
+    JSDocInfo jsdoc = n.getJSDocInfo();
+    if (jsdoc != null && jsdoc.isNoCollapse()) {
+      t.getCompiler().report(
+          t.makeError(n, MISPLACED_ANNOTATION, "@nocollapse",
+              "This JSDoc has no effect on prototype properties."));
     }
   }
 
@@ -263,6 +269,18 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
         t.getCompiler().report(t.makeError(n, MISPLACED_ANNOTATION,
             "type", "Type annotations are not allowed here. "
                 + "Are you missing parentheses?"));
+      }
+    }
+  }
+
+  /**
+   * Check that an arrow function is not annotated with {@constructor}.
+   */
+  private void validateArrowFunction(Node n) {
+    if (n.isArrowFunction()) {
+      JSDocInfo info = NodeUtil.getBestJSDocInfo(n);
+      if (info != null && info.isConstructorOrInterface()) {
+        compiler.report(JSError.make(n, ARROW_FUNCTION_AS_CONSTRUCTOR));
       }
     }
   }

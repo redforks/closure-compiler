@@ -68,7 +68,6 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     testModules(
         "var name = require('other');" + "name()",
         "goog.provide('module$test');"
-            + "var module$test = {};"
             + "goog.require('module$other');"
             + "var name$$module$test = module$other;"
             + "name$$module$test();");
@@ -76,14 +75,15 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     ProcessEs6ModulesTest.testModules(
         this,
         ImmutableList.of(
-            SourceFile.fromCode("mod/name.js", ""),
+            SourceFile.fromCode(Compiler.joinPathParts("mod", "name.js"), ""),
             SourceFile.fromCode(
-                "test/sub.js", "var name = require('mod/name');" + "(function() { name(); })();")),
-        "goog.provide('module$test$sub');"
-            + "var module$test$sub = {};"
-            + "goog.require('module$mod$name');"
-            + "var name$$module$test$sub = module$mod$name;"
-            + "(function() { name$$module$test$sub(); })();");
+                Compiler.joinPathParts("test", "sub.js"),
+                "var name = require('mod/name');"
+                + "(function() { name(); })();")),
+                "goog.provide('module$test$sub');"
+                + "goog.require('module$mod$name');"
+                + "var name$$module$test$sub = module$mod$name;"
+                + "(function() { name$$module$test$sub(); })();");
   }
 
   public void testExports() {
@@ -91,7 +91,6 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     testModules(
         "var name = require('other');" + "exports.foo = 1;",
         "goog.provide('module$test');"
-            + "/** @const */ var module$test = {};"
             + "goog.require('module$other');"
             + "var name$$module$test = module$other;"
             + "module$test.foo = 1;");
@@ -100,7 +99,7 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         "goog.provide('module$test');"
             + "goog.require('module$other');"
             + "var name$$module$test = module$other;"
-            + "/** @const */ var module$test = function () {};");
+            + "module$test = function () {};");
   }
 
   public void testPropertyExports() {
@@ -108,7 +107,6 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     testModules(
         "exports.one = 1;" + "module.exports.obj = {};" + "module.exports.obj.two = 2;",
         "goog.provide('module$test');"
-            + "/** @const */ var module$test = {};"
             + "module$test.one = 1;"
             + "module$test.obj = {};"
             + "module$test.obj.two = 2;");
@@ -119,7 +117,6 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     testModules(
         "exports.one = 1;" + "module.exports = {};",
         "goog.provide('module$test');"
-            + "var module$test = {};"
             + "var exports$$module$test = module$test;"
             + "exports$$module$test.one = 1;"
             + "module$test = {};");
@@ -130,7 +127,6 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     testModules(
         "var a = 1, b = 2;" + "(function() { var a; b = 4})()",
         "goog.provide('module$test');"
-            + "var module$test = {};"
             + "var a$$module$test = 1, b$$module$test = 2;"
             + "(function() { var a; b$$module$test = 4})();");
   }
@@ -140,7 +136,6 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     testModules(
         "var name = require('other'); exports.foo = 1;",
         "goog.provide('module$test_test');"
-            + "var module$test_test = {};"
             + "goog.require('module$other');"
             + "var name$$module$test_test = module$other;"
             + "module$test_test.foo = 1;");
@@ -151,7 +146,6 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     testModules(
         "var name = require('../other'); exports.bar = 1;",
         "goog.provide('module$foo$index');"
-            + "var module$foo$index = {};"
             + "goog.require('module$other');"
             + "var name$$module$foo$index = module$other;"
             + "module$foo$index.bar = 1;");
@@ -161,16 +155,15 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     setFilename("foo/bar");
     testModules(
         "var name = require('other');",
-        "goog.provide('module$foo$bar'); var module$foo$bar = {};"
+        "goog.provide('module$foo$bar');"
             + "goog.require('module$other');"
             + "var name$$module$foo$bar = module$other;");
     ProcessEs6ModulesTest.testModules(
         this,
         ImmutableList.of(
-            SourceFile.fromCode("foo/name.js", ""),
-            SourceFile.fromCode("foo/bar.js", "var name = require('./name');")),
+            SourceFile.fromCode(Compiler.joinPathParts("foo", "name.js"), ""),
+            SourceFile.fromCode(Compiler.joinPathParts("foo", "bar.js"), "var name = require('./name');")),
         "goog.provide('module$foo$bar');"
-            + "var module$foo$bar = {};"
             + "goog.require('module$foo$name');"
             + "var name$$module$foo$bar = module$foo$name;");
   }
@@ -182,13 +175,13 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         "module.exports = foo;",
         "goog.provide('module$test');" +
         "var foo$$module$test=function(module){module.exports={}};" +
-        "var module$test=foo$$module$test");
+        "module$test=foo$$module$test");
     testModules(
         "var foo = function () {var module = {};module.exports = {};};" +
         "module.exports = foo;",
         "goog.provide('module$test');" +
         "var foo$$module$test=function(){var module={};module.exports={}};" +
-        "var module$test=foo$$module$test");
+        "module$test=foo$$module$test");
     testModules(
         "var foo = function () {if (true) var module = {};" +
         "module.exports = {};};" +
@@ -196,8 +189,43 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         "goog.provide('module$test');" +
         "var foo$$module$test=function(){if(true)var module={};" +
         "module.exports={}};" +
-        "var module$test=foo$$module$test");
+        "module$test=foo$$module$test");
   }
+
+  public void testUMDPatternConversion() {
+    setFilename("test");
+    testModules(
+        "var foobar = {foo: 'bar'};" +
+        "if (typeof module === 'object' && module.exports) {" +
+        "  module.exports = foobar;" +
+        "} else if (typeof define === 'function' && define.amd) {" +
+        "  define([], function() {return foobar;});" +
+        "} else {" +
+        "  this.foobar = foobar;}",
+        "goog.provide('module$test');" +
+        "var foobar$$module$test = {foo: 'bar'};" +
+        "module$test = foobar$$module$test;");
+    testModules(
+        "var foobar = {foo: 'bar'};" +
+        "if (typeof define === 'function' && define.amd) {" +
+        "  define([], function() {return foobar;});" +
+        "} else if (typeof module === 'object' && module.exports) {" +
+        "  module.exports = foobar;" +
+        "} else {" +
+        "  this.foobar = foobar;}",
+        "goog.provide('module$test');" +
+        "var foobar$$module$test = {foo: 'bar'};" +
+        "module$test = foobar$$module$test;");
+    testModules(
+        "var foobar = {foo: 'bar'};" +
+        "if (typeof module === 'object' && module.exports) {" +
+        "  module.exports = foobar;}" +
+        "if (typeof define === 'function' && define.amd) {" +
+        "  define([], function () {return foobar;});}",
+        "goog.provide('module$test');" +
+        "var foobar$$module$test = {foo: 'bar'};" +
+        "module$test = foobar$$module$test;");
+}
 
   public void testSortInputs() throws Exception {
     SourceFile a = SourceFile.fromCode("a.js", "require('b');require('c')");

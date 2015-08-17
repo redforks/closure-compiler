@@ -43,7 +43,6 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -76,10 +75,6 @@ public final class DefaultPassConfig extends PassConfig {
           "Rename prototypes and inline variables cannot be used together.");
 
   // Miscellaneous errors.
-  static final DiagnosticType REPORT_PATH_IO_ERROR =
-      DiagnosticType.error("JSC_REPORT_PATH_IO_ERROR",
-          "Error writing compiler report to {0}");
-
   private static final DiagnosticType NAME_REF_GRAPH_FILE_ERROR =
       DiagnosticType.error("JSC_NAME_REF_GRAPH_FILE_ERROR",
           "Error \"{1}\" writing name reference graph to \"{0}\".");
@@ -220,22 +215,6 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(closureRewriteClass);
     }
 
-    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
-        && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
-      checks.add(convertEs6TypedToEs6);
-    }
-
-    // Early ES6 transpilation.
-    // Includes ES6 features that are straightforward to transpile.
-    // We won't handle them natively in the rest of the compiler, so we always
-    // transpile them, even if the output language is also ES6.
-    if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
-      checks.add(es6RewriteArrowFunction);
-      checks.add(es6RenameVariablesInParamLists);
-      checks.add(es6SplitVariableDeclarations);
-      checks.add(es6RewriteDestructuring);
-    }
-
     if (options.enables(DiagnosticGroups.MISSING_REQUIRE)
         || options.enables(DiagnosticGroups.EXTRA_REQUIRE)) {
       checks.add(checkRequires);
@@ -253,6 +232,22 @@ public final class DefaultPassConfig extends PassConfig {
 
     if (options.angularPass && !options.skipNonTranspilationPasses) {
       checks.add(angularPass);
+    }
+
+    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED
+        && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
+      checks.add(convertEs6TypedToEs6);
+    }
+
+    // Early ES6 transpilation.
+    // Includes ES6 features that are straightforward to transpile.
+    // We won't handle them natively in the rest of the compiler, so we always
+    // transpile them, even if the output language is also ES6.
+    if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
+      checks.add(es6RewriteArrowFunction);
+      checks.add(es6RenameVariablesInParamLists);
+      checks.add(es6SplitVariableDeclarations);
+      checks.add(es6RewriteDestructuring);
     }
 
     if (options.generateExports && !options.skipNonTranspilationPasses) {
@@ -501,6 +496,10 @@ public final class DefaultPassConfig extends PassConfig {
       passes.add(inferConsts);
     }
 
+    if (options.reportPath != null && (options.extraSmartNameRemoval || options.smartNameRemoval)) {
+      passes.add(initNameAnalyzeReport);
+    }
+
     // Running this pass before disambiguate properties allow the removing
     // unused methods that share the same name as methods called from unused
     // code.
@@ -516,7 +515,7 @@ public final class DefaultPassConfig extends PassConfig {
         passes.add(earlyPeepholeOptimizations);
       }
 
-      passes.add(smartNamePass);
+      passes.add(extraSmartNamePass);
     }
 
     // Property disambiguation should only run once and needs to be done
@@ -2030,60 +2029,40 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
-  /**
-   * Process smart name processing - removes unused classes and does referencing
-   * starting with minimum set of names.
-   */
-  private final PassFactory smartNamePass = new PassFactory("smartNamePass", true) {
-    private boolean hasWrittenFile = false;
-
-    @Override
-    protected CompilerPass create(final AbstractCompiler compiler) {
-      return new CompilerPass() {
-        @Override
-        public void process(Node externs, Node root) {
-          NameAnalyzer na = new NameAnalyzer(compiler, false);
-          na.process(externs, root);
-
-          String reportPath = options.reportPath;
-          if (reportPath != null) {
-            try {
-              if (hasWrittenFile) {
-                Files.append(na.getHtmlReport(), new File(reportPath),
-                    UTF_8);
-              } else {
-                Files.write(na.getHtmlReport(), new File(reportPath),
-                    UTF_8);
-                hasWrittenFile = true;
-              }
-            } catch (IOException e) {
-              compiler.report(JSError.make(REPORT_PATH_IO_ERROR, reportPath));
-            }
-          }
-
-          if (options.smartNameRemoval) {
-            na.removeUnreferenced();
-          }
-        }
-      };
-    }
+  private final PassFactory initNameAnalyzeReport = new PassFactory("initNameAnalyzeReport", true) {
+     @Override
+     protected CompilerPass create(final AbstractCompiler compiler) {
+       return new CompilerPass() {
+         @Override
+         public void process(Node externs, Node root) {
+           NameAnalyzer.createEmptyReport(compiler, options.reportPath);
+         }
+       };
+     }
   };
 
   /**
    * Process smart name processing - removes unused classes and does referencing
    * starting with minimum set of names.
    */
+  private final PassFactory extraSmartNamePass = new PassFactory("smartNamePass", true) {
+    @Override
+    protected CompilerPass create(final AbstractCompiler compiler) {
+      return new NameAnalyzer(compiler, true, options.reportPath);
+    }
+  };
+
+  private final PassFactory smartNamePass = new PassFactory("smartNamePass", true) {
+    @Override
+    protected CompilerPass create(final AbstractCompiler compiler) {
+      return new NameAnalyzer(compiler, true, options.reportPath);
+    }
+  };
+
   private final PassFactory smartNamePass2 = new PassFactory("smartNamePass", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
-      return new CompilerPass() {
-        @Override
-        public void process(Node externs, Node root) {
-          NameAnalyzer na = new NameAnalyzer(compiler, false);
-          na.process(externs, root);
-          na.removeUnreferenced();
-        }
-      };
+      return new NameAnalyzer(compiler, true, null);
     }
   };
 
@@ -2504,23 +2483,8 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("instrumentFunctions", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
-      return new CompilerPass() {
-        @Override public void process(Node externs, Node root) {
-          try {
-            FileReader templateFile =
-                new FileReader(options.instrumentationTemplate);
-            (new InstrumentFunctions(
-                compiler, functionNames,
-                options.instrumentationTemplate,
-                options.appNameStr,
-                templateFile)).process(externs, root);
-          } catch (IOException e) {
-            compiler.report(
-                JSError.make(AbstractCompiler.READ_ERROR,
-                    options.instrumentationTemplate));
-          }
-        }
-      };
+      return new InstrumentFunctions(
+          compiler, functionNames, options.instrumentationTemplate, options.appNameStr);
     }
   };
 

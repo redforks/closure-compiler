@@ -130,15 +130,12 @@ public final class VarCheckTest extends Es6CompilerTestCase {
   }
 
   public void testMultiplyDeclaredVars2() {
-    test("var y; try { y=1 } catch (x) {}" +
-         "try { y=1 } catch (x) {}",
-         "var y;try{y=1}catch(x){}try{y=1}catch(x){}");
+    testSame("var y; try { y=1 } catch (x) {}" +
+         "try { y=1 } catch (x) {}");
   }
 
   public void testMultiplyDeclaredVars3() {
-    testSameEs6("try { var x = 1; x *=2; } catch (x) {}");
-    testError("try { var x = 1; x *=2; } catch (x) {}",
-        VarCheck.VAR_MULTIPLY_DECLARED_ERROR, LanguageMode.ECMASCRIPT5);
+    testSame("try { var x = 1; x *=2; } catch (x) {}");
   }
 
   public void testMultiplyDeclaredVars4() {
@@ -234,6 +231,19 @@ public final class VarCheckTest extends Es6CompilerTestCase {
     testError("var a = {b:5}; with (a){b;}", VarCheck.UNDEFINED_VAR_ERROR);
   }
 
+  public void testFunctionDeclaredInBlock() {
+    testError("if (true) {function foo() {}} foo();", VarCheck.UNDEFINED_VAR_ERROR);
+    testError("foo(); if (true) {function foo() {}}", VarCheck.UNDEFINED_VAR_ERROR);
+
+    testSameEs6("if (true) {var foo = ()=>{}} foo();");
+    testErrorEs6("if (true) {let foo = ()=>{}} foo();", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("if (true) {const foo = ()=>{}} foo();", VarCheck.UNDEFINED_VAR_ERROR);
+
+    testSameEs6("foo(); if (true) {var foo = ()=>{}}");
+    testErrorEs6("foo(); if (true) {let foo = ()=>{}}", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("foo(); if (true) {const foo = ()=>{}}", VarCheck.UNDEFINED_VAR_ERROR);
+  }
+
   public void testValidFunctionExpr() {
     testSame("(function() {});");
   }
@@ -244,6 +254,17 @@ public final class VarCheckTest extends Es6CompilerTestCase {
 
   public void testRecursiveFunction2() {
     testSame("var a = 3; (function a() { return a(); })();");
+  }
+
+  public void testParam() {
+    testSame("function fn(a){ var b = a; }");
+    testSame("function fn(a){ var a = 2; }");
+    testError("function fn(){ var b = a; }", VarCheck.UNDEFINED_VAR_ERROR);
+
+    testSameEs6("function fn(a = 2){ var b = a; }");
+    testSameEs6("function fn(a = 2){ var a = 3; }");
+    testSameEs6("function fn({a, b}){ var c = a; }");
+    testSameEs6("function fn({a, b}){ var a = 3; }");
   }
 
   public void testLegalVarReferenceBetweenModules() {
@@ -391,6 +412,7 @@ public final class VarCheckTest extends Es6CompilerTestCase {
     sanityCheck = true;
     try {
       checkSynthesizedExtern("x", "");
+      fail("Expected RuntimeException");
     } catch (RuntimeException e) {
       assertThat(e.getMessage()).contains("Unexpected variable x");
     }

@@ -533,7 +533,8 @@ public class NodeTraversal {
           }
           return true;
         }
-      });
+      },
+      new Es6SyntacticScopeCreator(compiler));
     t.traverse(jsRoot);
   }
 
@@ -779,7 +780,7 @@ public class NodeTraversal {
    * Determines whether the traversal is currently in the global scope.
    */
   boolean inGlobalScope() {
-    return getScopeDepth() <= 1;
+    return getScopeDepth() == 1;
   }
 
   // Not dual of inGlobalScope, because of block scoping.

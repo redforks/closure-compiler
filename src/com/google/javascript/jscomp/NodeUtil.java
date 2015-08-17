@@ -517,6 +517,15 @@ public final class NodeUtil {
    * Returns true if this is an immutable value.
    */
   static boolean isImmutableValue(Node n) {
+    // TODO(johnlenz): rename this function.  It is currently being used
+    // in two disjoint cases:
+    // 1) We only care about the result of the expression
+    //    (in which case NOT here should return true)
+    // 2) We care that expression is a side-effect free and can't
+    //    be side-effected by other expressions.
+    // This should only be used to say the value is immuable and
+    // hasSideEffects and canBeSideEffected should be used for the other case.
+
     switch (n.getType()) {
       case Token.STRING:
       case Token.NUMBER:
@@ -4024,7 +4033,7 @@ public final class NodeUtil {
     d = (d >= 0) ? Math.floor(d) : Math.ceil(d);
 
     double two32 = 4294967296.0;
-    d = Math.IEEEremainder(d, two32);
+    d = d % two32;
     // (double)(long)d == d should hold here
 
     long l = (long) d;

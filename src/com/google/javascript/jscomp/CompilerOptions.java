@@ -77,6 +77,11 @@ public class CompilerOptions implements Serializable {
   private LanguageMode languageOut;
 
   /**
+   * The builtin set of externs to be used
+   */
+  private Environment environment;
+
+  /**
    * If true, don't transpile ES6 to ES3.
    *  WARNING: Enabling this option will likely cause the compiler to crash
    *     or produce incorrect output.
@@ -721,7 +726,7 @@ public class CompilerOptions implements Serializable {
   public boolean moveFunctionDeclarations;
 
   /** Instrumentation template to use with #recordFunctionInformation */
-  public String instrumentationTemplate;
+  public Instrumentation instrumentationTemplate;
 
   String appNameStr;
 
@@ -960,6 +965,9 @@ public class CompilerOptions implements Serializable {
     // Accepted language
     languageIn = LanguageMode.ECMASCRIPT3;
     languageOut = LanguageMode.NO_TRANSPILE;
+
+    // Which environment to use
+    environment = Environment.BROWSER;
 
     // Language variation
     acceptTypeSyntax = false;
@@ -1648,6 +1656,17 @@ public class CompilerOptions implements Serializable {
   }
 
   /**
+   * Set which set of builtin externs to use.
+   */
+  public void setEnvironment(Environment environment) {
+    this.environment = environment;
+  }
+
+  public Environment getEnvironment() {
+    return environment;
+  }
+
+  /**
    * @return whether we are currently transpiling from ES6 to a lower version.
    */
   boolean lowerFromEs6() {
@@ -2146,7 +2165,7 @@ public class CompilerOptions implements Serializable {
     this.moveFunctionDeclarations = moveFunctionDeclarations;
   }
 
-  public void setInstrumentationTemplate(String instrumentationTemplate) {
+  public void setInstrumentationTemplate(Instrumentation instrumentationTemplate) {
     this.instrumentationTemplate = instrumentationTemplate;
   }
 
@@ -2550,5 +2569,21 @@ public class CompilerOptions implements Serializable {
       public void addAlias(String alias, String definition) {
       }
     }
+  }
+
+  /**
+   * An environment specifies the built-in externs that are loaded for a given
+   * compilation.
+   */
+  public static enum Environment {
+    /**
+     * Hand crafted externs that have traditionally been the default externs.
+     */
+    BROWSER,
+
+    /**
+     * Only language externs are loaded.
+     */
+    CUSTOM
   }
 }

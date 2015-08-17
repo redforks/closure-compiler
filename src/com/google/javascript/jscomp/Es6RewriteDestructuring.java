@@ -36,13 +36,13 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, externs, this);
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, externs, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 
   @Override
@@ -175,7 +175,7 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
       if (child.isStringKey()) {
         if (!child.hasChildren()) { // converting shorthand
           Node name = IR.name(child.getString());
-          name.copyInformationFrom(child);
+          name.useSourceInfoIfMissingFrom(child);
           child.addChildToBack(name);
         }
         Node getprop =
