@@ -385,7 +385,13 @@ public class NodeTraversal {
       sourceName = getSourceName(n);
       curNode = n;
       pushScope(s);
-      traverseBranch(n, n.getParent());
+
+      // traverseBranch is not called here to avoid re-creating the block scope.
+      for (Node child = n.getFirstChild(); child != null; ) {
+        Node next = child.getNext();
+        traverseBranch(child, n);
+        child = next;
+      }
 
       popScope();
     } else {
@@ -525,17 +531,16 @@ public class NodeTraversal {
     final AbstractCompiler comp = compiler;
     final FunctionCallback cb = callback;
     final Node jsRoot = comp.getJsRoot();
-    NodeTraversal t = new NodeTraversal(comp, new AbstractPreOrderCallback() {
-        @Override
-        public final boolean shouldTraverse(NodeTraversal t, Node n, Node p) {
-          if ((n == jsRoot || n.isFunction()) && comp.hasScopeChanged(n)) {
-            cb.enterFunction(comp, n);
+    NodeTraversal.traverseEs6(comp, jsRoot,
+        new AbstractPreOrderCallback() {
+          @Override
+          public final boolean shouldTraverse(NodeTraversal t, Node n, Node p) {
+            if ((n == jsRoot || n.isFunction()) && comp.hasScopeChanged(n)) {
+              cb.enterFunction(comp, n);
+            }
+            return true;
           }
-          return true;
-        }
-      },
-      new Es6SyntacticScopeCreator(compiler));
-    t.traverse(jsRoot);
+        });
   }
 
   /**
@@ -649,7 +654,9 @@ public class NodeTraversal {
     popScope();
   }
 
-  /** Examines the functions stack for the last instance of a function node. */
+  /** Examines the functions stack for the last instance of a function node. When possible, prefer
+   *  this method over NodeUtil.getEnclosingFunction() because this in general looks at less nodes.
+   */
   public Node getEnclosingFunction() {
     Node root = getCfgRoot();
     return root.isFunction() ? root : null;
@@ -658,6 +665,7 @@ public class NodeTraversal {
   /** Creates a new scope (e.g. when entering a function). */
   private void pushScope(Node node) {
     Preconditions.checkState(curNode != null);
+    Preconditions.checkState(node != null);
     compiler.setScope(node);
     scopeRoots.push(node);
     if (NodeUtil.isValidCfgRoot(node)) {
@@ -683,6 +691,7 @@ public class NodeTraversal {
     compiler.setScope(s.getRootNode());
     scopes.push(s);
     if (NodeUtil.isValidCfgRoot(s.getRootNode())) {
+      cfgRoots.push(s.getRootNode());
       cfgs.push(null);
     }
     if (!quietly && scopeCallback != null) {
@@ -709,10 +718,9 @@ public class NodeTraversal {
       scopeRoot = scopeRoots.pop();
     }
     if (NodeUtil.isValidCfgRoot(scopeRoot)) {
+      Preconditions.checkState(!cfgRoots.isEmpty());
+      Preconditions.checkState(cfgRoots.pop() == scopeRoot);
       cfgs.pop();
-      if (!cfgRoots.isEmpty()) {
-        Preconditions.checkState(cfgRoots.pop() == scopeRoot);
-      }
     }
     if (hasScope()) {
       compiler.setScope(getScopeRoot());
@@ -732,9 +740,15 @@ public class NodeTraversal {
       scopes.push(scope);
     }
     scopeRoots.clear();
-    cfgRoots.clear();
     // No need to call compiler.setScope; the top scopeRoot is now the top scope
     return scope;
+  }
+
+  public Scope getClosestHoistScope() {
+    // TODO(moz): This should not call getScope(). We should find the root of the closest hoist
+    // scope and effectively getScope() from there, which avoids scanning inner scopes that might
+    // not be needed.
+    return getScope().getClosestHoistScope();
   }
 
   public TypedScope getTypedScope() {
@@ -765,32 +779,28 @@ public class NodeTraversal {
   }
 
   private Node getCfgRoot() {
-    if (cfgRoots.isEmpty()) {
-      Scope currScope = scopes.peek();
-      while (currScope.isBlockScope()) {
-        currScope = currScope.getParent();
-      }
-      return currScope.getRootNode();
-    } else {
-      return cfgRoots.peek();
-    }
+    return cfgRoots.peek();
   }
 
   /**
-   * Determines whether the traversal is currently in the global scope.
+   * Determines whether the traversal is currently in the global scope. Note that this returns false
+   * in a global block scope.
    */
   boolean inGlobalScope() {
-    return getScopeDepth() == 1;
+    return getScopeDepth() == 0;
   }
 
-  // Not dual of inGlobalScope, because of block scoping.
-  // They both return false in an inner block at top level.
-  boolean inFunction() {
-    return getCfgRoot().isFunction();
+  /**
+   * Determines whether the hoist scope of the current traversal is global.
+   */
+  boolean inGlobalHoistScope() {
+    return !getCfgRoot().isFunction();
   }
 
   int getScopeDepth() {
-    return scopes.size() + scopeRoots.size();
+    int sum = scopes.size() + scopeRoots.size();
+    Preconditions.checkState(sum > 0);
+    return sum - 1; // Use 0-based scope depth to be consistent within the compiler
   }
 
   public boolean hasScope() {

@@ -229,11 +229,11 @@ class GlobalNamespace
   private void process() {
     if (externsRoot != null) {
       inExterns = true;
-      NodeTraversal.traverse(compiler, externsRoot, new BuildGlobalNamespace());
+      NodeTraversal.traverseEs6(compiler, externsRoot, new BuildGlobalNamespace());
     }
     inExterns = false;
 
-    NodeTraversal.traverse(compiler, root, new BuildGlobalNamespace());
+    NodeTraversal.traverseEs6(compiler, root, new BuildGlobalNamespace());
     generated = true;
   }
 
@@ -430,6 +430,7 @@ class GlobalNamespace
         return;
       }
 
+      scope = scope.getClosestHoistScope();
       if (isSet) {
         if (scope.isGlobal()) {
           handleSetFromGlobal(module, scope, n, parent, name, isPropAssign, type);
@@ -1003,7 +1004,6 @@ class GlobalNamespace
 
     void addRef(Ref ref) {
       addRefInternal(ref);
-      JSDocInfo info;
       switch (ref.type) {
         case SET_FROM_GLOBAL:
           if (declaration == null) {
@@ -1014,7 +1014,7 @@ class GlobalNamespace
           break;
         case SET_FROM_LOCAL:
           localSets++;
-          info = ref.getNode() == null ? null :
+          JSDocInfo info = ref.getNode() == null ? null :
               NodeUtil.getBestJSDocInfo(ref.getNode());
           if (info != null && info.isNoCollapse()) {
             localSetsWithNoCollapse++;
@@ -1022,6 +1022,10 @@ class GlobalNamespace
           break;
         case PROTOTYPE_GET:
         case DIRECT_GET:
+          Node node = ref.getNode();
+          if (node != null && node.isGetProp() && node.getParent().isExprResult()) {
+            docInfo = node.getJSDocInfo();
+          }
           totalGets++;
           break;
         case ALIASING_GET:
@@ -1134,6 +1138,34 @@ class GlobalNamespace
       }
 
       return docInfo != null && docInfo.isNoCollapse();
+    }
+
+    boolean isInlinableGlobalAlias() {
+      // Only simple aliases with direct usage are inlinable.
+      if (inExterns || globalSets != 1 || localSets != 0 || !canCollapse()) {
+        return false;
+      }
+
+      // Only allow inlining of simple references.
+      for (Ref ref : getRefs()) {
+        switch (ref.type) {
+          case SET_FROM_GLOBAL:
+            // Expect one global set
+            continue;
+          case SET_FROM_LOCAL:
+            throw new IllegalStateException();
+          case ALIASING_GET:
+          case DIRECT_GET:
+            continue;
+          case PROTOTYPE_GET:
+          case CALL_GET:
+          case DELETE_PROP:
+            return false;
+          default:
+            throw new IllegalStateException();
+        }
+      }
+      return true;
     }
 
     boolean canCollapse() {

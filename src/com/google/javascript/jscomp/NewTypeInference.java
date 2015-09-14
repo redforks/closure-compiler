@@ -274,21 +274,19 @@ final class NewTypeInference implements CompilerPass {
   private final String ABSTRACT_METHOD_NAME;
   private final Map<String, AssertionFunctionSpec> assertionFunctionsMap;
   private static final QualifiedName NUMERIC_INDEX = new QualifiedName("0");
-  private final boolean isClosurePassOn;
 
   // Used only for development
   private static boolean showDebuggingPrints = false;
   static boolean measureMem = false;
   private static long peakMem = 0;
 
-  NewTypeInference(AbstractCompiler compiler, boolean isClosurePassOn) {
+  NewTypeInference(AbstractCompiler compiler) {
     this.warnings = new WarningReporter(compiler);
     this.compiler = compiler;
     this.convention = compiler.getCodingConvention();
     this.envs = new LinkedHashMap<>();
     this.summaries = new LinkedHashMap<>();
     this.deferredChecks = new LinkedHashMap<>();
-    this.isClosurePassOn = isClosurePassOn;
     this.ABSTRACT_METHOD_NAME = convention.getAbstractMethodName();
     assertionFunctionsMap = new LinkedHashMap<>();
     for (AssertionFunctionSpec assertionFunction : convention.getAssertionFunctions()) {
@@ -1376,22 +1374,24 @@ final class NewTypeInference implements CompilerPass {
     int exprKind = expr.getType();
     Node lhs = expr.getFirstChild();
     Node rhs = expr.getLastChild();
-    if ((specializedType.isTruthy() && exprKind == Token.AND) ||
-        (specializedType.isFalsy() && exprKind == Token.OR)) {
+    if ((specializedType.isTrueOrTruthy() && exprKind == Token.AND)
+        || (specializedType.isFalseOrFalsy() && exprKind == Token.OR)) {
       EnvTypePair lhsPair =
           analyzeExprFwd(lhs, inEnv, JSType.UNKNOWN, specializedType);
       EnvTypePair rhsPair =
           analyzeExprFwd(rhs, lhsPair.env, JSType.UNKNOWN, specializedType);
       return rhsPair;
-    } else if ((specializedType.isFalsy() && exprKind == Token.AND) ||
-        (specializedType.isTruthy() && exprKind == Token.OR)) {
+    } else if ((specializedType.isFalseOrFalsy() && exprKind == Token.AND)
+        || (specializedType.isTrueOrTruthy() && exprKind == Token.OR)) {
       EnvTypePair shortCircuitPair =
           analyzeExprFwd(lhs, inEnv, JSType.UNKNOWN, specializedType);
       EnvTypePair lhsPair = analyzeExprFwd(
           lhs, inEnv, JSType.UNKNOWN, specializedType.negate());
       EnvTypePair rhsPair =
           analyzeExprFwd(rhs, lhsPair.env, JSType.UNKNOWN, specializedType);
-      return EnvTypePair.join(shortCircuitPair, rhsPair);
+      JSType lhsUnspecializedType = JSType.join(shortCircuitPair.type, lhsPair.type);
+      return combineLhsAndRhsForLogicalOps(
+          exprKind, lhsUnspecializedType, shortCircuitPair, rhsPair);
     } else {
       // Independently of the specializedType, && rhs is only analyzed when
       // lhs is truthy, and || rhs is only analyzed when lhs is falsy.
@@ -1402,8 +1402,31 @@ final class NewTypeInference implements CompilerPass {
           lhs, inEnv, JSType.UNKNOWN, stopAfterLhsType.negate());
       EnvTypePair rhsPair =
           analyzeExprFwd(rhs, lhsPair.env, requiredType, specializedType);
-      return EnvTypePair.join(shortCircuitPair, rhsPair);
+      JSType lhsUnspecializedType = JSType.join(shortCircuitPair.type, lhsPair.type);
+      return combineLhsAndRhsForLogicalOps(
+          exprKind, lhsUnspecializedType, shortCircuitPair, rhsPair);
     }
+  }
+
+  private EnvTypePair combineLhsAndRhsForLogicalOps(int logicalOp,
+      JSType lhsUnspecializedType, EnvTypePair lhsPair, EnvTypePair rhsPair) {
+    if (logicalOp == Token.OR) {
+      if (lhsUnspecializedType.isAnyTruthyType()) {
+        return lhsPair;
+      }
+      if (lhsUnspecializedType.isAnyFalsyType()) {
+        return rhsPair;
+      }
+      return EnvTypePair.join(lhsPair, rhsPair);
+    }
+    Preconditions.checkState(logicalOp == Token.AND);
+    if (lhsUnspecializedType.isAnyFalsyType()) {
+      return lhsPair;
+    }
+    if (lhsUnspecializedType.isAnyTruthyType()) {
+      return rhsPair;
+    }
+    return EnvTypePair.join(lhsPair, rhsPair);
   }
 
   private EnvTypePair analyzeIncDecFwd(
@@ -1466,14 +1489,14 @@ final class NewTypeInference implements CompilerPass {
           ctor, Token.INSTANCEOF, "a constructor function", ctorType);
     }
     if (ctorFunType == null || !ctorFunType.isConstructor() ||
-        (!specializedType.isTruthy() && !specializedType.isFalsy())) {
+        (!specializedType.isTrueOrTruthy() && !specializedType.isFalseOrFalsy())) {
       ctorPair.type = JSType.BOOLEAN;
       return ctorPair;
     }
 
     // We are in a specialized context *and* we know the constructor type
     JSType instanceType = ctorFunType.getInstanceTypeOfCtor();
-    JSType instanceSpecType = specializedType.isTruthy()
+    JSType instanceSpecType = specializedType.isTrueOrTruthy()
         ? objPair.type.specialize(instanceType)
         : objPair.type.removeType(instanceType);
     if (!instanceSpecType.isBottom()) {
@@ -1534,7 +1557,6 @@ final class NewTypeInference implements CompilerPass {
     if (lhs.getBooleanProp(Node.ANALYZED_DURING_GTI)) {
       lhs.removeProp(Node.ANALYZED_DURING_GTI);
       JSType declType = markAndGetTypeOfPreanalyzedNode(lhs, inEnv, true);
-      maybeSetTypeI(lhs, declType);
       if (rhs.matchesQualifiedName(ABSTRACT_METHOD_NAME)) {
         return new EnvTypePair(inEnv, requiredType);
       }
@@ -1977,11 +1999,11 @@ final class NewTypeInference implements CompilerPass {
     JSType resultType = JSType.BOOLEAN;
     if (lhs.isString()) {
       QualifiedName pname = new QualifiedName(lhs.getString());
-      if (specializedType.isTruthy()) {
+      if (specializedType.isTrueOrTruthy()) {
         pair = analyzeExprFwd(rhs, inEnv, reqObjType,
             reqObjType.withPropertyRequired(pname.getLeftmostName()));
         resultType = JSType.TRUE_TYPE;
-      } else if (specializedType.isFalsy()) {
+      } else if (specializedType.isFalseOrFalsy()) {
         pair = analyzeExprFwd(rhs, inEnv, reqObjType);
         // If the rhs is a loose object, we won't warn about missing
         // properties, despite removing the type here.
@@ -2036,7 +2058,7 @@ final class NewTypeInference implements CompilerPass {
 
   private EnvTypePair analyzeStrictComparisonFwd(int comparisonOp,
       Node lhs, Node rhs, TypeEnv inEnv, JSType specializedType) {
-    if (specializedType.isTruthy() || specializedType.isFalsy()) {
+    if (specializedType.isTrueOrTruthy() || specializedType.isFalseOrFalsy()) {
       if (lhs.isTypeOf()) {
         return analyzeSpecializedTypeof(
             lhs, rhs, comparisonOp, inEnv, specializedType);
@@ -2055,13 +2077,13 @@ final class NewTypeInference implements CompilerPass {
     // This env may contain types that have been tightened after nullable deref.
     TypeEnv preciseEnv = rhsPair.env;
 
-    if ((comparisonOp == Token.SHEQ && specializedType.isTruthy()) ||
-        (comparisonOp == Token.SHNE && specializedType.isFalsy())) {
+    if ((comparisonOp == Token.SHEQ && specializedType.isTrueOrTruthy())
+        || (comparisonOp == Token.SHNE && specializedType.isFalseOrFalsy())) {
       JSType meetType = JSType.meet(lhsPair.type, rhsPair.type);
       lhsPair = analyzeExprFwd(lhs, preciseEnv, JSType.UNKNOWN, meetType);
       rhsPair = analyzeExprFwd(rhs, lhsPair.env, JSType.UNKNOWN, meetType);
-    } else if ((comparisonOp == Token.SHEQ && specializedType.isFalsy()) ||
-        (comparisonOp == Token.SHNE && specializedType.isTruthy())) {
+    } else if ((comparisonOp == Token.SHEQ && specializedType.isFalseOrFalsy()) ||
+        (comparisonOp == Token.SHNE && specializedType.isTrueOrTruthy())) {
       JSType lhsType = lhsPair.type;
       JSType rhsType = rhsPair.type;
       if (lhsType.isNullOrUndef()) {
@@ -2085,10 +2107,10 @@ final class NewTypeInference implements CompilerPass {
     if (comparedType.isUnknown()) {
       pair = analyzeExprFwd(typeofRand, inEnv);
       pair = analyzeExprFwd(typeString, pair.env);
-    } else if ((specializedType.isTruthy() &&
-         (comparisonOp == Token.SHEQ || comparisonOp == Token.EQ)) ||
-        (specializedType.isFalsy() &&
-         (comparisonOp == Token.SHNE || comparisonOp == Token.NE))) {
+    } else if ((specializedType.isTrueOrTruthy()
+            && (comparisonOp == Token.SHEQ || comparisonOp == Token.EQ))
+        || (specializedType.isFalseOrFalsy()
+            && (comparisonOp == Token.SHNE || comparisonOp == Token.NE))) {
       pair = analyzeExprFwd(typeofRand, inEnv, JSType.UNKNOWN, comparedType);
     } else {
       pair = analyzeExprFwd(typeofRand, inEnv);
@@ -2215,7 +2237,7 @@ final class NewTypeInference implements CompilerPass {
     Node lhs = expr.getFirstChild();
     Node rhs = expr.getLastChild();
 
-    if (specializedType.isTruthy() || specializedType.isFalsy()) {
+    if (specializedType.isTrueOrTruthy() || specializedType.isFalseOrFalsy()) {
       if (lhs.isTypeOf()) {
         return analyzeSpecializedTypeof(
             lhs, rhs, tokenType, inEnv, specializedType);
@@ -2236,8 +2258,8 @@ final class NewTypeInference implements CompilerPass {
     JSType lhsType = lhsPair.type;
     JSType rhsType = rhsPair.type;
 
-    if (tokenType == Token.EQ && specializedType.isTruthy() ||
-        tokenType == Token.NE && specializedType.isFalsy()) {
+    if (tokenType == Token.EQ && specializedType.isTrueOrTruthy()
+        || tokenType == Token.NE && specializedType.isFalseOrFalsy()) {
       if (lhsType.isNullOrUndef()) {
         rhsPair = analyzeExprFwd(
             rhs, preciseEnv, JSType.UNKNOWN, JSType.NULL_OR_UNDEF);
@@ -2253,8 +2275,8 @@ final class NewTypeInference implements CompilerPass {
         lhsPair = analyzeExprFwd(lhs, preciseEnv, JSType.UNKNOWN, lhsType);
         rhsPair = analyzeExprFwd(rhs, lhsPair.env);
       }
-    } else if (tokenType == Token.EQ && specializedType.isFalsy() ||
-        tokenType == Token.NE && specializedType.isTruthy()) {
+    } else if (tokenType == Token.EQ && specializedType.isFalseOrFalsy()
+        || tokenType == Token.NE && specializedType.isTrueOrTruthy()) {
       if (lhsType.isNullOrUndef()) {
         rhsType = rhsType.removeType(JSType.NULL_OR_UNDEF);
         rhsPair = analyzeExprFwd(rhs, preciseEnv, JSType.UNKNOWN, rhsType);
@@ -2375,7 +2397,7 @@ final class NewTypeInference implements CompilerPass {
       return analyzeCallNodeArgsFwdWhenError(call, inEnv);
     }
     EnvTypePair pair = analyzeExprFwd(call.getLastChild(), inEnv);
-    if (specializedType.isTruthy() || specializedType.isFalsy()) {
+    if (specializedType.isTrueOrTruthy() || specializedType.isFalseOrFalsy()) {
       pair = analyzeExprFwd(call.getLastChild(), inEnv, JSType.UNKNOWN,
           googPredicateTransformType(typeHint, specializedType, pair.type));
     }
@@ -2404,49 +2426,49 @@ final class NewTypeInference implements CompilerPass {
       case "array":
       case "isArray":
         JSType arrayType = commonTypes.getArrayInstance();
-        if (arrayType.isUnknown()) {
-          return JSType.UNKNOWN;
-        }
-        return booleanContext.isTruthy() ?
-            arrayType : beforeType.removeType(arrayType);
+      if (arrayType.isUnknown()) {
+        return JSType.UNKNOWN;
+      }
+      return booleanContext.isTrueOrTruthy()
+          ? arrayType : beforeType.removeType(arrayType);
       case "boolean":
       case "isBoolean":
-        return booleanContext.isTruthy() ?
-            JSType.BOOLEAN : beforeType.removeType(JSType.BOOLEAN);
+        return booleanContext.isTrueOrTruthy()
+          ? JSType.BOOLEAN : beforeType.removeType(JSType.BOOLEAN);
       case "function":
       case "isFunction":
-        return booleanContext.isTruthy()
-            ? commonTypes.looseTopFunction()
-            : beforeType.removeType(commonTypes.topFunction());
+        return booleanContext.isTrueOrTruthy()
+          ? commonTypes.looseTopFunction()
+          : beforeType.removeType(commonTypes.topFunction());
       case "null":
       case "isNull":
-        return booleanContext.isTruthy() ?
-            JSType.NULL : beforeType.removeType(JSType.NULL);
+        return booleanContext.isTrueOrTruthy()
+          ? JSType.NULL : beforeType.removeType(JSType.NULL);
       case "number":
       case "isNumber":
-        return booleanContext.isTruthy() ?
-            JSType.NUMBER : beforeType.removeType(JSType.NUMBER);
+        return booleanContext.isTrueOrTruthy()
+          ? JSType.NUMBER : beforeType.removeType(JSType.NUMBER);
       case "string":
       case "isString":
-        return booleanContext.isTruthy() ?
-            JSType.STRING : beforeType.removeType(JSType.STRING);
+        return booleanContext.isTrueOrTruthy()
+          ? JSType.STRING : beforeType.removeType(JSType.STRING);
       case "isDef":
-        return booleanContext.isTruthy() ?
-            beforeType.removeType(JSType.UNDEFINED) : JSType.UNDEFINED;
+        return booleanContext.isTrueOrTruthy()
+            ? beforeType.removeType(JSType.UNDEFINED) : JSType.UNDEFINED;
       case "isDefAndNotNull":
-        return booleanContext.isTruthy() ?
-            beforeType.removeType(JSType.NULL_OR_UNDEF) : JSType.NULL_OR_UNDEF;
+        return booleanContext.isTrueOrTruthy()
+            ? beforeType.removeType(JSType.NULL_OR_UNDEF) : JSType.NULL_OR_UNDEF;
       case "isObject":
         // typeof(null) === 'object', but goog.isObject(null) is false
-        return booleanContext.isTruthy() ?
-            JSType.TOP_OBJECT : beforeType.removeType(JSType.TOP_OBJECT);
+        return booleanContext.isTrueOrTruthy()
+            ? JSType.TOP_OBJECT : beforeType.removeType(JSType.TOP_OBJECT);
       case "object":
         // goog.typeOf(expr) === 'object' is true only for non-function objects.
         // Just do sth simple here.
         return JSType.UNKNOWN;
       case "undefined":
-        return booleanContext.isTruthy() ?
-            JSType.UNDEFINED : beforeType.removeType(JSType.UNDEFINED);
+        return booleanContext.isTrueOrTruthy()
+            ? JSType.UNDEFINED : beforeType.removeType(JSType.UNDEFINED);
       default:
         // For when we can't figure out the type name used with goog.typeOf.
         return JSType.UNKNOWN;
@@ -2491,7 +2513,7 @@ final class NewTypeInference implements CompilerPass {
     boolean isNotAnObject = !JSType.haveCommonSubtype(recvType, JSType.TOP_OBJECT);
     boolean mayNotBeAnObject = !recvType.isSubtypeOf(JSType.TOP_OBJECT);
     if (isNotAnObject
-        || (!specializedType.isTruthy() && !specializedType.isFalsy()
+        || (!specializedType.isTrueOrTruthy() && !specializedType.isFalseOrFalsy()
             && mayNotBeAnObject)) {
       warnings.add(JSError.make(receiver, PROPERTY_ACCESS_ON_NONOBJECT,
               getPropNameForErrorMsg(receiver.getParent()),
@@ -2548,20 +2570,27 @@ final class NewTypeInference implements CompilerPass {
 
   private boolean mayWarnAboutInexistentProp(
       Node propAccessNode, JSType recvType, QualifiedName propQname) {
-    if (!propAccessNode.isGetProp()) {
+    if (!propAccessNode.isGetProp() || recvType.hasProp(propQname)) {
       return false;
     }
+    // To avoid giant types in the error message, we use a heuristic:
+    // if the receiver is a qualified name whose type is too long, we print
+    // the qualified name instead.
+    Node recv = propAccessNode.getFirstChild();
+    String recvTypeAsString = recvType.toString();
     String pname = propQname.toString();
-    if (!recvType.mayHaveProp(propQname)) {
-      warnings.add(JSError.make(propAccessNode,
-              TypeCheck.INEXISTENT_PROPERTY, pname, recvType.toString()));
-      return true;
-    } else if (!recvType.hasProp(propQname)) {
-      warnings.add(JSError.make(propAccessNode,
-              POSSIBLY_INEXISTENT_PROPERTY, pname, recvType.toString()));
-      return true;
+    String errorMsg;
+    if (!recv.isQualifiedName()) {
+      errorMsg = recvTypeAsString;
+    } else if (recvTypeAsString.length() > 100) {
+      errorMsg = recv.getQualifiedName();
+    } else {
+      errorMsg = recv.getQualifiedName() + " of type " + recvTypeAsString;
     }
-    return false;
+    DiagnosticType warningType = recvType.mayHaveProp(propQname)
+        ? POSSIBLY_INEXISTENT_PROPERTY : TypeCheck.INEXISTENT_PROPERTY;
+    warnings.add(JSError.make(propAccessNode, warningType, pname, errorMsg));
+    return true;
   }
 
   private boolean mayWarnAboutConst(Node n) {
@@ -2587,12 +2616,11 @@ final class NewTypeInference implements CompilerPass {
     Preconditions.checkArgument(thisExpr.isThis());
     Preconditions.checkState(!currentScope.hasThis());
     Node parent = thisExpr.getParent();
-    Node scopeParent = currentScope.getRoot().getParent();
     if ((parent.isGetProp() || parent.isGetElem())
         // Don't warn for callbacks. Most of them are not annotated but THIS is
         // bound to a legitimate object at runtime. They do lose typechecking
         // for THIS however, but we won't warn.
-        && !scopeParent.isCall() && !scopeParent.isNew()) {
+        && !NodeUtil.isCallOrNewArgument(currentScope.getRoot())) {
       warnings.add(JSError.make(thisExpr, CheckGlobalThis.GLOBAL_THIS));
       return true;
     }
@@ -2608,10 +2636,10 @@ final class NewTypeInference implements CompilerPass {
     JSType recvReqType, recvSpecType;
 
     // First, analyze the receiver object.
-    if (specializedType.isTruthy()) {
+    if (specializedType.isTrueOrTruthy()) {
       recvReqType = reqObjType;
       recvSpecType = reqObjType.withProperty(propQname, specializedType);
-    } else if (specializedType.isFalsy()) {
+    } else if (specializedType.isFalseOrFalsy()) {
       recvReqType = recvSpecType = reqObjType;
     } else {
       recvReqType = reqObjType.withProperty(propQname, requiredType);
@@ -2660,8 +2688,8 @@ final class NewTypeInference implements CompilerPass {
       return new EnvTypePair(pair.env, JSType.UNKNOWN);
     }
     if (!propAccessNode.getParent().isExprResult()
-        && !specializedType.isTruthy()
-        && !specializedType.isFalsy()
+        && !specializedType.isTrueOrTruthy()
+        && !specializedType.isFalseOrFalsy()
         && !recvType.mayBeDict()
         && !mayWarnAboutInexistentProp(propAccessNode, recvType, propQname)
         && recvType.hasProp(propQname)
@@ -3299,7 +3327,7 @@ final class NewTypeInference implements CompilerPass {
   }
 
   private boolean isClosureSpecificCall(Node expr) {
-    if (!isClosurePassOn || !expr.isCall()) {
+    if (!expr.isCall()) {
       return false;
     }
     return expr.getFirstChild().isQualifiedName()

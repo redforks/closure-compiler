@@ -273,6 +273,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     typeCheck("function f() { this['p']; }", CheckGlobalThis.GLOBAL_THIS);
 
+    typeCheck("(function() { this.p; })();", CheckGlobalThis.GLOBAL_THIS);
+
     typeCheck(Joiner.on('\n').join(
         "function g(x) {}",
         "g(function() { return this.p; })"));
@@ -613,6 +615,21 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  if (x == y) {",
         "    return y - 1;",
         "  }",
+        "}"),
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck("var /** boolean */ x = true || 123;");
+
+    typeCheck("var /** number */ x = undefined || 123;");
+
+    typeCheck("var /** null */ x = null && 123;");
+
+    typeCheck("var /** number */ x = { a: 1 } && 123;");
+
+    typeCheck(Joiner.on('\n').join(
+        "function f(/** Object|undefined */ opt_obj) {",
+        "  var x = opt_obj && 'asdf';",
+        "  if (opt_obj && x in opt_obj) {}",
         "}"),
         NewTypeInference.INVALID_OPERAND_TYPE);
   }
@@ -8293,7 +8310,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "ns.fun.get = function(/** string */ name) {};",
         "/** @const */ ns.fun = ns.fun || {};",
         "ns.fun(123);"),
-        TypeCheck.NOT_CALLABLE);
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
   }
 
   public void testInvalidEnumDoesntCrash() {
@@ -8821,7 +8838,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "    x = /** @struct */ { a: 1 };",
         "  }",
         "  else {",
-        "    x = {};",
+        "    x = { b: 2 };",
         "  }",
         "  x['random' + 'propname'] = 123;",
         "}"),
@@ -10817,6 +10834,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  y = x;",
         "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+
     typeCheck(Joiner.on('\n').join(
         CLOSURE_BASE,
         "/** @param {number=} x */",
@@ -10825,6 +10843,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "    var /** undefined */ u = x;",
         "  }",
         "}"));
+
     typeCheck(Joiner.on('\n').join(
         CLOSURE_BASE,
         "/** @constructor */",
@@ -10835,6 +10854,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "    var /** (null|undefined) */ y = x;",
         "  }",
         "}"));
+
     typeCheck(Joiner.on('\n').join(
         CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
@@ -10842,6 +10862,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "    x - 5;",
         "  }",
         "}"));
+
     typeCheck(Joiner.on('\n').join(
         CLOSURE_BASE,
         "function f(/** (number|string) */ x) {",
@@ -10849,6 +10870,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "    x < 'str';",
         "  }",
         "}"));
+
     typeCheck(Joiner.on('\n').join(
         CLOSURE_BASE,
         "function f(/** (number|boolean) */ x) {",
@@ -12258,6 +12280,13 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "}"));
   }
 
+  public void testJoinWithTopObject() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @param {!Function|!Object} x */",
+        "function f(x) {}",
+        "f({ a: 1, b: 2 });"));
+  }
+
   public void testUnificationWithSubtyping() {
     typeCheck(Joiner.on('\n').join(
         "/** @constructor */ function Foo() {}",
@@ -13595,5 +13624,38 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "b = ns.Foo.instance_;"),
         NewTypeInference.MISTYPED_ASSIGN_RHS,
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testNoSpuriousWarningsInES6externs() {
+    typeCheckCustomExterns(Joiner.on('\n').join(
+        DEFAULT_EXTERNS,
+        "/**",
+        " * @interface",
+        " * @template VALUE",
+        " */",
+        "function I() {}",
+        "/** @return {VALUE} */",
+        "I.prototype['some-es6-symbol'] = function() {};"),
+        "");
+
+    typeCheckCustomExterns(Joiner.on('\n').join(
+        DEFAULT_EXTERNS,
+        "/**",
+        " * @return {T}",
+        " * @template T := number =:",
+        " */",
+        "function usesTTL() {}"),
+        "");
+
+    typeCheckCustomExterns(Joiner.on('\n').join(
+        DEFAULT_EXTERNS,
+        "/**",
+        " * @param {VALUE} x",
+        " * @return {RESULT}",
+        " * @template VALUE",
+        " * @template RESULT := number =:",
+        " */",
+        "function usesTTL(x) {}"),
+        "");
   }
 }

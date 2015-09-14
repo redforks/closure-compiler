@@ -532,18 +532,23 @@ public final class TypeSyntaxTest extends TestCase {
 
   public void testAmbientDeclaration() {
     parse("declare var x, y;");
+    parse("declare var x;\ndeclare var y;");
     parse("declare let x;");
     parse("declare const x;");
     parse("declare function foo();");
-    parse("declare class Foo {\n  constructor();\n  foo();\n};");
-    parse("declare class Foo {\n  static *foo(bar: string);\n};");
-    parse("declare enum Foo {\n};");
-    parse("declare module foo {\n};");
+    parse("declare class Foo {\n  constructor();\n  foo();\n}");
+    parse("declare class Foo {\n  static *foo(bar: string);\n}");
+    parse("declare class Foo {\n}\ndeclare class Bar {\n}");
+    parse("declare enum Foo {\n}");
+    parse("declare namespace foo {\n}");
+    parse("declare namespace foo {\n  class A {\n  }\n  class B extends A {\n  }\n}");
 
     expectErrors("Parse error. Ambient variable declaration may not have initializer");
     parse("declare var x = 3;");
     expectErrors("Parse error. Ambient variable declaration may not have initializer");
     parse("declare const x = 3;");
+    expectErrors("Parse error. Semi-colon expected");
+    parse("declare var x declare var y;");
     expectErrors("Parse error. Semi-colon expected");
     parse("declare function foo() {}");
     expectErrors("Parse error. Semi-colon expected");
@@ -552,6 +557,14 @@ public final class TypeSyntaxTest extends TestCase {
     parse("declare class Foo {\n  constructor() {}\n};");
 
     testNotEs6Typed("declare var x;", "ambient declaration");
+  }
+
+  public void testExportDeclaration() {
+    parse("export interface I {\n}\nexport class C implements I {\n}");
+    parse("export declare class A {\n}\nexport declare class B extends A {\n}");
+
+    expectErrors("Parse error. Semi-colon expected");
+    parse("export var x export var y");
   }
 
   public void testTypeQuery() {
@@ -679,16 +692,67 @@ public final class TypeSyntaxTest extends TestCase {
     parse("var x: 'string'");
   }
 
-  public void testModuleDeclaration() {
-    parse("module foo {\n}");
-    parse("module foo.bar.baz {\n}");
+  public void testNamespace() {
+    parse("namespace foo {\n}");
+    parse("namespace foo.bar.baz {\n}");
+
+    parse("namespace foo {\n  interface I {\n  }\n}");
+    parse("namespace foo {\n  class C {\n  }\n}");
+    parse("namespace foo {\n  enum E {\n  }\n}");
+    parse("namespace foo {\n  function f() {\n  }\n}");
+    parse("namespace foo {\n  declare var foo\n}");
+    parse("namespace foo {\n  namespace bar {\n  }\n}");
+    parse("namespace foo {\n  interface I {\n  }\n  class C {\n  }\n}");
+    parse("namespace foo {\n  type Foo = number;\n}");
+
+    parse("namespace foo {\n  export interface I {\n  }\n}");
+    parse("namespace foo {\n  export class C {\n  }\n}");
+    parse("namespace foo {\n  export enum E {\n  }\n}");
+    parse("namespace foo {\n  export function f() {\n  }\n}");
+    parse("namespace foo {\n  export declare var foo\n}");
+    parse("namespace foo {\n  export namespace bar {\n  }\n}");
+    parse("namespace foo {\n  export type Foo = number;\n}");
 
     expectErrors("Parse error. Semi-colon expected");
-    parse("module {\n}");
+    parse("namespace {}");
     expectErrors("Parse error. Semi-colon expected");
-    parse("module 'foo' {\n}"); // External modules are not supported
+    parse("namespace 'foo' {}"); // External modules are not supported
 
-    testNotEs6Typed("module foo {\n}", "module declaration");
+    testNotEs6Typed("namespace foo {}", "namespace declaration");
+  }
+
+  public void testAmbientNameSpace() {
+    parse("declare namespace foo {\n}");
+    parse("declare namespace foo.bar.baz {\n}");
+
+    parse("declare namespace foo {\n  interface I {\n  }\n}");
+    parse("declare namespace foo {\n  class I {\n    bar();\n  }\n}");
+    parse("declare namespace foo {\n  enum E {\n  }\n}");
+    parse("declare namespace foo {\n  function f();\n}");
+    parse("declare namespace foo {\n  var foo\n}");
+    parse("declare namespace foo {\n  namespace bar {\n  }\n}");
+    parse("declare namespace foo {\n  interface I {\n  }\n  class C {\n  }\n}");
+
+    parse("declare namespace foo {\n  export interface I {\n  }\n}");
+    parse("declare namespace foo {\n  export class I {\n    bar();\n  }\n}");
+    parse("declare namespace foo {\n  export enum E {\n  }\n}");
+    parse("declare namespace foo {\n  export function f();\n}");
+    parse("declare namespace foo {\n  export var foo\n}");
+    parse("declare namespace foo {\n  export namespace bar {\n  }\n}");
+    parse("declare namespace foo {\n  export interface I {\n  }\n  export class C {\n  }\n}");
+
+    expectErrors("Parse error. Semi-colon expected");
+    parse("declare namespace foo { class C { bar() {} }}");
+    expectErrors("Parse error. Ambient variable declaration may not have initializer");
+    parse("declare namespace foo { var a = 3; }");
+    expectErrors("Parse error. Ambient variable declaration may not have initializer");
+    parse("declare namespace foo { export var a = 3; }");
+    expectErrors("Parse error. Semi-colon expected");
+    parse("declare namespace foo { function bar() {} }");
+    expectErrors("Parse error. '}' expected");
+    parse("declare namespace foo { type Foo = number; }");
+
+    testNotEs6Typed("declare namespace foo {}", "ambient declaration", "namespace declaration");
   }
 
   private void assertVarType(String message, TypeDeclarationNode expectedType, String source) {

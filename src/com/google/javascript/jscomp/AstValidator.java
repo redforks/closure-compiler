@@ -96,6 +96,10 @@ public final class AstValidator implements CompilerPass {
   }
 
   public void validateStatement(Node n) {
+    validateStatement(n, false);
+  }
+
+  public void validateStatement(Node n, boolean isAmbient) {
     switch (n.getType()) {
       case Token.LABEL:
         validateLabel(n);
@@ -104,7 +108,11 @@ public final class AstValidator implements CompilerPass {
         validateBlock(n);
         return;
       case Token.FUNCTION:
-        validateFunctionStatement(n);
+        if (isAmbient) {
+          validateFunctionSignature(n);
+        } else {
+          validateFunctionStatement(n);
+        }
         return;
       case Token.WITH:
         validateWith(n);
@@ -155,13 +163,13 @@ public final class AstValidator implements CompilerPass {
         validateChildless(n);
         return;
       case Token.CLASS:
-        validateClassDeclaration(n, false);
+        validateClassDeclaration(n, isAmbient);
         return;
       case Token.IMPORT:
         validateImport(n);
         return;
       case Token.EXPORT:
-        validateExport(n);
+        validateExport(n, isAmbient);
         return;
       case Token.INTERFACE:
         validateInterface(n);
@@ -174,6 +182,9 @@ public final class AstValidator implements CompilerPass {
         return;
       case Token.DECLARE:
         validateAmbientDeclaration(n);
+        return;
+      case Token.NAMESPACE:
+        validateNamespace(n, isAmbient);
         return;
       default:
         violation("Expected statement but was " + Token.name(n.getType()) + ".", n);
@@ -370,7 +381,7 @@ public final class AstValidator implements CompilerPass {
     }
   }
 
-  private void validateExport(Node n) {
+  private void validateExport(Node n, boolean isAmbient) {
     validateNodeType(Token.EXPORT, n);
     if (n.getBooleanProp(Node.EXPORT_ALL_FROM)) { // export * from "mod"
       validateChildCount(n, 2);
@@ -384,7 +395,7 @@ public final class AstValidator implements CompilerPass {
       if (n.getFirstChild().getType() == Token.EXPORT_SPECS) {
         validateExportSpecifiers(n.getFirstChild());
       } else {
-        validateStatement(n.getFirstChild());
+        validateStatement(n.getFirstChild(), isAmbient);
       }
       if (n.getChildCount() == 2) {
         validateString(n.getChildAtIndex(1));
@@ -482,6 +493,9 @@ public final class AstValidator implements CompilerPass {
         validateChildCount(n);
         validateChildless(n.getFirstChild());
         break;
+      case Token.CALL_SIGNATURE:
+        validateChildCount(n);
+        break;
       default:
         violation("Interface contained member of invalid type " + Token.name(n.getType()), n);
     }
@@ -564,6 +578,9 @@ public final class AstValidator implements CompilerPass {
       case Token.INDEX_SIGNATURE:
         validateChildCount(n);
         validateChildless(n.getFirstChild());
+        break;
+      case Token.CALL_SIGNATURE:
+        validateChildCount(n);
         break;
       case Token.EMPTY: // Empty is allowed too.
         break;
@@ -1293,22 +1310,64 @@ public final class AstValidator implements CompilerPass {
   private void validateAmbientDeclaration(Node n) {
     validateEs6TypedFeature("ambient declaration", n);
     validateNodeType(Token.DECLARE, n);
-    Node child = n.getFirstChild();
-    switch (child.getType()) {
+    validateAmbientDeclarationHelper(n.getFirstChild());
+  }
+
+  private void validateAmbientDeclarationHelper(Node n) {
+    switch (n.getType()) {
       case Token.VAR:
       case Token.LET:
       case Token.CONST:
-        validateNameDeclarationHelper(child.getType(), child);
+        validateNameDeclarationHelper(n.getType(), n);
         break;
       case Token.FUNCTION:
-        validateFunctionSignature(child);
+        validateFunctionSignature(n);
         break;
       case Token.CLASS:
-        validateClassDeclaration(child, true);
+        validateClassDeclaration(n, true);
         break;
       case Token.ENUM:
-        validateEnum(child);
+        validateEnum(n);
         break;
+      case Token.NAMESPACE:
+        validateNamespace(n, true);
+        break;
+      case Token.TYPE_ALIAS:
+        validateTypeAlias(n);
+        break;
+      case Token.EXPORT:
+        validateExport(n, true);
+        break;
+    }
+  }
+
+  private void validateNamespace(Node n, boolean isAmbient) {
+    validateEs6TypedFeature("namespace", n);
+    validateNodeType(Token.NAMESPACE, n);
+    validateChildCount(n);
+    validateNamespaceName(n.getFirstChild());
+    validateNamespaceElements(n.getLastChild(), isAmbient);
+  }
+
+  private void validateNamespaceName(Node n) {
+    switch (n.getType()) {
+      case Token.NAME:
+        validateName(n);
+        break;
+      case Token.GETPROP:
+        validateGetProp(n);
+        break;
+    }
+  }
+
+  private void validateNamespaceElements(Node n, boolean isAmbient) {
+    validateNodeType(Token.NAMESPACE_ELEMENTS, n);
+    for (Node child : n.children()) {
+      if (isAmbient) {
+        validateAmbientDeclarationHelper(child);
+      } else {
+        validateStatement(child);
+      }
     }
   }
 

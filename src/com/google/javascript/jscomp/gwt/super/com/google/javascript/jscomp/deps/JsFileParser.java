@@ -14,20 +14,21 @@
  * limitations under the License.
  */
 
-package com.google.javascript.jscomp.parsing.parser.trees;
+package com.google.javascript.jscomp.deps;
 
-import com.google.common.collect.ImmutableList;
-import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
+import com.google.javascript.jscomp.ErrorManager;
 
-/**
- * Parse tree node representing a module name (of the form {@code foo.bar.Baz})
- */
-public class ModuleNameTree extends ParseTree {
+/** GWT compatible no-op replacement for {@code JsFileParser} */
+public final class JsFileParser {
+  public JsFileParser(ErrorManager errorManager) {
+  }
 
-  public final ImmutableList<String> segments;
+  public JsFileParser setIncludeGoogBase(boolean include) {
+    throw new UnsupportedOperationException("JsFileParser.setIncludeGoogBase not implemented");
+  }
 
-  public ModuleNameTree(SourceRange location, ImmutableList<String> segments) {
-    super(ParseTreeType.MODULE_NAME, location);
-    this.segments = segments;
+  public DependencyInfo parseFile(String filePath, String closureRelativePath,
+      String fileContents) {
+    throw new UnsupportedOperationException("JsFileParser.parseFile not implemented");
   }
 }

@@ -28,14 +28,13 @@ public final class VariableReferenceCheckTest extends Es6CompilerTestCase {
   private static final String VARIABLE_RUN =
       "var a = 1; var b = 2; var c = a + b, d = c;";
 
-  private boolean enableAmbiguousFunctionCheck = false;
+  private boolean enableUnusedLocalAssignmentCheck = false;
 
   @Override
   public CompilerOptions getOptions() {
     CompilerOptions options = super.getOptions();
-    if (enableAmbiguousFunctionCheck) {
-      options.setWarningLevel(
-          DiagnosticGroups.AMBIGUOUS_FUNCTION_DECL, CheckLevel.WARNING);
+    if (enableUnusedLocalAssignmentCheck) {
+      options.setWarningLevel(DiagnosticGroups.LINT_CHECKS, CheckLevel.WARNING);
     }
     return options;
   }
@@ -49,7 +48,6 @@ public final class VariableReferenceCheckTest extends Es6CompilerTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    enableAmbiguousFunctionCheck = false;
   }
 
   public void testCorrectCode() {
@@ -112,63 +110,60 @@ public final class VariableReferenceCheckTest extends Es6CompilerTestCase {
   }
 
   public void testHoistedFunction1() {
-    enableAmbiguousFunctionCheck = true;
     assertNoWarning("f(); function f() {}");
   }
 
   public void testHoistedFunction2() {
-    enableAmbiguousFunctionCheck = true;
     assertNoWarning("function g() { f(); function f() {} }");
   }
 
   public void testNonHoistedFunction() {
-    enableAmbiguousFunctionCheck = true;
     assertUndeclared("if (true) { f(); function f() {} }");
   }
 
   public void testNonHoistedFunction2() {
-    enableAmbiguousFunctionCheck = true;
     assertNoWarning("if (false) { function f() {} f(); }");
   }
 
   public void testNonHoistedFunction3() {
-    enableAmbiguousFunctionCheck = true;
     assertNoWarning("function g() { if (false) { function f() {} f(); }}");
   }
 
   public void testNonHoistedFunction4() {
-    enableAmbiguousFunctionCheck = true;
     assertAmbiguous("if (false) { function f() {} }  f();");
   }
 
   public void testNonHoistedFunction5() {
-    enableAmbiguousFunctionCheck = true;
     assertAmbiguous("function g() { if (false) { function f() {} }  f(); }");
   }
 
   public void testNonHoistedFunction6() {
-    enableAmbiguousFunctionCheck = true;
     assertUndeclared("if (false) { f(); function f() {} }");
   }
 
   public void testNonHoistedFunction7() {
-    enableAmbiguousFunctionCheck = true;
     assertUndeclared("function g() { if (false) { f(); function f() {} }}");
   }
 
   public void testNonHoistedRecursiveFunction1() {
-    enableAmbiguousFunctionCheck = true;
     assertNoWarning("if (false) { function f() { f(); }}");
   }
 
   public void testNonHoistedRecursiveFunction2() {
-    enableAmbiguousFunctionCheck = true;
     assertNoWarning("function g() { if (false) { function f() { f(); }}}");
   }
 
   public void testNonHoistedRecursiveFunction3() {
-    enableAmbiguousFunctionCheck = true;
     assertNoWarning("function g() { if (false) { function f() { f(); g(); }}}");
+  }
+
+  public void testDestructuringInFor() {
+    testSameEs6("for (let [key, val] of X){}");
+    testSameEs6("for (let [key, [nestKey, nestVal], val] of X){}");
+
+    testSameEs6("var {x: a, y: b} = {x: 1, y: 2}; a++; b++;");
+    testWarningEs6("a++; var {x: a} = {x: 1};",
+        VariableReferenceCheck.EARLY_REFERENCE);
   }
 
   public void testNoWarnInExterns1() {
@@ -189,6 +184,59 @@ public final class VariableReferenceCheckTest extends Es6CompilerTestCase {
     testSame(externs, code, null);
   }
 
+  public void testUnusedLocalVar() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertUnused("function f() { var a; }");
+    assertUnused("function f() { var a = 2; }");
+    assertUnused("function f() { var a; a = 2; }");
+  }
+
+  public void testUnusedLocalLet() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertUnusedEs6("function f() { let a; }");
+    assertUnusedEs6("function f() { let a = 2; }");
+    assertUnusedEs6("function f() { let a; a = 2; }");
+  }
+
+  public void xtestUnusedLocalConst() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertUnusedEs6("function f() { const a = 2; }");
+  }
+
+  public void testUnusedLocalArgNoWarning() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertNoWarning("function f(a) {}");
+  }
+
+  public void testUnusedGlobalNoWarning() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertNoWarning("var a = 2;");
+  }
+
+  public void testUnusedAssignedInInnerFunction() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertUnused("function f() { var x = 1; function g() { x = 2; } }");
+  }
+
+  public void testUsedInInnerFunction() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertNoWarning("function f() { var x = 1; function g() { use(x); } }");
+  }
+
+  public void testUnusedCatch() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertNoWarning("function f() { try {} catch (x) {} }");
+  }
+
+  public void testIncrementCountsAsUse() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertNoWarning("var a = 2; var b = []; b[a++] = 1;");
+  }
+
+  public void testForIn() {
+    enableUnusedLocalAssignmentCheck = true;
+    assertNoWarning("for (var prop in obj) {}");
+  }
   /**
    * Expects the JS to generate one bad-read error.
    */
@@ -207,9 +255,23 @@ public final class VariableReferenceCheckTest extends Es6CompilerTestCase {
    * Expects the JS to generate one bad-write warning.
    */
   private void assertAmbiguous(String js) {
-    testWarning(js, VariableReferenceCheck.AMBIGUOUS_FUNCTION_DECL,
+    testError(js, VariableReferenceCheck.AMBIGUOUS_FUNCTION_DECL,
         LanguageMode.ECMASCRIPT5);
     testSameEs6(js); // In ES6, these are block scoped functions, so no ambiguity.
+  }
+
+  /**
+   * Expects the JS to generate one unused local error.
+   */
+  private void assertUnused(String js) {
+    testWarning(js, VariableReferenceCheck.UNUSED_LOCAL_ASSIGNMENT);
+  }
+
+  /**
+   * Expects the JS to generate one unused local error.
+   */
+  private void assertUnusedEs6(String js) {
+    testWarningEs6(js, VariableReferenceCheck.UNUSED_LOCAL_ASSIGNMENT);
   }
 
   /**

@@ -1440,6 +1440,18 @@ public final class IntegrationTest extends IntegrationTestCase {
         });
   }
 
+  public void testCrossModuleDepCheck() {
+    CompilerOptions options = createCompilerOptions();
+    String[] code = new String[] {
+      "var goog = {}; new goog.Foo();",
+      "/** @constructor */ goog.Foo = function() {};",
+    };
+    testSame(options, code);
+
+    WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
+    test(options, code, code, CheckGlobalNames.STRICT_MODULE_DEP_QNAME);
+  }
+
   public void testFlowSensitiveInlineVariables1() {
     CompilerOptions options = createCompilerOptions();
     String code = "function f() { var x = 3; x = 5; return x; }";
@@ -1667,18 +1679,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     testSame(options, code);
 
     options.setAliasAllStrings(true);
-    test(options, code, expected);
-  }
-
-  public void testAliasExterns() {
-    CompilerOptions options = createCompilerOptions();
-    String code = "function f() { return window + window + window + window; }";
-    String expected = "var GLOBAL_window = window;" +
-        "function f() { return GLOBAL_window + GLOBAL_window + " +
-        "               GLOBAL_window + GLOBAL_window; }";
-    testSame(options, code);
-
-    options.setAliasExternals(true);
     test(options, code, expected);
   }
 
@@ -1970,7 +1970,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     // are de-duped before that happens.
     CompilerOptions options = createCompilerOptions();
 
-    options.setAliasExternals(true);
     externs = ImmutableList.of(SourceFile.fromCode("externs", "extern.foo"));
 
     test(options,
@@ -2030,17 +2029,6 @@ public final class IntegrationTest extends IntegrationTestCase {
         code,
         StrictModeCheck.DELETE_VARIABLE);
   }
-
-  public void testEs6LanguageMode() {
-    CompilerOptions options = createCompilerOptions();
-    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
-
-    test(options, "var a = function() { return foo(bar); };", "var a = ()=>foo(bar);");
-    test(options,
-        "var o = { x:5, getX:function() { return this.x; } }",
-        "var o = { x:5, getX() { return this.x; } }");
-  }
-
 
 
   public void testIssue598() {
@@ -2616,7 +2604,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(
         options);
     options.setRenamePrefixNamespace("_");
-    test(options, code, "_.x = null; try { +_.x.FOO; } catch (e) {}");
+    test(options, code, "_.x = null; try { +_.x.FOO; } catch (a) {}");
   }
 
   public void testRenameCollision() {
@@ -2684,7 +2672,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     CompilationLevel.ADVANCED_OPTIMIZATIONS
         .setOptionsForCompilationLevel(options);
-    options.setAliasExternals(true);
     String code =
         "window.offsetWidth;";
     String result =

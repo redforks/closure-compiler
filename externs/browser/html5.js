@@ -1210,6 +1210,9 @@ HTMLElement.prototype.attachedCallback;
 HTMLElement.prototype.detachedCallback;
 
 /** @type {string} */
+HTMLAnchorElement.prototype.download;
+
+/** @type {string} */
 HTMLAnchorElement.prototype.hash;
 
 /** @type {string} */
@@ -1239,6 +1242,9 @@ HTMLAnchorElement.prototype.protocol;
 
 /** @type {string} */
 HTMLAnchorElement.prototype.search;
+
+/** @type {string} */
+HTMLAreaElement.prototype.download;
 
 /**
  * @type {string}
@@ -1382,7 +1388,7 @@ HTMLMediaElement.prototype.canPlayType = function(type) {};
 
 /** Event handlers */
 
-/** @type {?function(!Event)} */
+/** @type {?function(Event)} */
 HTMLMediaElement.prototype.onabort;
 
 /** @type {?function(!Event)} */
@@ -1400,7 +1406,7 @@ HTMLMediaElement.prototype.onemptied;
 /** @type {?function(!Event)} */
 HTMLMediaElement.prototype.onended;
 
-/** @type {?function(!Event)} */
+/** @type {?function(Event)} */
 HTMLMediaElement.prototype.onerror;
 
 /** @type {?function(!Event)} */
@@ -1448,10 +1454,10 @@ HTMLMediaElement.prototype.onvolumechange;
 /** @type {?function(!Event)} */
 HTMLMediaElement.prototype.onwaiting;
 
-/** @type {?function(!Event)} */
+/** @type {?function(Event)} */
 HTMLImageElement.prototype.onload;
 
-/** @type {?function(!Event)} */
+/** @type {?function(Event)} */
 HTMLImageElement.prototype.onerror;
 
 /** @type {number} */
@@ -2008,7 +2014,6 @@ DataTransferItem.prototype.type;
 
 /**
  * @param {function(string)} callback
- * @nosideeffects
  */
 DataTransferItem.prototype.getAsString = function(callback) {};
 
@@ -2363,6 +2368,12 @@ FileList.prototype.item = function(i) { return null; };
 XMLHttpRequest.prototype.withCredentials;
 
 /**
+ * @type {?function(!ProgressEvent): void}
+ * @see https://dvcs.w3.org/hg/xhr/raw-file/tip/Overview.html#handler-xhr-onprogress
+ */
+XMLHttpRequest.prototype.onprogress;
+
+/**
  * @type {XMLHttpRequestUpload}
  * @see http://dev.w3.org/2006/webapi/XMLHttpRequest-2/#the-upload-attribute
  */
@@ -2428,6 +2439,12 @@ XMLHttpRequestEventTarget.prototype.dispatchEvent = function(evt) {};
  * @extends {XMLHttpRequestEventTarget}
  */
 function XMLHttpRequestUpload() {}
+
+/**
+ * @type {?function(!ProgressEvent): void}
+ * @see https://dvcs.w3.org/hg/xhr/raw-file/tip/Overview.html#handler-xhr-onprogress
+ */
+XMLHttpRequestUpload.prototype.onprogress;
 
 /**
  * @param {number=} opt_width

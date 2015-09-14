@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -411,30 +412,6 @@ public class CompilerOptions implements Serializable {
 
   /** Removes unused variables in local scope. */
   public boolean removeUnusedLocalVars;
-
-  /** Adds variable aliases for externals to reduce code size */
-  public boolean aliasExternals;
-
-  String aliasableGlobals;
-
-  /**
-   * A comma separated white-list of global names. When {@link #aliasExternals}
-   * is enable, if set to a non-empty string, only externals with these names
-   * will be considered for aliasing.
-   */
-  public void setAliasableGlobals(String names) {
-    aliasableGlobals = names;
-  }
-
-  String unaliasableGlobals;
-
-  /**
-   * A comma separated white-list of global names. When {@link #aliasExternals}
-   * is enable, these global names will not be aliased.
-   */
-  public void setUnaliasableGlobals(String names) {
-    unaliasableGlobals = names;
-  }
 
   /** Collapses multiple variable declarations into one */
   public boolean collapseVariableDeclarations;
@@ -1020,7 +997,6 @@ public class CompilerOptions implements Serializable {
     removeUnusedConstructorProperties = false;
     removeUnusedVars = false;
     removeUnusedLocalVars = false;
-    aliasExternals = false;
     collapseVariableDeclarations = false;
     collapseAnonymousFunctions = false;
     aliasableStrings = Collections.emptySet();
@@ -1538,6 +1514,10 @@ public class CompilerOptions implements Serializable {
     this.dependencyOptions = options;
   }
 
+  public DependencyOptions getDependencyOptions() {
+    return dependencyOptions;
+  }
+
   /**
    * Sort inputs by their goog.provide/goog.require calls, and prune inputs
    * whose symbols are not required.
@@ -1633,7 +1613,9 @@ public class CompilerOptions implements Serializable {
    */
   public void setLanguageIn(LanguageMode languageIn) {
     Preconditions.checkState(languageIn != LanguageMode.NO_TRANSPILE);
+    Preconditions.checkNotNull(dependencyOptions);
     this.languageIn = languageIn;
+    dependencyOptions.setEs6ModuleOrder(languageIn.isEs6OrHigher());
   }
 
   public LanguageMode getLanguageIn() {
@@ -1936,10 +1918,6 @@ public class CompilerOptions implements Serializable {
 
   public void setRemoveUnusedLocalVars(boolean removeUnusedLocalVars) {
     this.removeUnusedLocalVars = removeUnusedLocalVars;
-  }
-
-  public void setAliasExternals(boolean aliasExternals) {
-    this.aliasExternals = aliasExternals;
   }
 
   public void setCollapseVariableDeclarations(boolean enabled) {
@@ -2259,14 +2237,17 @@ public class CompilerOptions implements Serializable {
     this.sourceMapOutputPath = sourceMapOutputPath;
   }
 
+  @GwtIncompatible("SourceMap")
   public void setSourceMapDetailLevel(SourceMap.DetailLevel sourceMapDetailLevel) {
     this.sourceMapDetailLevel = sourceMapDetailLevel;
   }
 
+  @GwtIncompatible("SourceMap")
   public void setSourceMapFormat(SourceMap.Format sourceMapFormat) {
     this.sourceMapFormat = sourceMapFormat;
   }
 
+  @GwtIncompatible("SourceMap")
   public void setSourceMapLocationMappings(
       List<SourceMap.LocationMapping> sourceMapLocationMappings) {
     this.sourceMapLocationMappings = sourceMapLocationMappings;
@@ -2316,6 +2297,7 @@ public class CompilerOptions implements Serializable {
   /**
    * Both enable and configure conformance checks, if non-null.
    */
+  @GwtIncompatible("Conformance")
   public void setConformanceConfig(ConformanceConfig conformanceConfig) {
     this.conformanceConfigs = ImmutableList.of(conformanceConfig);
   }
@@ -2323,6 +2305,7 @@ public class CompilerOptions implements Serializable {
   /**
    * Both enable and configure conformance checks, if non-null.
    */
+  @GwtIncompatible("Conformance")
   public void setConformanceConfigs(List<ConformanceConfig> configs) {
     this.conformanceConfigs = ImmutableList.copyOf(configs);
   }

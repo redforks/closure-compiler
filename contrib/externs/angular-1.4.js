@@ -1011,6 +1011,31 @@ angular.$animateProvider.prototype.classNameFilter = function(
     opt_expression) {};
 
 /******************************************************************************
+ * $ariaProvider Service
+ *****************************************************************************/
+
+/**
+ * @constructor
+ */
+angular.$ariaProvider = function() {};
+
+/**
+ * @param {!{
+ *   ariaHidden: (boolean|undefined),
+ *   ariaChecked: (boolean|undefined),
+ *   ariaDisabled: (boolean|undefined),
+ *   ariaRequired: (boolean|undefined),
+ *   ariaInvalid: (boolean|undefined),
+ *   ariaMultiline: (boolean|undefined),
+ *   ariaValue: (boolean|undefined),
+ *   tabindex: (boolean|undefined),
+ *   bindKeypress: (boolean|undefined),
+ *   bindRoleForClick: (boolean|undefined)
+ * }} config
+ */
+angular.$ariaProvider.prototype.config = function(config) {};
+
+/******************************************************************************
  * $compile Service
  *****************************************************************************/
 
@@ -2206,7 +2231,7 @@ angular.$templateCache;
  *****************************************************************************/
 
 /**
- * @typedef {function(function(), number=, boolean=):!angular.$q.Promise}
+ * @typedef {function(Function, number=, boolean=, ...*):!angular.$q.Promise}
  */
 angular.$timeout;
 

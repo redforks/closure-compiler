@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
@@ -28,6 +29,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
+import com.google.javascript.jscomp.deps.ClosureSortedDependencies;
+import com.google.javascript.jscomp.deps.Es6SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
@@ -49,8 +52,8 @@ import java.util.TreeSet;
 /**
  * A {@link JSModule} dependency graph that assigns a depth to each module and
  * can answer depth-related queries about them. For the purposes of this class,
- * a module's depth is defined as the number of hops in the longest path from
- * the module to a module with no dependencies.
+ * a module's depth is defined as the number of hops in the longest (non cyclic)
+ * path from the module to a module with no dependencies.
  *
  */
 public final class JSModuleGraph {
@@ -156,6 +159,7 @@ public final class JSModuleGraph {
    * - "inputs" (list of file names)
    * @return List of module JSONObjects.
    */
+  @GwtIncompatible("com.google.gson")
   JsonArray toJson() {
     JsonArray modules = new JsonArray();
     for (JSModule module : getAllModules()) {
@@ -373,7 +377,9 @@ public final class JSModuleGraph {
           MissingModuleException {
 
     SortedDependencies<CompilerInput> sorter =
-        new SortedDependencies<>(inputs);
+        depOptions.isEs6ModuleOrder()
+            ? new Es6SortedDependencies<>(inputs) : new ClosureSortedDependencies<>(inputs);
+
     Iterable<CompilerInput> entryPointInputs = createEntryPointInputs(
         depOptions, inputs, sorter);
 

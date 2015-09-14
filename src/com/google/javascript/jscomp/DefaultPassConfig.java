@@ -157,21 +157,6 @@ public final class DefaultPassConfig extends PassConfig {
         anonymousFunctionNameMap, stringMap, functionNames, idGeneratorMap);
   }
 
-  @Override
-  protected void setIntermediateState(State state) {
-    this.cssNames = state.cssNames == null ? null :
-         new HashMap<>(state.cssNames);
-    this.exportedNames = state.exportedNames == null ? null :
-         new HashSet<>(state.exportedNames);
-    this.crossModuleIdGenerator = state.crossModuleIdGenerator;
-    this.variableMap = state.variableMap;
-    this.propertyMap = state.propertyMap;
-    this.anonymousFunctionNameMap = state.anonymousFunctionNameMap;
-    this.stringMap = state.stringMap;
-    this.functionNames = state.functionNames;
-    this.idGeneratorMap = state.idGeneratorMap;
-  }
-
   GlobalNamespace getGlobalNamespace() {
     return namespaceForChecks;
   }
@@ -198,6 +183,11 @@ public final class DefaultPassConfig extends PassConfig {
 
     // Verify JsDoc annotations
     checks.add(checkJsDoc);
+
+    if (!options.skipNonTranspilationPasses && options.closurePass
+        && options.enables(DiagnosticGroups.LINT_CHECKS)) {
+      checks.add(checkRequiresAndProvidesSorted);
+    }
 
     // goog.module rewrite must happen even if options.skipNonTranspilationPasses is set.
     if (options.closurePass) {
@@ -239,17 +229,6 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(convertEs6TypedToEs6);
     }
 
-    // Early ES6 transpilation.
-    // Includes ES6 features that are straightforward to transpile.
-    // We won't handle them natively in the rest of the compiler, so we always
-    // transpile them, even if the output language is also ES6.
-    if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
-      checks.add(es6RewriteArrowFunction);
-      checks.add(es6RenameVariablesInParamLists);
-      checks.add(es6SplitVariableDeclarations);
-      checks.add(es6RewriteDestructuring);
-    }
-
     if (options.generateExports && !options.skipNonTranspilationPasses) {
       checks.add(generateExports);
     }
@@ -262,8 +241,9 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(closurePrimitives);
     }
 
-    // It's important that the PolymerPass run *after* the ClosurePrimitives rewrite and *before*
-    // the suspicious code checks.
+    // It's important that the PolymerPass run *after* the ClosurePrimitives
+    // rewrite and *before* the suspicious code checks.
+    // This is enforced in the assertValidOrder method.
     if (options.polymerPass && !options.skipNonTranspilationPasses) {
       checks.add(polymerPass);
     }
@@ -302,6 +282,17 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(objectPropertyStringPreprocess);
     }
 
+    // Early ES6 transpilation.
+    // Includes ES6 features that are straightforward to transpile.
+    // We won't handle them natively in the rest of the compiler, so we always
+    // transpile them, even if the output language is also ES6.
+    if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
+      checks.add(es6RewriteArrowFunction);
+      checks.add(es6RenameVariablesInParamLists);
+      checks.add(es6SplitVariableDeclarations);
+      checks.add(es6RewriteDestructuring);
+    }
+
     // Late ES6 transpilation.
     // Includes ES6 features that are best handled natively by the compiler.
     // As we convert more passes to handle these features, we will be moving the transpilation
@@ -336,6 +327,8 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(symbolTableForNewTypeInference);
       checks.add(newTypeInference);
     }
+
+    checks.add(inlineTypeAliases);
 
     if (options.checkTypes || options.inferTypes
         // With NTI, we still need OTI to run because the later passes that use
@@ -703,10 +696,6 @@ public final class DefaultPassConfig extends PassConfig {
     // accesses in order to avoid aliasing property names.
     if (!options.aliasableStrings.isEmpty() || options.aliasAllStrings) {
       passes.add(aliasStrings);
-    }
-
-    if (options.aliasExternals) {
-      passes.add(aliasExternals);
     }
 
     // Passes after this point can no longer depend on normalized AST
@@ -1226,6 +1215,14 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
+  private final PassFactory inlineTypeAliases =
+      new PassFactory("inlineTypeAliases", true) {
+    @Override
+    CompilerPass create(AbstractCompiler compiler) {
+      return new InlineAliases(compiler);
+    }
+  };
+
   private final PassFactory convertToTypedES6 =
       new PassFactory("ConvertToTypedES6", true) {
     @Override
@@ -1488,7 +1485,7 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("NewTypeInference", true) {
         @Override
         protected CompilerPass create(final AbstractCompiler compiler) {
-          return new NewTypeInference(compiler, options.closurePass);
+          return new NewTypeInference(compiler);
         }
       };
 
@@ -1578,11 +1575,15 @@ public final class DefaultPassConfig extends PassConfig {
           .add(new CheckForInOverArray(compiler))
           .add(new CheckPrototypeProperties(compiler))
           .add(new ImplicitNullabilityCheck(compiler));
-      if (options.closurePass) {
-        callbacks.add(new CheckRequiresAndProvidesSorted(compiler));
-      }
-
       return combineChecks(compiler, callbacks.build());
+    }
+  };
+
+  private final HotSwapPassFactory checkRequiresAndProvidesSorted =
+      new HotSwapPassFactory("checkRequiresAndProvidesSorted", true) {
+    @Override
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+      return new CheckRequiresAndProvidesSorted(compiler);
     }
   };
 
@@ -2273,15 +2274,6 @@ public final class DefaultPassConfig extends PassConfig {
           anonymousFunctionNameMap = naf.getFunctionMap();
         }
       };
-    }
-  };
-
-  /** Alias external symbols. */
-  private final PassFactory aliasExternals = new PassFactory("aliasExternals", true) {
-    @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
-      return new AliasExternals(compiler, compiler.getModuleGraph(),
-          options.unaliasableGlobals, options.aliasableGlobals);
     }
   };
 

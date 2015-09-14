@@ -1169,12 +1169,44 @@ public final class NodeUtil {
         return false;
       }
 
-      // Math.floor has no side-effects.
+      // Many common Math functions have no side-effects.
       // TODO(nicksantos): This is a terrible terrible hack, until
       // I create a definitionProvider that understands namespacing.
-      if (nameNode.getFirstChild().isName()) {
-        if ("Math.floor".equals(nameNode.getQualifiedName())) {
-          return false;
+      if (nameNode.getFirstChild().isName() && nameNode.isQualifiedName()
+          && nameNode.getFirstChild().getString().equals("Math")) {
+        switch(nameNode.getLastChild().getString()) {
+          case "abs":
+          case "acos":
+          case "acosh":
+          case "asin":
+          case "asinh":
+          case "atan":
+          case "atanh":
+          case "atan2":
+          case "cbrt":
+          case "ceil":
+          case "cos":
+          case "cosh":
+          case "exp":
+          case "expm1":
+          case "floor":
+          case "hypot":
+          case "log":
+          case "log10":
+          case "log1p":
+          case "log2":
+          case "max":
+          case "min":
+          case "pow":
+          case "round":
+          case "sign":
+          case "sin":
+          case "sinh":
+          case "sqrt":
+          case "tan":
+          case "tanh":
+          case "trunc":
+            return false;
         }
       }
 
@@ -1817,6 +1849,20 @@ public final class NodeUtil {
   }
 
   /**
+   * @return The first computed property in the objlit whose key matches {@code key}.
+   */
+  @Nullable
+  static Node getFirstComputedPropMatchingKey(Node objlit, Node key) {
+    Preconditions.checkState(objlit.isObjectLit());
+    for (Node child : objlit.children()) {
+      if (child.isComputedProp() && child.getFirstChild().isEquivalentTo(key)) {
+        return child.getLastChild();
+      }
+    }
+    return null;
+  }
+
+  /**
    * Returns true if the shallow scope contains references to 'this' keyword
    */
   static boolean referencesThis(Node n) {
@@ -2106,12 +2152,12 @@ public final class NodeUtil {
   static boolean createsBlockScope(Node n) {
     switch (n.getType()) {
       case Token.BLOCK:
-        Node parent = n.getParent();
-        if (parent == null || parent.isCatch()) {
+        // Don't create block scope for top-level synthetic block or the one contained in a CATCH.
+        if (n.getParent() == null || n.getParent().getParent() == null
+            || n.getParent().isCatch()) {
           return false;
         }
-        Node child = n.getFirstChild();
-        return child != null && !child.isScript();
+        return true;
       case Token.FOR:
       case Token.FOR_OF:
         return true;
@@ -2126,8 +2172,7 @@ public final class NodeUtil {
         return true;
       case Token.BLOCK:
         // Only valid for top level synthetic block
-        if (n.getParent() == null
-            || n.getFirstChild() != null && n.getFirstChild().isScript()) {
+        if (n.getParent() == null || n.getParent().getParent() == null) {
           return true;
         }
       default:
@@ -2151,9 +2196,20 @@ public final class NodeUtil {
       case Token.SCRIPT:
       case Token.BLOCK:
       case Token.LABEL:
+      case Token.NAMESPACE_ELEMENTS: // The body of TypeScript namespace is also a statement parent
         return true;
       default:
         return false;
+    }
+  }
+
+  private static boolean isDeclarationParent(Node parent) {
+    switch (parent.getType()) {
+      case Token.DECLARE:
+      case Token.EXPORT:
+        return true;
+      default:
+        return isStatementParent(parent);
     }
   }
 
@@ -2293,14 +2349,14 @@ public final class NodeUtil {
    * is not part of a expression; see {@link #isFunctionExpression}).
    */
   static boolean isFunctionDeclaration(Node n) {
-    return n.isFunction() && isStatement(n);
+    return n.isFunction() && isDeclarationParent(n.getParent());
   }
 
   /**
    * see {@link #isClassDeclaration}
    */
   static boolean isClassDeclaration(Node n) {
-    return n.isClass() && isStatement(n);
+    return n.isClass() && isDeclarationParent(n.getParent());
   }
 
   /**
@@ -2320,13 +2376,17 @@ public final class NodeUtil {
     }
     Node current = n.getParent();
     while (current != null) {
-      if (current.isBlock()) {
-        return !current.getParent().isFunction();
-      } else if (current.isFunction() || current.isScript()) {
-        return false;
-      } else {
-        Preconditions.checkArgument(current.isLabel());
-        current = current.getParent();
+      switch (current.getType()) {
+        case Token.BLOCK:
+          return !current.getParent().isFunction();
+        case Token.FUNCTION:
+        case Token.SCRIPT:
+        case Token.DECLARE:
+        case Token.EXPORT:
+          return false;
+        default:
+          Preconditions.checkState(current.isLabel());
+          current = current.getParent();
       }
     }
     return false;
@@ -2482,30 +2542,67 @@ public final class NodeUtil {
    * Determines whether this node is used as an L-value. Notice that sometimes
    * names are used as both L-values and R-values.
    *
-   * <p>We treat "var x;" as a pseudo-L-value, which kind of makes sense if you
-   * treat it as "assignment to 'undefined' at the top of the scope". But if
-   * we're honest with ourselves, it doesn't make sense, and we only do this
-   * because it makes sense to treat this as syntactically similar to
-   * "var x = 0;".
+   * <p>We treat "var x;" and "let x;" as an L-value because it's syntactically similar to
+   * "var x = undefined", even though it's technically not an L-value. But it kind of makes
+   * sense if you treat it as "assignment to 'undefined' at the top of the scope".
    *
    * @param n The node
    * @return True if n is an L-value.
    */
   public static boolean isLValue(Node n) {
-    Preconditions.checkArgument(n.isName() || n.isGetProp() ||
-        n.isGetElem());
+    Preconditions.checkArgument(
+        n.isName() || n.isGetProp() || n.isGetElem() || n.isStringKey() || n.isRest(),
+        n);
     Node parent = n.getParent();
     if (parent == null) {
       return false;
     }
-    return (NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == n)
-        || (NodeUtil.isForIn(parent) && parent.getFirstChild() == n)
-        || parent.isVar() || parent.isLet() || parent.isConst()
+    return (isAssignmentOp(parent) && parent.getFirstChild() == n)
+        || (isForIn(parent) && parent.getFirstChild() == n)
+        || isNameDeclaration(parent)
         || (parent.isFunction() && parent.getFirstChild() == n)
+        || parent.isRest()
+        || (parent.isDefaultValue() && parent.getFirstChild() == n)
         || parent.isDec()
         || parent.isInc()
         || parent.isParamList()
-        || parent.isCatch();
+        || parent.isCatch()
+        || isLhsByDestructuring(n);
+  }
+
+  public static boolean isLhsByDestructuring(Node n) {
+    Node parent = n.getParent();
+
+    if (parent.isDestructuringPattern()
+        || (parent.isStringKey() && parent.getParent().isObjectPattern())) {
+      if (n.isStringKey() && n.hasChildren()) {
+        return false;
+      }
+      Node childNode = n;
+      boolean isLastChildOfHighestPattern = false;
+
+      // The AST structure for destructuring patterns are a little bit complicated.
+      // The last child of a destructuring pattern is NOT the left hand side UNLESS
+      // the destructuring pattern is:
+      //   1) the variable for for-of loop;
+      //   2) within the first child of ASSIGN
+      //   3) within the first child of DEFAULT_VALUE (default parameter)
+      // Also, in nested destructuring only the last child of the highest pattern
+      // and its descendants are NOT lhs.
+      for (Node currAncestor : n.getAncestors()) {
+        if (currAncestor.isForOf() || currAncestor.isFor()
+            || currAncestor.isAssign()
+            || currAncestor.isDefaultValue()) {
+          return currAncestor.getFirstChild() == childNode;
+        }
+        if (currAncestor.isDestructuringPattern()) {
+          isLastChildOfHighestPattern = currAncestor.getLastChild() == childNode;
+        }
+        childNode = currAncestor;
+      }
+      return !isLastChildOfHighestPattern;
+    }
+    return false;
   }
 
   /**
@@ -2801,7 +2898,7 @@ public final class NodeUtil {
     Node result;
     Node nameNode = newQName(compiler, name);
     if (nameNode.isName()) {
-      result = IR.var(nameNode, value);
+      result = value == null ? IR.var(nameNode) : IR.var(nameNode, value);
       result.setJSDocInfo(info);
     } else if (value != null) {
       result = IR.exprResult(IR.assign(nameNode, value));
@@ -3647,11 +3744,14 @@ public final class NodeUtil {
   /**
    * Returns whether this is a target of a call or new.
    */
-  static boolean isCallOrNewTarget(Node target) {
-    Node parent = target.getParent();
-    return parent != null
-        && NodeUtil.isCallOrNew(parent)
-        && parent.getFirstChild() == target;
+  static boolean isCallOrNewTarget(Node n) {
+    Node parent = n.getParent();
+    return parent != null && isCallOrNew(parent) && parent.getFirstChild() == n;
+  }
+
+  static boolean isCallOrNewArgument(Node n) {
+    Node parent = n.getParent();
+    return parent != null && isCallOrNew(parent) && parent.getFirstChild() != n;
   }
 
   private static boolean isToStringMethodCall(Node call) {

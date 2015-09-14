@@ -15,10 +15,12 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_GET_ALIAS;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_GET_CALL_SCOPE;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_GET_IDENTIFIER;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_MODULE_IDENTIFIER;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_REQUIRE_IDENTIFIER;
+import static com.google.javascript.jscomp.deps.JsFileLineParser.PARSE_ERROR;
 
 /**
  * Unit tests for ClosureRewriteModule
@@ -224,13 +226,16 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
   }
 
   public void testInvalidModule() {
-    testError("goog.module(a);", INVALID_MODULE_IDENTIFIER);
+    // The ES6 path turns on DependencyOptions.needsManagement() which leads to JsFileLineParser
+    // execution that throws a different exception on some invalid goog.provide()s.
+    testError("goog.module(a);", INVALID_MODULE_IDENTIFIER, PARSE_ERROR);
   }
 
   public void testInvalidRequire() {
-    testError("goog.module('ns.a');" + "goog.require(a);", INVALID_REQUIRE_IDENTIFIER);
+    // The ES6 path turns on DependencyOptions.needsManagement() which leads to JsFileLineParser
+    // execution that throws a different exception on some invalid goog.provide()s.
+    testError("goog.module('ns.a');" + "goog.require(a);", INVALID_REQUIRE_IDENTIFIER, PARSE_ERROR);
   }
-
 
   public void testGoogModuleGet1() {
     test(
@@ -242,6 +247,48 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
     test(
         "function f() { var x = goog.module.get('a.b.c'); }",
         "function f() { var x = a.b.c; }");
+  }
+
+  public void testAliasedGoogModuleGet1() {
+    test(
+        LINE_JOINER.join(
+          "goog.module('a');",
+          "",
+          "var x = goog.forwardDeclare('b');",
+          "function f() { x = goog.module.get('b'); }"),
+        LINE_JOINER.join(
+          "goog.provide('a'); goog.scope(function(){",
+          "  var x = b;",
+          "  function f() {}",
+          "});"));
+  }
+
+  public void testAliasedGoogModuleGet2() {
+    test(
+        LINE_JOINER.join(
+          "goog.module('a');",
+          "",
+          "var x = goog.forwardDeclare('x.y.z');",
+          "function f() { x = goog.module.get('x.y.z'); }"),
+        LINE_JOINER.join(
+          "goog.provide('a'); goog.scope(function(){",
+          "  var x = x.y.z;",
+          "  function f() {}",
+          "});"));
+  }
+
+  public void testInvalidGoogModeuleGetAlias() {
+    testError("goog.module('a'); x = goog.module.get('g');", INVALID_GET_ALIAS);
+
+    testError("goog.module('a'); var x; x = goog.module.get('g');", INVALID_GET_ALIAS);
+
+    testError(
+        "goog.module('a'); var x = goog.forwardDeclare(); x = goog.module.get('g');",
+        INVALID_GET_ALIAS);
+
+    testError(
+        "goog.module('a'); var x = goog.forwardDeclare('z'); x = goog.module.get('g');",
+        INVALID_GET_ALIAS);
   }
 
 

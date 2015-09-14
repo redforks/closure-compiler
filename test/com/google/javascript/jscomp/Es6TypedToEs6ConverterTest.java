@@ -23,7 +23,6 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   protected void setUp() throws Exception {
     super.setUp();
     setAcceptedLanguage(LanguageMode.ECMASCRIPT6_TYPED);
-    enableCompareAsTree(true);
   }
 
   @Override
@@ -44,6 +43,11 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
       }
     });
     return optimizer;
+  }
+
+  @Override
+  protected int getNumRepetitions() {
+    return 1;
   }
 
   public void testMemberVariable() {
@@ -71,6 +75,18 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
         LINE_JOINER.join(
         "class C {}",
         "/** @type {{p: string}} */ C.prototype.on;"));
+
+    test(
+        "export class C { foo: number; }",
+        "export class C {} /** @type {number} */ C.prototype.foo;");
+
+    testExternChanges(
+        "declare class C { foo: number; }",
+        "class C {} /** @type {number} */ C.prototype.foo;");
+
+    testExternChanges(
+        "export declare class C { foo: number; }",
+        "export class C {} /** @type {number} */ C.prototype.foo;");
   }
 
   public void testMemberVariable_noCtor() {
@@ -120,9 +136,10 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
 
   // TypeQuery is currently not supported.
   public void testTypeQuery() {
-    testError("var x: typeof y | number;",
+    test("var x: typeof y | number;", "var /** ? | number */ x;", null,
         Es6TypedToEs6Converter.TYPE_QUERY_NOT_SUPPORTED);
-    testError("var x: (p1: typeof y) => number;",
+
+    test("var x: (p1: typeof y) => number;", "var /** function(?): number */ x;", null,
         Es6TypedToEs6Converter.TYPE_QUERY_NOT_SUPPORTED);
   }
 
@@ -133,6 +150,27 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   public void testOptionalParameter() {
     test("function f(p1?: number) {}", "function f(/** number= */ p1) {}");
     test("function f(p1?) {}", "function f(/** ?= */ p1) {}");
+  }
+
+  public void testOptionalProperty() {
+    test("var x: {foo?};", "var /** {foo: (? | undefined)} */ x;");
+    test("var x: {foo?()};", "var /** {foo: (function(): ? | undefined)}  */ x;");
+    test("var x: {foo?: string};", "var /** {foo: (string | undefined)} */ x;");
+    test("var x: {foo?: string | number};", "var /** {foo: ((string | number) | undefined)} */ x;");
+    test("var x: {foo?(): string};", "var /** {foo: ((function(): string) | undefined)} */ x;");
+
+    test("interface I {foo?: string}",
+         "/** @interface */ class I {} /** @type {string | undefined} */ I.prototype.foo;");
+
+    test("interface I {foo?(): string}",
+        LINE_JOINER.join(
+         "/** @interface */ class I {}",
+         "/** @type {(function(): string) | undefined} */ I.prototype.foo;"));
+
+    test("interface I {foo?()}",
+        LINE_JOINER.join(
+         "/** @interface */ class I {}",
+         "/** @type {(function(): ?) | undefined} */ I.prototype.foo;"));
   }
 
   public void testRestParameter() {
@@ -166,6 +204,7 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   }
 
   public void testRecordType() {
+    test("var x: {p; q};", "var /** {p: ?, q: ?} */ x;");
     test("var x: {p: string; q: number};", "var /** {p: string, q: number} */ x;");
     test("var x: {p: string, q: number};", "var /** {p: string, q: number} */ x;");
     test("var x: {p: string; q: {p: string; q: number}};",
@@ -177,8 +216,11 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
         "};"),
         "var /** {p: string} */ x;");
 
-    testError("var x: {constructor(); q: number};",
-        Es6TypedToEs6Converter.UNSUPPORTED_RECORD_TYPE);
+    test("var x: {foo(p1: number, p2?, ...p3: string[]): string;};",
+         "var /** {foo: function(number, ?=, ...string): string} */ x;");
+
+    test("var x: {constructor(); q: number};",
+         "var /** {constructor: function(): ?, q: number} */ x;");
   }
 
   public void testParameterizedType() {
@@ -206,8 +248,8 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
     test("var Foo = class<T> {};", "var Foo = /** @template T */ class {};");
 
     // Currently, bounded generics are not supported.
-    testError("class Foo<U extends () => boolean, V> {}",
-        Es6TypedToEs6Converter.CANNOT_CONVERT_BOUNDED_GENERICS);
+    test("class Foo<U extends () => boolean, V> {}", "/** @template U, V */ class Foo {}",
+        null, Es6TypedToEs6Converter.CANNOT_CONVERT_BOUNDED_GENERICS);
   }
 
   public void testGenericFunction() {
@@ -238,10 +280,24 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   public void testInterface() {
     test("interface I { foo: string; }",
          "/** @interface */ class I {} /** @type {string} */ I.prototype.foo;");
+
     test("interface Foo extends Bar, Baz {}",
          "/** @interface @extends {Bar} @extends {Baz} */ class Foo {}");
+
     test("interface I { foo(p: string): boolean; }",
          "/** @interface */ class I { /** @return {boolean} */ foo(/** string */ p) {} }");
+
+    testExternChanges(
+        "declare namespace foo.bar { interface J extends foo.I {} }",
+        LINE_JOINER.join(
+        "/** @const */ var foo = {}; /** @const */ foo.bar = {}",
+        "/** @interface @extends {foo.I} */ foo.bar.J = class {};"));
+
+    testExternChanges(
+        "declare namespace foo { interface I { bar: number; } }",
+        LINE_JOINER.join(
+        "/** @const */ var foo = {};",
+        "/** @interface */ foo.I = class {}; /** @type {number} */ foo.I.prototype.bar;"));
   }
 
   public void testTypeAlias() {
@@ -253,17 +309,21 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
   }
 
   public void testAmbientDeclaration() {
-    enableCompareAsTree(false);
     testExternChanges(
         "declare var x: number;",
-        "/** @suppress {duplicate} */ var /** number */ x;");
-    testExternChanges("declare let x;", "var x;");
+        "var /** number */ x;");
+    testExternChanges("declare let x;", "let x;");
     testExternChanges("declare const x;", "/** @const */ var x;");
     testExternChanges("declare function f(): number;", "/** @return {number} */ function f() {}");
     testExternChanges(
         "declare enum Foo {}",
-        "/** @suppress {duplicate} @enum {number} */ var Foo = {}");
+        "/** @enum {number} */ var Foo = {}");
     testExternChanges("declare class C { constructor(); };", "class C { constructor() {} }");
+    testExternChanges(
+        "declare class C { foo(): number; };",
+        "class C { /** @return {number} */ foo() {} }");
+    testExternChanges("declare module foo {}", "/** @const */ var foo = {};"); // Accept "module"
+    testExternChanges("declare namespace foo {}", "/** @const */ var foo = {};");
   }
 
   public void testIndexSignature() {
@@ -278,6 +338,12 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
         Es6TypedToEs6Converter.UNSUPPORTED_RECORD_TYPE);
   }
 
+  public void testCallSignature() {
+    testError("interface I { (): string }", Es6TypedToEs6Converter.CALL_SIGNATURE_NOT_SUPPORTED);
+    testError("interface I { new (): string }",
+        Es6TypedToEs6Converter.CALL_SIGNATURE_NOT_SUPPORTED);
+  }
+
   public void testAccessibilityModifier() {
     test("class Foo { private constructor() {} }",
          "class Foo { /** @private */ constructor() {} }");
@@ -286,9 +352,283 @@ public final class Es6TypedToEs6ConverterTest extends CompilerTestCase {
          "class Foo {} /** @protected @type {number} */ Foo.bar;");
     test("class Foo { private get() {} }", "class Foo { /** @private */ get() {} }");
     test("class Foo { public set() {} }", "class Foo { /** @public */ set() {} }");
-    testError("class Foo { private ['foo']() {} }",
-        Es6TypedToEs6Converter.COMPUTED_PROP_ACCESS_MODIFIER);
-    testError("class Foo { private ['foo']; }",
-        Es6TypedToEs6Converter.COMPUTED_PROP_ACCESS_MODIFIER);
+
+    test("class Foo { private ['foo']() {} }", "class Foo { /** @private */ ['foo']() {} }",
+        null, Es6TypedToEs6Converter.COMPUTED_PROP_ACCESS_MODIFIER);
+    test("class Foo { private ['foo']; }", "class Foo {}  /** @private */ Foo.prototype['foo'];",
+        null, Es6TypedToEs6Converter.COMPUTED_PROP_ACCESS_MODIFIER);
+  }
+
+  public void testAmbientNamespace() {
+    testExternChanges(
+        "declare namespace foo { var i, j, k; }",
+        "/** @const */ var foo = {}; foo.i; foo.j; foo.k;");
+
+    testExternChanges(
+        "declare namespace foo { let i, j, k; }",
+        "/** @const */ var foo = {}; foo.i; foo.j; foo.k;");
+
+    testExternChanges(
+        "declare namespace foo { function f(); }",
+        "/** @const */ var foo = {}; foo.f = function() {};");
+
+    testExternChanges("declare namespace foo { interface I {} }",
+         "/** @const */ var foo = {}; /** @interface */ foo.I = class {};");
+
+    testExternChanges("declare namespace foo { interface I { bar: number; } }",
+        LINE_JOINER.join(
+         "/** @const */ var foo = {}; /** @interface */ foo.I = class {};",
+         "/** @type {number} */ foo.I.prototype.bar;"));
+
+    testExternChanges("declare namespace foo { class C { bar: number; } }",
+        LINE_JOINER.join(
+         "/** @const */ var foo = {}; foo.C = class {};",
+         "/** @type {number} */ foo.C.prototype.bar;"));
+
+    testExternChanges("declare namespace foo.bar { class C { baz(): number; } }",
+        LINE_JOINER.join(
+         "/** @const */ var foo = {}; /** @const */ foo.bar = {};",
+         "foo.bar.C = class { /** @return {number} */ baz() {}};"));
+
+    testExternChanges("declare namespace foo { interface I {} class C implements I {} }",
+        LINE_JOINER.join(
+            "/** @const */ var foo = {};",
+            "/** @interface */ foo.I = class {};",
+            "/** @implements {foo.I} */ foo.C = class {}"));
+
+    testExternChanges("declare namespace foo { class A {} class B extends A {} }",
+        LINE_JOINER.join(
+            "/** @const */ var foo = {};",
+            "foo.A = class {};",
+            "foo.B = class extends foo.A {};"));
+
+    testExternChanges("declare namespace foo { class C {} var x: C; }",
+        LINE_JOINER.join(
+            "/** @const */ var foo = {};",
+            "foo.C = class {};",
+            "/** @type {!foo.C} */ foo.x;"));
+
+    testExternChanges("declare namespace foo { interface J {} interface I extends J {} }",
+         LINE_JOINER.join(
+             "/** @const */ var foo = {};",
+             "/** @interface */ foo.J = class {};",
+             "/** @interface @extends {foo.J} */ foo.I = class {};"));
+
+    testExternChanges("declare namespace foo { enum E {} }",
+        "/** @const */ var foo = {}; /** @enum */ foo.E = {};");
+
+    testExternChanges("declare namespace foo.bar {}",
+        "/** @const */ var foo = {}; /** @const */ foo.bar = {};");
+
+    testExternChanges(
+        "declare namespace foo { module baw {} } declare namespace foo { module baz {} }",
+        LINE_JOINER.join(
+        "/** @const */ var foo = {};",
+        "/** @const */ foo.baw = {}; /** @const */ foo.baz = {};"));
+
+    testExternChanges(
+        "declare namespace foo { var x: Bar; } declare namespace foo { class Bar {} }",
+        "/** @const */ var foo = {}; /** @type {!foo.Bar} */ foo.x; foo.Bar = class {};");
+
+    testExternChanges("declare namespace foo {} declare var x;",
+        "/** @const */ var foo = {}; var x;");
+
+    testExternChanges("declare namespace foo.bar {} declare var x;",
+        "/** @const */ var foo = {}; /** @const */ foo.bar = {}; var x;");
+
+    testExternChanges(
+        "export declare namespace foo.bar {}",
+        "export /** @const */ var foo = {}; /** @const */ foo.bar = {};");
+
+    testExternChanges(
+        "export declare namespace foo.bar { export var x; }",
+        "export /** @const */ var foo = {}; /** @const */ foo.bar = {}; foo.bar.x;");
+
+    testExternChanges(
+        "export declare namespace foo.bar {} export declare namespace foo.bar {}",
+        "export /** @const */ var foo = {}; /** @const */ foo.bar = {};");
+  }
+
+  public void testExportDeclaration() {
+    test("export var i: number;", "export var /** number */ i;");
+    test("export var i, j: string, k: number;", "export var i, /** string */ j, /** number */ k;");
+    test("export let i, j: string, k: number;", "export let i, /** string */ j, /** number */ k;");
+    test("export const i: number = 5, j: string = '5';",
+         "export const /** number */ i = 5, /** string */ j = '5';");
+
+    test("export function f(): number {}", "export /** @return {number} */ function f() {}");
+
+    test("export interface I {}", "export /** @interface */ class I {}");
+
+    test("export interface I {} export class C implements I {}",
+         "export /** @interface */ class I {} export /** @implements {I} */ class C {}");
+
+    testSame("export class A {} export class B extends A {}");
+
+    test("export class C {} export var x: C;", "export class C {} export var /** !C */ x;");
+
+    test("export enum E {}", "export /** @enum */ var E = {};");
+
+    testError("namespace foo { export var x; }",
+        Es6TypedToEs6Converter.NON_AMBIENT_NAMESPACE_NOT_SUPPORTED);
+  }
+
+  public void testExportAmbientDeclaration() {
+    testExternChanges("export declare var i: number;", "export var /** number */ i;");
+    testExternChanges(
+        "export declare var i, j: string, k: number;",
+        "export var i, /** string */ j, /** number */ k;");
+    testExternChanges(
+        "export declare let i, j: string, k: number;",
+        "export let i, /** string */ j, /** number */ k;");
+    testExternChanges(
+        "export declare const i: number, j: string;",
+        "export /** @const */ var /** number */ i, /** string */ j;");
+
+    testExternChanges(
+        "export declare function f(): number;",
+        "export /** @return {number} */ function f() {}");
+
+    testExternChanges(
+        "export declare class A {} export declare class B extends A {}",
+        "export class A {} export class B extends A {}");
+
+    testExternChanges(
+        "export declare class C {} export declare var x: C;",
+        "export class C {} export var /** !C */ x;");
+
+    testExternChanges("export declare enum E {}", "export /** @enum */ var E = {};");
+
+    testError("namespace foo { export declare var x; }",
+        Es6TypedToEs6Converter.NON_AMBIENT_NAMESPACE_NOT_SUPPORTED);
+  }
+
+  public void testExportDeclarationInAmbientNamespace() {
+    testExternChanges(
+        "declare namespace foo { export var i, j, k; }",
+        "/** @const */ var foo = {}; foo.i; foo.j; foo.k;");
+
+    testExternChanges(
+        "declare namespace foo { export let i, j, k; }",
+        "/** @const */ var foo = {}; foo.i; foo.j; foo.k;");
+
+    testExternChanges(
+        "declare namespace foo { export function f(); }",
+        "/** @const */ var foo = {}; foo.f = function() {};");
+
+    testExternChanges("declare namespace foo { export interface I {} }",
+         "/** @const */ var foo = {}; /** @interface */ foo.I = class {};");
+
+    testExternChanges(
+        "declare namespace foo { export interface I {} export class C implements I {} }",
+        LINE_JOINER.join(
+            "/** @const */ var foo = {};",
+            "/** @interface */ foo.I = class {};",
+            "/** @implements {foo.I} */ foo.C = class {}"));
+
+    testExternChanges("declare namespace foo { export class A {} export class B extends A {} }",
+        LINE_JOINER.join(
+            "/** @const */ var foo = {};",
+            "foo.A = class {};",
+            "foo.B = class extends foo.A {};"));
+
+    testExternChanges("declare namespace foo { export class C {} export var x: C; }",
+        LINE_JOINER.join(
+            "/** @const */ var foo = {};",
+            "foo.C = class {};",
+            "/** @type {!foo.C} */ foo.x;"));
+
+    testExternChanges(
+        "declare namespace foo { export interface J {} export interface I extends J {} }",
+         LINE_JOINER.join(
+             "/** @const */ var foo = {};",
+             "/** @interface */ foo.J = class {};",
+             "/** @interface @extends {foo.J} */ foo.I = class {};"));
+
+    testExternChanges("declare namespace foo { export enum E {} }",
+        "/** @const */ var foo = {}; /** @enum */ foo.E = {};");
+
+    testExternChanges("declare namespace foo.bar {}",
+        "/** @const */ var foo = {}; /** @const */ foo.bar = {};");
+
+    testExternChanges(
+        LINE_JOINER.join(
+        "declare namespace foo { export namespace bax {} export namespace bay {} }",
+        "declare namespace foo { export namespace baz {} }"),
+        LINE_JOINER.join(
+        "/** @const */ var foo = {}; /** @const */ foo.bax = {};",
+        "/** @const */ foo.bay = {}; /** @const */ foo.baz = {};"));
+
+    testExternChanges(
+        LINE_JOINER.join(
+        "declare namespace foo { export var x: Bar; }",
+        "declare namespace foo { export class Bar {} }"),
+        "/** @const */ var foo = {}; /** @type {!foo.Bar} */ foo.x; foo.Bar = class {};");
+  }
+
+  public void testOverload() {
+    test("interface I { foo(p1: number): number; foo(p1: number, p2: boolean): string }",
+        "/** @interface */ class I { /** @type {!Function} */ foo() {} }", null,
+        Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
+
+   test("interface I { foo?(p1: number): number; foo?(p1: number, p2: boolean): string }",
+        "/** @interface */ class I {} /** @type {!Function | undefined} */ I.prototype.foo;", null,
+       Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
+
+    testExternChanges(LINE_JOINER.join(
+        "declare function foo(p1: number): number;",
+        "declare function foo(p1: number, p2: boolean): string"),
+        "/** @type {!Function} */ function foo() {}",
+            Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
+
+    testExternChanges(LINE_JOINER.join(
+        "declare function foo(p1: number): number;",
+        "declare function bar();",
+        "declare function foo(p1: number, p2: boolean): string"),
+        "/** @type {!Function} */ function foo() {} function bar() {}",
+            Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
+
+    testExternChanges(LINE_JOINER.join(
+        "declare function foo(): any;",
+        "declare function foo(p1: number): number;",
+        "declare function bar();",
+        "declare function bar(p1: number, p2: boolean): string"),
+        "/** @type {!Function} */ function foo() {} /** @type {!Function} */ function bar() {}",
+            Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED,
+            Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
+
+    testExternChanges(LINE_JOINER.join(
+        "declare namespace goog {",
+        "  function foo(p1: number): number;",
+        "  function foo(p1: number, p2: boolean): string",
+        "}"),
+        "/** @const */ var goog = {}; /** @type {!Function} */ goog.foo = function() {}",
+            Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
+
+    testExternChanges(
+        LINE_JOINER.join(
+        "declare namespace goog {",
+        "  interface I {",
+        "    foo(): number;",
+        "    foo(p1: number): string;",
+        "  }",
+        "  function foo(p1: number): number",
+        "  function foo(p1: number, p2: boolean): string",
+        "}"),
+        LINE_JOINER.join(
+        "/** @const */ var goog = {};",
+        "/** @interface */ goog.I = class { /** @type {!Function} */ foo() {} };",
+        "/** @type {!Function} */ goog.foo = function() {};"),
+        Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED,
+        Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
+  }
+
+  public void testSpecializedSignature() {
+    testExternChanges(LINE_JOINER.join(
+        "declare function foo(p1: number): number;",
+        "declare function foo(p1: 'random'): string"),
+        "/** @type {!Function} */ function foo() {}",
+            Es6TypedToEs6Converter.SPECIALIZED_SIGNATURE_NOT_SUPPORTED,
+            Es6TypedToEs6Converter.OVERLOAD_NOT_SUPPORTED);
   }
 }

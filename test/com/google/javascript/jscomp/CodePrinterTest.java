@@ -325,29 +325,29 @@ public final class CodePrinterTest extends CodePrinterTestBase {
 
   public void testPrintObjectPatternAssign() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a})=foo()");
-    assertPrintSame("({a,b})=foo()");
-    assertPrintSame("({a:a,b:b})=foo()");
+    assertPrintSame("({a}=foo())");
+    assertPrintSame("({a,b}=foo())");
+    assertPrintSame("({a:a,b:b}=foo())");
   }
 
   public void testPrintNestedObjectPattern() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a:{b,c}})=foo()");
-    assertPrintSame("({a:{b:{c:{d}}}})=foo()");
+    assertPrintSame("({a:{b,c}}=foo())");
+    assertPrintSame("({a:{b:{c:{d}}}}=foo())");
   }
 
   public void testPrintObjectPatternInitializer() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a=1})=foo()");
-    assertPrintSame("({a:{b=2}})=foo()");
-    assertPrintSame("({a:b=2})=foo()");
-    assertPrintSame("({a,b:{c=2}})=foo()");
-    assertPrintSame("({a:{b=2},c})=foo()");
+    assertPrintSame("({a=1}=foo())");
+    assertPrintSame("({a:{b=2}}=foo())");
+    assertPrintSame("({a:b=2}=foo())");
+    assertPrintSame("({a,b:{c=2}}=foo())");
+    assertPrintSame("({a:{b=2},c}=foo())");
   }
 
   public void testPrintMixedDestructuring() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a:[b,c]})=foo()");
+    assertPrintSame("({a:[b,c]}=foo())");
     assertPrintSame("[a,{b,c}]=foo()");
   }
 
@@ -1999,10 +1999,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     languageMode = LanguageMode.ECMASCRIPT6;
     // export declarations
     assertPrintSame("export var x=1");
+    assertPrintSame("export var x;export var y");
     assertPrintSame("export let x=1");
     assertPrintSame("export const x=1");
     assertPrintSame("export function f(){}");
     assertPrintSame("export class f{}");
+    assertPrintSame("export class f{}export class b{}");
 
     // export all from
     assertPrint("export * from 'a.b.c'", "export*from\"a.b.c\"");
@@ -2021,6 +2023,8 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     // export default
     assertPrintSame("export default x");
     assertPrintSame("export default 1");
+    assertPrintSame("export default class Foo{}export function f(){}");
+    assertPrintSame("export function f(){}export default class Foo{}");
   }
 
   public void testTemplateLiteral() {

@@ -95,12 +95,12 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
 
   public void processFile(Node root) {
     FindGoogProvideOrGoogModule finder = new FindGoogProvideOrGoogModule();
-    NodeTraversal.traverse(compiler, root, finder);
+    NodeTraversal.traverseEs6(compiler, root, finder);
     if (finder.isFound()) {
       return;
     }
     isEs6Module = false;
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
@@ -307,18 +307,6 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     URI normalizedAddress = loader.normalizeInputAddress(t.getInput());
     String moduleName = ES6ModuleLoader.toModuleName(normalizedAddress);
 
-    if (!exportMap.isEmpty()) {
-      // Creates an export object for this module.
-      // var moduleName = {};
-      Node objectlit = IR.objectlit();
-      Node varNode = IR.var(IR.name(moduleName), objectlit)
-          .useSourceInfoIfMissingFromForTree(script);
-      JSDocInfoBuilder info = new JSDocInfoBuilder(true);
-      info.recordConstancy();
-      varNode.setJSDocInfo(info.build());
-      script.addChildToBack(varNode);
-    }
-
     for (Map.Entry<String, NameNodePair> entry : exportMap.entrySet()) {
       String exportedName = entry.getKey();
       String withSuffix = entry.getValue().name;
@@ -356,7 +344,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     }
 
     // Rename vars to not conflict in global scope.
-    NodeTraversal.traverse(compiler, script, new RenameGlobalVars(moduleName));
+    NodeTraversal.traverseEs6(compiler, script, new RenameGlobalVars(moduleName));
 
     if (!exportMap.isEmpty()) {
       // Add goog.provide call.
@@ -384,7 +372,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
   }
 
   private void rewriteRequires(Node script) {
-    NodeTraversal.traverse(compiler, script, new NodeTraversal.AbstractShallowCallback() {
+    NodeTraversal.traverseEs6(compiler, script, new NodeTraversal.AbstractShallowCallback() {
       @Override
       public void visit(NodeTraversal t, Node n, Node parent) {
         if (n.isCall()

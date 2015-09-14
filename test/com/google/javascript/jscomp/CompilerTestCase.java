@@ -1048,18 +1048,18 @@ public abstract class CompilerTestCase extends TestCase {
         errorManagers[i] = new BlackHoleErrorManager();
         compiler.setErrorManager(errorManagers[i]);
 
-        // Only run process closure primitives once, if asked.
-        if (closurePassEnabled && i == 0) {
-          recentChange.reset();
-          new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false)
-              .process(null, mainRoot);
-          hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
-        }
-
         if (rewriteClosureCode && i == 0) {
           new ClosureRewriteClass(compiler).process(null, mainRoot);
           new ClosureRewriteModule(compiler).process(null, mainRoot);
           new ScopedAliases(compiler, null, CompilerOptions.NULL_ALIAS_TRANSFORMATION_HANDLER)
+              .process(null, mainRoot);
+          hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
+        }
+
+        // Only run process closure primitives once, if asked.
+        if (closurePassEnabled && i == 0) {
+          recentChange.reset();
+          new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false)
               .process(null, mainRoot);
           hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
         }
@@ -1353,6 +1353,16 @@ public abstract class CompilerTestCase extends TestCase {
   }
 
   protected void testExternChanges(String extern, String input, String expectedExtern) {
+    testExternChanges(extern, input, expectedExtern, (DiagnosticType[]) null);
+  }
+
+  protected void testExternChanges(String input, String expectedExtern,
+      DiagnosticType... warnings) {
+    testExternChanges("", input, expectedExtern, warnings);
+  }
+
+  protected void testExternChanges(String extern, String input, String expectedExtern,
+      DiagnosticType... warnings) {
     Compiler compiler = createCompiler();
     CompilerOptions options = getOptions();
     compiler.init(
@@ -1373,6 +1383,16 @@ public abstract class CompilerTestCase extends TestCase {
     (getProcessor(compiler)).process(externs, root);
 
     if (compareAsTree) {
+      // Ignore and remove empty externs, so that if we start with an empty extern and only add
+      // to the synthetic externs, we can still enable compareAsTree.
+      if (externs.hasMoreThanOneChild()) {
+        for (Node c : externs.children()) {
+          if (!c.hasChildren()) {
+            c.detachFromParent();
+          }
+        }
+      }
+
       // Expected output parsed without implied block.
       Preconditions.checkState(externs.isBlock());
       Preconditions.checkState(compareJsDoc);
@@ -1388,6 +1408,19 @@ public abstract class CompilerTestCase extends TestCase {
       String externsCode = compiler.toSource(externs);
       String expectedCode = compiler.toSource(expected);
       assertThat(externsCode).isEqualTo(expectedCode);
+    }
+
+    if (warnings != null) {
+      String warningMessage = "";
+      for (JSError actualWarning : compiler.getWarnings()) {
+        warningMessage += actualWarning.description + "\n";
+      }
+      assertEquals("There should be " + warnings.length + " warnings. " + warningMessage,
+          warnings.length, compiler.getWarningCount());
+      for (int i = 0; i < warnings.length; i++) {
+        DiagnosticType warning = warnings[i];
+        assertEquals(warningMessage, warning, compiler.getWarnings()[i].getType());
+      }
     }
   }
 

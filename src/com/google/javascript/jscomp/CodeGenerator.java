@@ -119,6 +119,11 @@ class CodeGenerator {
       // the IN_FOR_INIT_CLAUSE one.
       Context rhsContext = getContextForNoInOperator(context);
 
+      boolean needsParens = (context == Context.START_OF_EXPR) && first.isObjectPattern();
+      if (n.isAssign() && needsParens) {
+        add("(");
+      }
+
       if (NodeUtil.isAssignmentOp(n) && NodeUtil.isAssignmentOp(last)) {
         // Assignments are the only right-associative binary operators
         addExpr(first, p, context);
@@ -126,6 +131,10 @@ class CodeGenerator {
         addExpr(last, p, rhsContext);
       } else {
         unrollBinaryOperator(n, type, opstr, context, rhsContext, p, p + 1);
+      }
+
+      if (n.isAssign() && needsParens) {
+        add(")");
       }
       return;
     }
@@ -362,7 +371,7 @@ class CodeGenerator {
           add("from");
           add(last);
         }
-        cc.endStatement();
+        processEnd(first, context);
         break;
 
       case Token.IMPORT:
@@ -459,10 +468,11 @@ class CodeGenerator {
 
       case Token.CLASS_MEMBERS:
       case Token.INTERFACE_MEMBERS:
-      case Token.MODULE_ELEMENTS:
+      case Token.NAMESPACE_ELEMENTS:
         cc.beginBlock();
         for (Node c = first; c != null; c = c.getNext()) {
           add(c);
+          processEnd(c, context);
           cc.endLine();
         }
         cc.endBlock(false);
@@ -524,10 +534,6 @@ class CodeGenerator {
             add(n.getString());
             maybeAddOptional(n);
             maybeAddTypeDecl(n);
-            if (!n.getParent().isRecordType()
-                && !n.getParent().isIndexSignature()) {
-              add(";");
-            }
           } else {
             Preconditions.checkState(childCount == 1);
             Preconditions.checkState(first.isFunction());
@@ -560,11 +566,7 @@ class CodeGenerator {
             maybeAddOptional(fn);
             add(parameters);
             maybeAddTypeDecl(fn);
-            if (body.isEmpty()) {
-              add(";");
-            } else {
-              add(body, Context.PRESERVE_BLOCK);
-            }
+            add(body, Context.PRESERVE_BLOCK);
           }
           break;
         }
@@ -975,14 +977,11 @@ class CodeGenerator {
             // properties that exist for their type declaration.
             Preconditions.checkState(n.getBooleanProp(Node.COMPUTED_PROP_VARIABLE));
           }
-          if (isInClass) {
-            add(";");
-          }
         }
         break;
 
       case Token.OBJECT_PATTERN:
-        addObjectPattern(n, context);
+        addObjectPattern(n);
         maybeAddTypeDecl(n);
         break;
 
@@ -1142,11 +1141,11 @@ class CodeGenerator {
           add(members);
           break;
         }
-      case Token.MODULE: {
+      case Token.NAMESPACE: {
         Preconditions.checkState(childCount == 2);
         Node name = first;
         Node elements = last;
-        add("module");
+        add("namespace");
         add(name);
         add(elements);
         break;
@@ -1156,19 +1155,19 @@ class CodeGenerator {
         add(n.getString());
         cc.addOp("=", true);
         add(last);
-        cc.endStatement();
+        cc.endStatement(true);
         break;
       case Token.DECLARE:
         add("declare");
         add(first);
-        cc.endStatement();
+        processEnd(n, context);
         break;
       case Token.INDEX_SIGNATURE:
         add("[");
         add(first);
         add("]");
         maybeAddTypeDecl(n);
-        add(";");
+        cc.endStatement(true);
         break;
       case Token.CALL_SIGNATURE:
         if (n.getBooleanProp(Node.CONSTRUCT_SIGNATURE)) {
@@ -1177,7 +1176,7 @@ class CodeGenerator {
         maybeAddGenericTypes(n);
         add(first);
         maybeAddTypeDecl(n);
-        add(";");
+        cc.endStatement(true);
         break;
       default:
         throw new RuntimeException("Unknown type " + Token.name(type) + "\n" + n.toStringTree());
@@ -1565,12 +1564,8 @@ class CodeGenerator {
     }
   }
 
-  void addObjectPattern(Node n, Context context) {
+  void addObjectPattern(Node n) {
     boolean hasInitializer = false;
-    boolean needsParens = (context == Context.START_OF_EXPR);
-    if (needsParens) {
-      add("(");
-    }
 
     add("{");
     for (Node child = n.getFirstChild(); child != null; child = child.getNext()) {
@@ -1586,10 +1581,6 @@ class CodeGenerator {
     }
     if (!hasInitializer) {
       add("}");
-    }
-
-    if (needsParens) {
-      add(")");
     }
   }
 
@@ -1884,5 +1875,53 @@ class CodeGenerator {
   private static Context getContextForNoInOperator(Context context) {
     return (context == Context.IN_FOR_INIT_CLAUSE
         ? Context.IN_FOR_INIT_CLAUSE : Context.OTHER);
+  }
+
+  private void processEnd(Node n, Context context) {
+    switch (n.getType()) {
+      case Token.CLASS:
+      case Token.INTERFACE:
+      case Token.ENUM:
+      case Token.NAMESPACE:
+        cc.endClass(context == Context.STATEMENT);
+        break;
+      case Token.FUNCTION:
+        if (n.getLastChild().isEmpty()) {
+          cc.endStatement(true);
+        } else {
+          cc.endFunction(context == Context.STATEMENT);
+        }
+        break;
+      case Token.DECLARE:
+        if (n.getParent().getType() != Token.NAMESPACE_ELEMENTS) {
+          processEnd(n.getFirstChild(), context);
+        }
+        break;
+      case Token.EXPORT:
+        if (n.getParent().getType() != Token.NAMESPACE_ELEMENTS
+            && n.getFirstChild().getType() != Token.DECLARE) {
+          processEnd(n.getFirstChild(), context);
+        }
+        break;
+      case Token.COMPUTED_PROP:
+        if (n.hasOneChild()) {
+          cc.endStatement(true);
+        }
+        break;
+      case Token.MEMBER_FUNCTION_DEF:
+      case Token.GETTER_DEF:
+      case Token.SETTER_DEF:
+        if (n.getFirstChild().getLastChild().isEmpty()) {
+          cc.endStatement(true);
+        }
+        break;
+      case Token.MEMBER_VARIABLE_DEF:
+        cc.endStatement(true);
+        break;
+      default:
+        if (context == Context.STATEMENT) {
+          cc.endStatement();
+        }
+    }
   }
 }

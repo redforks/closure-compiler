@@ -25,15 +25,51 @@
 /** The global object. */
 $jscomp.global = this;
 
+/**
+ * This is needed to make things work in IE11. Otherwise we get an error:
+ * "Variable undefined in strict mode"
+ * TODO(tbreisacher): Investigate.
+ * @suppress {duplicate}
+ */
+var Symbol;
+
+/**
+ * Initializes the Symbol function.
+ * @suppress {reportUnknownTypes}
+ */
+$jscomp.initSymbol = function() {
+  if (!$jscomp.global.Symbol) {
+    Symbol = $jscomp.Symbol;
+  }
+
+  // Only need to do this once. All future calls are no-ops.
+  $jscomp.initSymbol = function() {};
+};
+
+
+/** @private {number} */
+$jscomp.symbolCounter_ = 0;
+
+
+/**
+ * Produces "symbols" (actually just unique strings).
+ * @param {string} description
+ * @return {symbol}
+ */
+$jscomp.Symbol = function(description) {
+  return /** @type {symbol} */ (
+      'jscomp_symbol_' + description + ($jscomp.symbolCounter_++));
+};
+
 
 /**
  * Initializes Symbol.iterator, if it's not already defined.
  * @suppress {reportUnknownTypes}
  */
 $jscomp.initSymbolIterator = function() {
-  Symbol = $jscomp.global.Symbol || {};
+  $jscomp.initSymbol();
   if (!Symbol.iterator) {
-    Symbol.iterator = '$jscomp$iterator';
+    Symbol.iterator = Symbol('iterator');
   }
 
   // Only need to do this once. All future calls are no-ops.
@@ -56,7 +92,7 @@ $jscomp.makeIterator = function(iterable) {
     return iterable[Symbol.iterator]();
   }
   if (!(iterable instanceof Array) && typeof iterable != 'string') {
-    throw new Error();
+    throw new Error(iterable + ' is not iterable');
   }
   var index = 0;
   return /** @type {!Iterator} */ ({
