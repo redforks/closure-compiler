@@ -267,7 +267,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
               }
             } else if ("inherits".equals(methodName)) {
               // Note: inherits is allowed in local scope
-              processInheritsCall(t, n);
+              processInheritsCall(n);
             } else if ("exportSymbol".equals(methodName)) {
               // Note: exportSymbol is allowed in local scope
               Node arg = left.getNext();
@@ -811,7 +811,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
   /**
    * Processes the goog.inherits call.
    */
-  private void processInheritsCall(NodeTraversal t, Node n) {
+  private void processInheritsCall(Node n) {
     if (n.getChildCount() == 3) {
       Node subClass = n.getChildAtIndex(1);
       Node superClass = subClass.getNext();
@@ -1063,7 +1063,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     // as we migrate users to explicit goog.forwardDeclare() calls.
     if (typeDecls != null) {
       for (String typeDecl : typeDecls) {
-        compiler.getTypeRegistry().forwardDeclareType(typeDecl);
+        compiler.forwardDeclareType(typeDecl);
       }
     }
 
@@ -1093,8 +1093,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     }
 
     if (typeDeclaration != null) {
-      compiler.getTypeRegistry().forwardDeclareType(typeDeclaration);
-
+      compiler.forwardDeclareType(typeDeclaration);
       // Forward declaration was recorded and we can remove the call.
       parent.detachFromParent();
       compiler.reportCodeChange();
@@ -1357,7 +1356,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
             varNode.copyInformationFrom(candidateDefinition);
             candidateDefinition.getParent().replaceChild(
                 candidateDefinition, varNode);
-            nameNode.setJSDocInfo(assignNode.getJSDocInfo());
+            varNode.setJSDocInfo(assignNode.getJSDocInfo());
             compiler.reportCodeChange();
             replacementNode = varNode;
           }
@@ -1415,12 +1414,11 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       Node decl = IR.var(name);
       decl.putBooleanProp(Node.IS_NAMESPACE, true);
 
-      // TODO(nicksantos): ew ew ew. Create a mutator package.
       if (compiler.getCodingConvention().isConstant(namespace)) {
         name.putBooleanProp(Node.IS_CONSTANT_NAME, true);
       }
       if (candidateDefinition == null) {
-        name.setJSDocInfo(NodeUtil.createConstantJsDoc());
+        decl.setJSDocInfo(NodeUtil.createConstantJsDoc());
       }
 
       Preconditions.checkState(isNamespacePlaceholder(decl));

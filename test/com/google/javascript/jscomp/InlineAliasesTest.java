@@ -49,9 +49,9 @@ public class InlineAliasesTest extends Es6CompilerTestCase {
             SourceFile.fromCode("A", LINE_JOINER.join(
                 "/** @const */ var $jscomp={}; /** @const */ $jscomp.scope={};",
                 "/** @constructor */ $jscomp.scope.Base = function(){};",
-                "var /** @const */ base = $jscomp.scope.Base;")),
+                "/** @const */ var base = $jscomp.scope.Base;")),
             SourceFile.fromCode("B", LINE_JOINER.join(
-                "var /** @const */ leaf =",
+                "/** @const */ var leaf =",
                 "  /** @constructor @extends {$jscomp.scope.Base} */ function Foo(){}"))));
   }
 
@@ -71,11 +71,11 @@ public class InlineAliasesTest extends Es6CompilerTestCase {
         ImmutableList.of(
             SourceFile.fromCode("A", LINE_JOINER.join(
                 "/** @const */ var $jscomp={}; /** @const */ $jscomp.scope={};",
-                "var /** @const */ ns={}; ",
+                " /** @const */ var ns = {}; ",
                 "/** @constructor */ $jscomp.scope.Base = function(){};",
                 "/** @const */ ns.base = $jscomp.scope.Base;")),
             SourceFile.fromCode("B", LINE_JOINER.join(
-                "var /** @const */ leaf =",
+                "/** @const */ var leaf =",
                 "  /** @constructor @extends {$jscomp.scope.Base} */function Foo(){}"))));
   }
 
@@ -96,12 +96,12 @@ public class InlineAliasesTest extends Es6CompilerTestCase {
         ImmutableList.of(
             SourceFile.fromCode("A", LINE_JOINER.join(
                 "/** @const */ var $jscomp={}; /** @const */ $jscomp.scope={};",
-                "var /** @const */ ns={}; ",
+                "/** @const */ var ns = {}; ",
                 "/** @constructor */ $jscomp.scope.Base = function(){}",
                 "/** @constructor */ $jscomp.scope.Base.Foo = function(){};",
                 "/** @const */ ns.base = $jscomp.scope.Base;")),
             SourceFile.fromCode("B", LINE_JOINER.join(
-                "var /**@const*/ leaf =",
+                " /**@const*/ var leaf =",
                 "  /**@constructor @extends {$jscomp.scope.Base.Foo}*/function Foo(){}"))));
   }
 
@@ -121,12 +121,69 @@ public class InlineAliasesTest extends Es6CompilerTestCase {
         ImmutableList.of(
             SourceFile.fromCode("A", LINE_JOINER.join(
                 "/** @const */ var $jscomp={}; /** @const */ $jscomp.scope={};",
-                "var /** @const */ ns={}; ",
+                "/** @const */ var ns = {}; ",
                 "/** @constructor */ $jscomp.scope.Base = function(){};",
                 "/** @const */ ns.base = $jscomp.scope.Base;")),
             SourceFile.fromCode("B",
-                "var /** @const */ leaf = new $jscomp.scope.Base;")));
+                "/** @const */ var leaf = new $jscomp.scope.Base;")));
   }
+
+  public void testRewriteGoogModuleAliasesWithPrototypeGets1() {
+    testGoogModules(
+        ImmutableList.of(
+            SourceFile.fromCode("B", LINE_JOINER.join(
+                "goog.module('mod_B');",
+                "",
+                "/** @interface */ function B(){}",
+                "B.prototype.f = function(){};",
+                "",
+                "exports = B;")),
+            SourceFile.fromCode("A", LINE_JOINER.join(
+                "goog.module('mod_A');",
+                "",
+                "var B = goog.require('mod_B');",
+                "",
+                "/** @type {B} */",
+                "var b;"))),
+        ImmutableList.of(
+            SourceFile.fromCode("B", LINE_JOINER.join(
+                "/**@const */var $jscomp = {}; /**@const */$jscomp.scope = {};",
+                "/**@interface */$jscomp.scope.B = /**@interface */function() {};",
+                "$jscomp.scope.B.prototype.f = function() {};",
+                "/** @const */var mod_B = $jscomp.scope.B;")),
+            SourceFile.fromCode("A", LINE_JOINER.join(
+                "/**@const */var mod_A = {};",
+                "/**@type {$jscomp.scope.B} */$jscomp.scope.b;"))));
+  }
+
+  public void testRewriteGoogModuleAliasesWithPrototypeGets2() {
+    testGoogModules(
+        ImmutableList.of(
+            SourceFile.fromCode("B", LINE_JOINER.join(
+                "goog.module('mod_B');",
+                "",
+                "/** @interface */ function B(){}",
+                "",
+                "exports = B;")),
+            SourceFile.fromCode("A", LINE_JOINER.join(
+                "goog.module('mod_A');",
+                "",
+                "var B = goog.require('mod_B');",
+                "B.prototype;",
+                "",
+                "/** @type {B} */",
+                "var b;"))),
+        ImmutableList.of(
+            SourceFile.fromCode("B", LINE_JOINER.join(
+                "/**@const */var $jscomp = {}; /**@const */$jscomp.scope = {};",
+                "/**@interface */$jscomp.scope.B = /**@interface */function() {};",
+                "/** @const */var mod_B = $jscomp.scope.B;")),
+            SourceFile.fromCode("A", LINE_JOINER.join(
+                "/**@const */var mod_A = {};",
+                "$jscomp.scope.B.prototype;",
+                "/**@type {$jscomp.scope.B} */$jscomp.scope.b;"))));
+  }
+
 
   public void testSimpleAliasInJSDoc() {
     test("function Foo(){}; var /** @const */ alias = Foo; /** @type {alias} */ var x;",

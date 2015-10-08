@@ -58,6 +58,10 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
       "JSC_GOOG_CLASS_CONSTRUCTOR_MISSING",
       "The constructor expression is missing for the class descriptor");
 
+  static final DiagnosticType GOOG_CLASS_CONSTRUCTOR_NOT_VALID = DiagnosticType.error(
+      "JSC_GOOG_CLASS_CONSTRUCTOR_NOT_VALID",
+      "The constructor expression must be a function literal");
+
   static final DiagnosticType GOOG_CLASS_CONSTRUCTOR_ON_INTERFACE = DiagnosticType.error(
       "JSC_GOOG_CLASS_CONSTRUCTOR_ON_INTERFACE",
       "Should not have a constructor expression for an interface");
@@ -257,7 +261,12 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
       // report missing constructor
       compiler.report(JSError.make(description, GOOG_CLASS_CONSTRUCTOR_MISSING));
       return null;
+    } else {
+      if (!constructor.isFunction()) {
+        compiler.report(JSError.make(constructor, GOOG_CLASS_CONSTRUCTOR_NOT_VALID));
+      }
     }
+
     if (constructor == null) {
       constructor = IR.function(
           IR.name("").srcref(callNode),
@@ -596,6 +605,15 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
       mergedInfo.recordNgInject(true);
     }
 
+    if (classInfo.makesUnrestricted() || ctorInfo.makesUnrestricted()) {
+      mergedInfo.recordUnrestricted();
+    } else if (classInfo.makesDicts() || ctorInfo.makesDicts()) {
+      mergedInfo.recordDict();
+    } else {
+      // @struct by default
+      mergedInfo.recordStruct();
+    }
+
     // @constructor is implied, @interface must be explicit
     boolean isInterface = classInfo.isInterface() || ctorInfo.isInterface();
     if (isInterface) {
@@ -618,15 +636,6 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
     } else {
       // @constructor by default
       mergedInfo.recordConstructor();
-      if (classInfo.makesUnrestricted() || ctorInfo.makesUnrestricted()) {
-        mergedInfo.recordUnrestricted();
-      } else if (classInfo.makesDicts() || ctorInfo.makesDicts()) {
-        mergedInfo.recordDict();
-      } else {
-        // @struct by default
-        mergedInfo.recordStruct();
-      }
-
 
       if (classInfo.getBaseType() != null) {
         mergedInfo.recordBaseType(classInfo.getBaseType());

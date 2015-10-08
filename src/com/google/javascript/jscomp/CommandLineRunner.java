@@ -44,6 +44,7 @@ import org.kohsuke.args4j.spi.StringOptionHandler;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
@@ -489,6 +490,12 @@ public class CommandLineRunner extends
         usage = "Rewrite Polymer classes to be compiler-friendly.")
     private boolean polymerPass = false;
 
+    @Option(name = "--dart_pass",
+        hidden = true,
+        handler = BooleanOptionHandler.class,
+        usage = "Rewrite Dart Dev Compiler output to be compiler-friendly.")
+    private boolean dartPass = false;
+
     @Option(name = "--output_manifest",
         hidden = true,
         usage = "Prints out a list of all the files in the compilation. "
@@ -565,7 +572,7 @@ public class CommandLineRunner extends
 
     @Option(name = "--new_type_inf",
         hidden = true,
-        usage = "In development new type inference pass. DO NOT USE!")
+        usage = "Checks for type errors using the new type inference algorithm.")
     private boolean useNewTypeInference = false;
 
     @Option(name = "--rename_prefix_namespace",
@@ -584,6 +591,13 @@ public class CommandLineRunner extends
             + "Options: BROWSER, CUSTOM. Defaults to BROWSER.")
     private CompilerOptions.Environment environment =
         CompilerOptions.Environment.BROWSER;
+
+
+    @Option(name = "--instrumentation_template",
+            hidden = true,
+            usage = "A file containing an instrumentation template.")
+        private String instrumentationFile = "";
+
 
     @Argument
     private List<String> arguments = new ArrayList<>();
@@ -1100,6 +1114,7 @@ public class CommandLineRunner extends
           .setWarningsWhitelistFile(flags.warningsWhitelistFile)
           .setAngularPass(flags.angularPass)
           .setTracerMode(flags.tracerMode)
+          .setInstrumentationTemplateFile(flags.instrumentationFile)
           .setNewTypeInference(flags.useNewTypeInference);
     }
     errorStream = null;
@@ -1160,6 +1175,8 @@ public class CommandLineRunner extends
 
     options.polymerPass = flags.polymerPass;
 
+    options.setDartPass(flags.dartPass);
+
     options.renamePrefixNamespace = flags.renamePrefixNamespace;
 
     if (!flags.translationsFile.isEmpty()) {
@@ -1184,6 +1201,29 @@ public class CommandLineRunner extends
     }
 
     options.setConformanceConfigs(loadConformanceConfigs(flags.conformanceConfigs));
+
+    if (!flags.instrumentationFile.isEmpty()) {
+        String instrumentationPb;
+        Instrumentation.Builder builder = Instrumentation.newBuilder();
+        try (BufferedReader br = new BufferedReader(new FileReader(flags.instrumentationFile))) {
+            StringBuilder sb = new StringBuilder();
+            String line = br.readLine();
+
+            while (line != null) {
+                sb.append(line);
+                sb.append(System.lineSeparator());
+                line = br.readLine();
+            }
+            instrumentationPb = sb.toString();
+            TextFormat.merge(instrumentationPb, builder);
+
+            // Setting instrumentation template
+            options.instrumentationTemplate = builder.build();
+
+        } catch (IOException e) {
+            throw new RuntimeException("Error reading instrumentation template", e);
+        }
+    }
 
     return options;
   }

@@ -19,7 +19,6 @@
  *
  * TODO: Mocks.
  * TODO: Remaining Services:
- *     $cookies
  *     $cookieStore
  *     $document
  *     $httpBackend
@@ -219,44 +218,127 @@ angular.toJson = function(obj, opt_pretty) {};
 angular.uppercase = function(s) {};
 
 /**
- * @constructor
+ * @typedef {{
+ *   animate: (function(!angular.JQLite, !Object, !Object, !Function,
+ *       !Object=):(!Function|undefined)|undefined),
+ *   enter: (function(!angular.JQLite, !Function, !Object=):
+ *       (!Function|undefined)|undefined),
+ *   leave: (function(!angular.JQLite, !Function, !Object=):
+ *       (!Function|undefined)|undefined),
+ *   move: (function(!angular.JQLite, !Function, !Object=):
+ *       (!Function|undefined)|undefined),
+ *   beforeAddClass: (function(!angular.JQLite, string, !Function, !Object=):
+ *       (!Function|undefined)|undefined),
+ *   addClass: (function(!angular.JQLite, string, !Function, !Object=):
+ *       (!Function|undefined)|undefined),
+ *   beforeRemoveClass: (function(!angular.JQLite, string, !Function, !Object=):
+ *       (!Function|undefined)|undefined),
+ *   removeClass: (function(!angular.JQLite, string, !Function, !Object=):
+ *       (!Function|undefined)|undefined),
+ *   beforeSetClass: (function(!angular.JQLite, string, string, !Function,
+ *       !Object=):(!Function|undefined)|undefined),
+ *   setClass: (function(!angular.JQLite, string, string, !Function, !Object=):
+ *       (!Function|undefined)|undefined)
+ *   }}
  */
-angular.Animation = function() {};
+angular.Animation;
 
 /**
  * @param {!angular.JQLite} element
- * @param {!Function} done
+ * @param {!Object} from
+ * @param {!Object} to
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
  * @return {(!Function|undefined)}
  */
-angular.Animation.prototype.enter = function(element, done) {};
+angular.Animation.animate =
+    function(element, from, to, doneFn, opt_options) {};
 
 /**
  * @param {!angular.JQLite} element
- * @param {!Function} done
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
  * @return {(!Function|undefined)}
  */
-angular.Animation.prototype.leave = function(element, done) {};
+angular.Animation.enter = function(element, doneFn, opt_options) {};
 
 /**
  * @param {!angular.JQLite} element
- * @param {!Function} done
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
  * @return {(!Function|undefined)}
  */
-angular.Animation.prototype.move = function(element, done) {};
+angular.Animation.leave = function(element, doneFn, opt_options) {};
 
 /**
  * @param {!angular.JQLite} element
- * @param {!Function} done
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
  * @return {(!Function|undefined)}
  */
-angular.Animation.prototype.addClass = function(element, done) {};
+angular.Animation.move = function(element, doneFn, opt_options) {};
 
 /**
  * @param {!angular.JQLite} element
- * @param {!Function} done
+ * @param {string} className
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
  * @return {(!Function|undefined)}
  */
-angular.Animation.prototype.removeClass = function(element, done) {};
+angular.Animation.beforeAddClass =
+    function(element, className, doneFn, opt_options) {};
+
+/**
+ * @param {!angular.JQLite} element
+ * @param {string} className
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
+ * @return {(!Function|undefined)}
+ */
+angular.Animation.addClass =
+    function(element, className, doneFn, opt_options) {};
+
+/**
+ * @param {!angular.JQLite} element
+ * @param {string} className
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
+ * @return {(!Function|undefined)}
+ */
+angular.Animation.beforeRemoveClass =
+    function(element, className, doneFn, opt_options) {};
+
+/**
+ * @param {!angular.JQLite} element
+ * @param {string} className
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
+ * @return {(!Function|undefined)}
+ */
+angular.Animation.removeClass =
+    function(element, className, doneFn, opt_options) {};
+
+/**
+ * @param {!angular.JQLite} element
+ * @param {string} addedClass
+ * @param {string} removedClass
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
+ * @return {(!Function|undefined)}
+ */
+angular.Animation.beforeSetClass =
+    function(element, addedClass, removedClass, doneFn, opt_options) {};
+
+/**
+ * @param {!angular.JQLite} element
+ * @param {string} addedClass
+ * @param {string} removedClass
+ * @param {!Function} doneFn
+ * @param {!Object=} opt_options
+ * @return {(!Function|undefined)}
+ */
+angular.Animation.setClass =
+    function(element, addedClass, removedClass, doneFn, opt_options) {};
 
 /**
  * @constructor
@@ -626,7 +708,7 @@ angular.Module = function() {};
 
 /**
  * @param {string} name
- * @param {function(...*):angular.Animation} animationFactory
+ * @param {angular.Injectable} animationFactory
  */
 angular.Module.prototype.animation = function(name, animationFactory) {};
 
@@ -644,18 +726,24 @@ angular.Module.prototype.config = function(configFn) {};
 angular.Module.prototype.constant = function(name, object) {};
 
 /**
- * @param {string} name
- * @param {angular.Injectable} constructor
+ * Intended to be called with either a name string and a constructor, or an
+ * Object with names as keys and constructors as values.
+ *
+ * @param {string|!Object.<angular.Injectable>} name
+ * @param {angular.Injectable=} opt_constructor
  * @return {!angular.Module}
  */
-angular.Module.prototype.controller = function(name, constructor) {};
+angular.Module.prototype.controller = function(name, opt_constructor) {};
 
 /**
- * @param {string} name
- * @param {angular.Injectable} directiveFactory
+ * Intended to be called with either a name string and a directive factory, or
+ * an Object with names as keys and directive factories as values.
+ *
+ * @param {string|!Object.<angular.Injectable>} name
+ * @param {angular.Injectable=} opt_directiveFactory
  * @return {!angular.Module}
  */
-angular.Module.prototype.directive = function(name, directiveFactory) {};
+angular.Module.prototype.directive = function(name, opt_directiveFactory) {};
 
 /**
  * @param {string} name
@@ -697,6 +785,13 @@ angular.Module.prototype.service = function(name, constructor) {};
  * @return {!angular.Module}
  */
 angular.Module.prototype.value = function(name, object) {};
+
+/**
+ * @param {string} name
+ * @param {!angular.Injectable} decorator
+ * @return {!angular.Module}
+ */
+angular.Module.prototype.decorator = function(name, decorator) {};
 
 /**
  * @type {string}
@@ -1062,6 +1157,20 @@ angular.$compileProvider = function() {};
  */
 angular.$compileProvider.prototype.debugInfoEnabled = function(opt_enabled) {};
 
+/**
+ * @param {!RegExp=} opt_expression
+ * @return {!RegExp|!angular.$compileProvider}
+ */
+angular.$compileProvider.prototype.aHrefSanitizationWhitelist = function(
+    opt_expression) {};
+
+/**
+ * @param {!RegExp=} opt_expression
+ * @return {!RegExp|!angular.$compileProvider}
+ */
+angular.$compileProvider.prototype.imgSrcSanitizationWhitelist = function(
+    opt_expression) {};
+
 /******************************************************************************
  * $cacheFactory Service
  *****************************************************************************/
@@ -1141,6 +1250,74 @@ angular.$controller;
  *   }}
  */
 angular.$controllerProvider;
+
+/******************************************************************************
+ * $cookies Service
+ *****************************************************************************/
+
+/**
+ * @constructor
+ */
+angular.$cookies = function() {};
+
+/**
+ * @param {string} key
+ * @return {string|undefined}
+ */
+angular.$cookies.prototype.get = function(key) {};
+
+/**
+ * @param {string} key
+ * @return {?Object|undefined}
+ */
+angular.$cookies.prototype.getObject = function(key) {};
+
+/**
+ * @return {!Object<string, string>}
+ */
+angular.$cookies.prototype.getAll = function() {};
+
+/**
+ * @param {string} key
+ * @param {string} value
+ * @param {!angular.$cookies.Config=} opt_options
+ */
+angular.$cookies.prototype.put = function(key, value, opt_options) {};
+
+/**
+ * @param {string} key
+ * @param {?Object} value
+ * @param {!angular.$cookies.Config=} opt_options
+ */
+angular.$cookies.prototype.putObject = function(key, value, opt_options) {};
+
+/**
+ * @param {string} key
+ * @param {!angular.$cookies.Config=} opt_options
+ */
+angular.$cookies.prototype.remove = function(key, opt_options) {};
+
+/**
+ * See:
+ * https://docs.angularjs.org/api/ngCookies/provider/$cookiesProvider#defaults
+ * @typedef {{
+ *   path: (string|undefined),
+ *   domain: (string|undefined),
+ *   date: (string|!Date|undefined),
+ *   secure: (boolean|undefined)
+ * }}
+ */
+angular.$cookies.Config;
+
+/**
+ * @constructor
+ */
+angular.$cookiesProvider = function() {};
+
+/**
+ * @type {angular.$cookies.Config}
+ */
+angular.$cookiesProvider.prototype.defaults;
 
 /******************************************************************************
  * $exceptionHandler Service
@@ -1829,7 +2006,7 @@ angular.$provide.prototype.constant = function(name, object) {};
 
 /**
  * @param {string} name
- * @param {angular.Injectable} decorator
+ * @param {!angular.Injectable} decorator
  */
 angular.$provide.prototype.decorator = function(name, decorator) {};
 

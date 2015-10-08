@@ -757,17 +757,14 @@ public final class NewParserTest extends BaseJSTypeTestCase {
   }
 
   public void testInlineJSDocAttachment3() {
-    parseWarning(
-        "function f(/** @type {string} */ x) {}",
-        "Bad type annotation. type not recognized due to syntax error");
+    parse("function f(/** @type {string} */ x) {}");
   }
 
   public void testInlineJSDocAttachment4() {
-    parseWarning(
+    parse(
         "function f(/**\n" +
         " * @type {string}\n" +
-        " */ x) {}",
-        "Bad type annotation. type not recognized due to syntax error");
+        " */ x) {}");
   }
 
   public void testInlineJSDocAttachment5() {
@@ -1025,6 +1022,10 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     testExtendedObjectLiteral("var a = {b};");
     testExtendedObjectLiteral("var a = {b, c};");
     testExtendedObjectLiteral("var a = {b, c: d, e};");
+    testExtendedObjectLiteral("var a = {type};");
+    testExtendedObjectLiteral("var a = {declare};");
+    testExtendedObjectLiteral("var a = {namespace};");
+    testExtendedObjectLiteral("var a = {module};");
 
     parseError("var a = { '!@#$%' };", "':' expected");
     parseError("var a = { 123 };", "':' expected");
@@ -1303,31 +1304,23 @@ public final class NewParserTest extends BaseJSTypeTestCase {
 
   public void testObjectDestructuringAssign() {
     mode = LanguageMode.ECMASCRIPT6;
-    parse("({x, y}) = foo();");
+    parseError("({x, y}) = foo();", "invalid assignment target");
     parse("({x, y} = foo());");
-    parse("({x: x, y: y}) = foo();");
     parse("({x: x, y: y} = foo());");
-    parse("({x: {y, z}}) = foo();");
     parse("({x: {y, z}} = foo());");
-    parse("({k1: {k2 : x} = bar(), k3: y}) = foo();");
     parse("({k1: {k2 : x} = bar(), k3: y} = foo());");
 
     // Useless, but legal.
-    parse("({}) = foo();");
     parse("({} = foo());");
   }
 
   public void testObjectDestructuringAssignWithInitializer() {
     mode = LanguageMode.ECMASCRIPT6;
-    parse("({x = 1}) = foo();");
+    parseError("({x = 1}) = foo();", "invalid assignment target");
     parse("({x = 1} = foo());");
-    parse("({x: {y = 1}}) = foo();");
     parse("({x: {y = 1}} = foo());");
-    parse("({x: y = 1}) = foo();");
     parse("({x: y = 1} = foo());");
-    parse("({x: v1 = 5, y: v2 = 'str'}) = foo();");
     parse("({x: v1 = 5, y: v2 = 'str'} = foo());");
-    parse("({k1: {k2 : x} = bar(), k3: y}) = foo();");
     parse("({k1: {k2 : x} = bar(), k3: y} = foo());");
   }
 
@@ -1368,6 +1361,11 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     mode = LanguageMode.ECMASCRIPT6;
     parse("var {if: x, else: y} = foo();");
     parse("var {while: x=1, for: y} = foo();");
+    parse("var {type} = foo();");
+    parse("var {declare} = foo();");
+    parse("var {module} = foo();");
+    parse("var {namespace} = foo();");
+
     parseError("var {while} = foo();", "cannot use keyword 'while' here.");
     parseError("var {implements} = foo();", "cannot use keyword 'implements' here.");
   }
@@ -1385,14 +1383,20 @@ public final class NewParserTest extends BaseJSTypeTestCase {
 
   public void testObjectDestructuringExtraParens() {
     mode = LanguageMode.ECMASCRIPT6;
-    parse("({x}) = y;");
-    parse("(({x})) = y;");
-    parse("((({x}))) = y;");
+    parse("({x: y} = z);");
+    parse("({x: (y)} = z);");
+    parse("({x: ((y))} = z);");
 
-    parse("([x]) = y;");
+    parse("([x] = y);");
+    parse("[(x), y] = z;");
     parse("[x, (y)] = z;");
     parse("[x, ([y])] = z;");
     parse("[x, (([y]))] = z;");
+  }
+
+  public void testObjectLiteralCannotUseDestructuring() {
+    mode = LanguageMode.ECMASCRIPT6;
+    parseError("var o = {x = 5}", "Default value cannot appear at top level of an object literal.");
   }
 
   public void testMixedDestructuring() {
@@ -2293,11 +2297,22 @@ public final class NewParserTest extends BaseJSTypeTestCase {
   public void testRestParameters() {
     mode = LanguageMode.ECMASCRIPT6;
     parse("function f(...b) {}");
-    parseError("f = (...xs, x) => xs", "A rest parameter must be last in a parameter list.");
+    parse("(...xs) => xs");
+    parse("(x, ...xs) => xs");
+    parse("(x, y, ...xs) => xs");
+    parseError("(...xs, x) => xs", "')' expected");
 
     mode = LanguageMode.ECMASCRIPT5;
     parseWarning("function f(...b) {}",
         "this language feature is only supported in es6 mode: rest parameters");
+  }
+
+  public void testExpressionsThatLookLikeParameters() {
+    mode = LanguageMode.ECMASCRIPT6;
+    parseError("();", "invalid paren expression");
+    parseError("(...xs);", "invalid paren expression");
+    parseError("(x, ...xs);", "A rest parameter must be in a parameter list.");
+    parseError("(a, b, c, ...xs);", "A rest parameter must be in a parameter list.");
   }
 
   public void testDefaultParametersWithRestParameters() {
@@ -2575,8 +2590,8 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     mode = LanguageMode.ECMASCRIPT6;
 
     // {x: 5} and {x: 'str'} are valid object literals but not valid patterns.
-    parseError("for ({x: 5} in foo()) {}", "Invalid LHS for a for-in loop");
-    parseError("for ({x: 'str'} in foo()) {}", "Invalid LHS for a for-in loop");
+    parseError("for ({x: 5} in foo()) {}", "invalid assignment target");
+    parseError("for ({x: 'str'} in foo()) {}", "invalid assignment target");
     parseError("var {x: 5} = foo();", "'identifier' expected");
     parseError("var {x: 'str'} = foo();", "'identifier' expected");
     parseError("({x: 5} = foo());", "invalid assignment target");
@@ -2639,7 +2654,46 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     parse("import {x, y} from './someModule'");
     parse("import {x as x1, y as y1} from './someModule'");
     parse("import {x as x1, y as y1, } from './someModule'");
+    parse("import {default as d, class as c} from './someModule'");
+    parse("import d, {x as x1, y as y1} from './someModule'");
     parse("import * as sm from './someModule'");
+
+    parseError("import class from './someModule'",
+            "cannot use keyword 'class' here.");
+    parseError("import * as class from './someModule'",
+            "'identifier' expected");
+    parseError("import {a as class} from './someModule'",
+            "'identifier' expected");
+    parseError("import {class} from './someModule'",
+            "'as' expected");
+  }
+
+  public void testExport() {
+    mode = LanguageMode.ECMASCRIPT6;
+
+    parse("export const x = 1");
+    parse("export var x = 1");
+    parse("export function f() {}");
+    parse("export class c {}");
+    parse("export {x, y}");
+    parse("export {x as x1}");
+    parse("export {x as x1, y as x2}");
+    parse("export {x as default, y as class}");
+
+    parseError("export {default as x}",
+        "cannot use keyword 'default' here.");
+    parseError("export {package as x}",
+        "cannot use keyword 'package' here.");
+    parseError("export {package}",
+        "cannot use keyword 'package' here.");
+
+    parse("export {x as x1, y as y1} from './someModule'");
+    parse("export {x as x1, y as y1, } from './someModule'");
+    parse("export {default as d} from './someModule'");
+    parse("export {d as default, c as class} from './someModule'");
+    parse("export {default as default, class as class} from './someModule'");
+    parse("export {class} from './someModule'");
+    parse("export * from './someModule'");
   }
 
   public void testShebang() {

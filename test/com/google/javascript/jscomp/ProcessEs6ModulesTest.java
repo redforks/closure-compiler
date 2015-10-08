@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.ProcessEs6Modules.LHS_OF_GOOG_REQUIRE_MUST_BE_CONST;
+
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
@@ -85,16 +87,35 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
     testModules(this, input, expected);
   }
 
+  private static void testModules(CompilerTestCase test, String input, DiagnosticType error) {
+    String fileName = test.getFilename() + ".js";
+    ImmutableList<SourceFile> inputs =
+        ImmutableList.of(SourceFile.fromCode("other.js", ""), SourceFile.fromCode(fileName, input));
+    test.test(inputs, null, error);
+  }
+
+  private void testModules(String input, DiagnosticType error) {
+    testModules(this, input, error);
+  }
+
   public void testImport() {
     testModules(
         "import name from 'other'; use(name);",
-        LINE_JOINER.join("goog.require('module$other');", "use(module$other.default);"));
+        "goog.require('module$other'); use(module$other.default);");
 
     testModules("import {n as name} from 'other';", "goog.require('module$other');");
 
     testModules(
         "import x, {f as foo, b as bar} from 'other'; use(x);",
-        LINE_JOINER.join("goog.require('module$other');", "use(module$other.default);"));
+        "goog.require('module$other'); use(module$other.default);");
+
+    testModules(
+        "import {default as name} from 'other'; use(name);",
+        "goog.require('module$other'); use(module$other.default);");
+
+    testModules(
+        "import {class as name} from 'other'; use(name);",
+        "goog.require('module$other'); use(module$other.class);");
   }
 
   public void testImport_missing() {
@@ -166,6 +187,20 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "var b$$module$testcode = 2;",
             "module$testcode.foo = f$$module$testcode;",
             "module$testcode.bar = b$$module$testcode;"));
+
+    testModules(
+        "var f = 1; export {f as default};",
+        LINE_JOINER.join(
+            "goog.provide('module$testcode');",
+            "var f$$module$testcode = 1;",
+            "module$testcode.default = f$$module$testcode;"));
+
+    testModules(
+        "var f = 1; export {f as class};",
+        LINE_JOINER.join(
+            "goog.provide('module$testcode');",
+            "var f$$module$testcode = 1;",
+            "module$testcode.class = f$$module$testcode;"));
   }
 
   public void testExportWithJsDoc() {
@@ -214,11 +249,16 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
 
   public void testExportFrom() {
     testModules(
-        "export {name} from 'other';",
+        LINE_JOINER.join(
+            "export {name} from 'other';",
+            "export {default} from 'other';",
+            "export {class} from 'other';"),
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "goog.require('module$other');",
-            "module$testcode.name = module$other.name;"));
+            "module$testcode.name = module$other.name;",
+            "module$testcode.default = module$other.default;",
+            "module$testcode.class = module$other.class;"));
 
     testModules(
         "export {a, b as c, d} from 'other';",
@@ -228,6 +268,27 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "module$testcode.a = module$other.a;",
             "module$testcode.c = module$other.b;",
             "module$testcode.d = module$other.d;"));
+
+    testModules(
+        "export {a as b, b as a} from 'other';",
+        LINE_JOINER.join(
+            "goog.provide('module$testcode');",
+            "goog.require('module$other');",
+            "module$testcode.b = module$other.a;",
+            "module$testcode.a = module$other.b;"));
+
+    testModules(
+        LINE_JOINER.join(
+            "export {default as a} from 'other';",
+            "export {a as a2, default as b} from 'other';",
+            "export {class as switch} from 'other';"),
+        LINE_JOINER.join(
+            "goog.provide('module$testcode');",
+            "goog.require('module$other');",
+            "module$testcode.a = module$other.default;",
+            "module$testcode.a2 = module$other.a;",
+            "module$testcode.b = module$other.default;",
+            "module$testcode.switch = module$other.class;"));
   }
 
   public void testExportDefault() {
@@ -436,35 +497,83 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
 
   public void testGoogRequires_rewrite() {
     testModules(
-        "var bar = goog.require('foo.bar'); export var x;",
+        "const bar = goog.require('foo.bar'); export var x;",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "goog.require('foo.bar');",
-            "var bar$$module$testcode = foo.bar;",
+            "const bar$$module$testcode = foo.bar;",
             "var x$$module$testcode;",
             "module$testcode.x = x$$module$testcode"));
+
+    testModules(
+        "export var x; const bar = goog.require('foo.bar');",
+        LINE_JOINER.join(
+            "goog.provide('module$testcode');",
+            "var x$$module$testcode;",
+            "goog.require('foo.bar');",
+            "const bar$$module$testcode = foo.bar;",
+            "module$testcode.x = x$$module$testcode"));
+
+    testModules(
+        "import * as s from 'other'; const bar = goog.require('foo.bar');",
+        LINE_JOINER.join(
+            "goog.require('module$other');",
+            "goog.require('foo.bar');",
+            "const bar$$module$testcode = foo.bar;"));
+
+    testModules(
+        "const bar = goog.require('foo.bar'); import * as s from 'other';",
+        LINE_JOINER.join(
+            "goog.require('module$other');",
+            "goog.require('foo.bar');",
+            "const bar$$module$testcode = foo.bar;"));
+  }
+
+  public void testGoogRequires_nonConst() {
+    testModules(
+        "var bar = goog.require('foo.bar'); export var x;",
+        LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
 
     testModules(
         "export var x; var bar = goog.require('foo.bar');",
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var x$$module$testcode;",
-            "goog.require('foo.bar');",
-            "var bar$$module$testcode = foo.bar;",
-            "module$testcode.x = x$$module$testcode"));
+        LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
 
     testModules(
         "import * as s from 'other'; var bar = goog.require('foo.bar');",
-        LINE_JOINER.join(
-            "goog.require('module$other');",
-            "goog.require('foo.bar');",
-            "var bar$$module$testcode = foo.bar;"));
+        LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
 
     testModules(
         "var bar = goog.require('foo.bar'); import * as s from 'other';",
+        LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
+  }
+
+  public void testGoogRequiresDestructuring_rewrite() {
+    testModules(
+        LINE_JOINER.join(
+            "import * as s from 'other';",
+            "const {foo, bar} = goog.require('some.name.space');",
+            "use(foo, bar);"),
         LINE_JOINER.join(
             "goog.require('module$other');",
-            "goog.require('foo.bar');",
-            "var bar$$module$testcode = foo.bar;"));
+            "goog.require('some.name.space');",
+            "const {",
+            "  foo: foo$$module$testcode,",
+            "  bar: bar$$module$testcode,",
+            "} = some.name.space;",
+            "use(foo$$module$testcode, bar$$module$testcode);"));
+
+    testModules(
+        LINE_JOINER.join(
+            "import * as s from 'other';",
+            "var {foo, bar} = goog.require('some.name.space');",
+            "use(foo, bar);"),
+        LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
+
+    testModules(
+        LINE_JOINER.join(
+            "import * as s from 'other';",
+            "let {foo, bar} = goog.require('some.name.space');",
+            "use(foo, bar);"),
+        LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
   }
 }

@@ -216,7 +216,7 @@ public class RecordType extends PrototypeObjectType {
    * @return a Map that maps the property's name to the property's type
    */
   public Map<String, JSType> getOwnPropertyTypeMap() {
-    Map<String, JSType> propTypeMap = new HashMap<String, JSType>();
+    Map<String, JSType> propTypeMap = new HashMap<>();
     for (String name : this.getOwnPropertyNames()) {
       propTypeMap.put(name, this.getPropertyType(name));
     }
@@ -260,11 +260,6 @@ public class RecordType extends PrototypeObjectType {
 
     return RecordType.isSubtype(
         this, that.toMaybeRecordType(), implicitImplCache);
-  }
-
-  /** Determines if typeA is a subtype of typeB */
-  static boolean isSubtype(ObjectType typeA, RecordType typeB) {
-    return isSubtype(typeA, typeB, ImplCache.create());
   }
 
   /** Determines if typeA is a subtype of typeB */

@@ -355,6 +355,9 @@ class DisambiguateProperties<T> implements CompilerPass {
         typeSystem.addInvalidatingType(objType.getImplicitPrototype());
         recordInvalidationError(objType.getImplicitPrototype(), error);
       }
+      if (objType != null && objType.isConstructor() && objType.isFunctionType()) {
+        typeSystem.addInvalidatingType(objType.toMaybeFunctionType().getInstanceType());
+      }
     }
   }
 
@@ -906,6 +909,13 @@ class DisambiguateProperties<T> implements CompilerPass {
       // Unwrap templatized types, they are not unique at runtime.
       if (foundType != null && foundType.isTemplatizedType()) {
         foundType = foundType.toMaybeTemplatizedType().getReferencedType();
+      }
+
+      // Since disambiguation just looks at names, we must return a uniquely named type rather
+      // than an "equivalent" type. In particular, we must manually unwrap named types
+      // so that the returned type has the correct name.
+      if (foundType != null && foundType.isNamedType()) {
+        foundType = foundType.toMaybeNamedType().getReferencedType().toMaybeObjectType();
       }
 
       return foundType;

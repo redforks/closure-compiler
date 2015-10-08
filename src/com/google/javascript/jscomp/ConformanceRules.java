@@ -64,12 +64,12 @@ public final class ConformanceRules {
 
   private ConformanceRules() {}
 
-  /** 
+  /**
    * Classes extending AbstractRule must return ConformanceResult
    * from their checkConformance implementation. For simple rules, the
    * constants CONFORMANCE, POSSIBLE_VIOLATION, VIOLATION are sufficient.
-   * However, for some rules additional clarification specific to the 
-   * violation instance is helpful, for that, an instance of this class 
+   * However, for some rules additional clarification specific to the
+   * violation instance is helpful, for that, an instance of this class
    * can be created to associate a note with the violation.
    */
   public static class ConformanceResult {
@@ -90,6 +90,11 @@ public final class ConformanceRules {
         ConformanceLevel.CONFORMANCE);
     public static final ConformanceResult POSSIBLE_VIOLATION = new ConformanceResult(
         ConformanceLevel.POSSIBLE_VIOLATION);
+    private static final ConformanceResult POSSIBLE_VIOLATION_DUE_TO_LOOSE_TYPES =
+        new ConformanceResult(
+            ConformanceLevel.POSSIBLE_VIOLATION,
+            "The type information available for this expression is too loose "
+            + "ensure conformance.");
     public static final ConformanceResult VIOLATION = new ConformanceResult(
         ConformanceLevel.VIOLATION);
   }
@@ -357,7 +362,7 @@ public final class ConformanceRules {
              || targetType.isAllType()
              || targetType.isEquivalentTo(
                  registry.getNativeType(JSTypeNative.OBJECT_TYPE))) {
-            return ConformanceResult.POSSIBLE_VIOLATION;
+            return ConformanceResult.POSSIBLE_VIOLATION_DUE_TO_LOOSE_TYPES;
           } else if (targetType.isSubtype(methodClassType)) {
             return ConformanceResult.VIOLATION;
           }
@@ -714,7 +719,7 @@ public final class ConformanceRules {
           if (!ConformanceUtil.validateCall(
               compiler, n.getParent(), r.restrictedCallType,
               isCallInvocation)) {
-            return ConformanceResult.POSSIBLE_VIOLATION;
+            return ConformanceResult.POSSIBLE_VIOLATION_DUE_TO_LOOSE_TYPES;
           }
         } else if (targetType.isSubtype(methodClassType)) {
           if (!ConformanceUtil.validateCall(
@@ -820,7 +825,7 @@ public final class ConformanceRules {
         }
       }
       return possibleViolation
-          ? ConformanceResult.POSSIBLE_VIOLATION
+          ? ConformanceResult.POSSIBLE_VIOLATION_DUE_TO_LOOSE_TYPES
           : ConformanceResult.CONFORMANCE;
     }
   }
@@ -968,16 +973,33 @@ public final class ConformanceRules {
 
     @Override
     protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
-      if (n.isGetProp() || n.isGetElem() || n.isNew() || n.isCall()) {
-        JSType targetType = n.getFirstChild().getJSType();
-        if (targetType != null
-            && !(targetType.isUnknownType()
-                || targetType.isEmptyType())
-            && (targetType.isNullable() || targetType.isVoidable())) {
-          return ConformanceResult.VIOLATION;
-        }
+      boolean valid;
+
+      switch (n.getType()) {
+          case Token.GETPROP:
+          case Token.GETELEM:
+          case Token.NEW:
+          case Token.CALL:
+             valid = maybeValidDerefType(n.getFirstChild());
+             break;
+          case Token.IN:
+             valid = maybeValidDerefType(n.getLastChild());
+             break;
+          default:
+             valid = true;
+             break;
       }
-      return ConformanceResult.CONFORMANCE;
+
+      return valid ? ConformanceResult.CONFORMANCE : ConformanceResult.VIOLATION;
+    }
+
+    // Whether the type is known to be valid.
+    private boolean maybeValidDerefType(Node n) {
+      JSType type = n.getJSType();
+      return type == null
+          || type.isUnknownType()
+          || type.isEmptyType()
+          || (!type.isNullable() && !type.isVoidable());
     }
   }
 
@@ -1141,7 +1163,7 @@ public final class ConformanceRules {
       return isKnown(n)
           && !isAllType(n)
           && isClassType(n)
-          && !isNativeObjecType(n)
+          && !isNativeObjectType(n)
           && !isWhitelistedType(n);
     }
 
@@ -1169,7 +1191,7 @@ public final class ConformanceRules {
         FunctionType ctor = type.getConstructor();
         if (ctor != null) {
           JSDocInfo info = ctor.getJSDocInfo();
-          if (info != null && info.isConstructor()) {
+          if (info != null && info.isConstructorOrInterface()) {
             return true;
           }
         }
@@ -1202,12 +1224,7 @@ public final class ConformanceRules {
           && !isTemplateType(n); // TODO(johnlenz): Remove this restriction
     }
 
-    private boolean isRecordType(Node n) {
-      JSType type = n.getJSType();
-      return (type != null && type.isRecordType());
-    }
-
-    private boolean isNativeObjecType(Node n) {
+    private boolean isNativeObjectType(Node n) {
       JSType type = n.getJSType().restrictByNotNullOrUndefined();
       return type != null && type.isEquivalentTo(nativeObjectType);
     }

@@ -27,7 +27,6 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SourcePosition;
 
-import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,7 +39,7 @@ import java.util.Set;
  * Compiler options
  * @author nicksantos@google.com (Nick Santos)
  */
-public class CompilerOptions implements Serializable {
+public class CompilerOptions {
 
   // Unused. For people using reflection to circumvent access control.
   @SuppressWarnings("unused")
@@ -57,8 +56,6 @@ public class CompilerOptions implements Serializable {
 
   // TODO(nicksantos): All public properties of this class should be made
   // package-private, and have a public setter.
-
-  private static final long serialVersionUID = 7L;
 
   /**
    * The warning classes that are available.
@@ -144,7 +141,6 @@ public class CompilerOptions implements Serializable {
    */
   boolean inferTypes;
 
-  // The new type inference is a work in progress. Don't use.
   boolean useNewTypeInference;
 
   /**
@@ -172,22 +168,15 @@ public class CompilerOptions implements Serializable {
   DependencyOptions dependencyOptions = new DependencyOptions();
 
   /** Returns localized replacement for MSG_* variables */
-  // Transient so that clients don't have to implement Serializable.
-  public transient MessageBundle messageBundle = null;
+  public MessageBundle messageBundle = null;
 
   //--------------------------------
   // Checks
   //--------------------------------
 
   /** Checks that all symbols are defined */
+  // TODO(tbreisacher): Remove this and deprecate the corresponding setter.
   public boolean checkSymbols;
-
-  /**
-   * Deprecated. The checks that used to be controlled by this flag are now on by default,
-   * and this setter is a no-op. You can safely remove this call from your code.
-   */
-  @Deprecated
-  public void setAggressiveVarCheck(CheckLevel level) {}
 
   /** Checks for suspicious statements that have no effect */
   public boolean checkSuspiciousCode;
@@ -662,6 +651,9 @@ public class CompilerOptions implements Serializable {
   /** Processes Polymer calls */
   boolean polymerPass;
 
+  /** Processes the output of the Dart Dev Compiler */
+  boolean dartPass;
+
   /** Remove goog.abstractMethod assignments. */
   boolean removeAbstractMethods;
 
@@ -893,7 +885,8 @@ public class CompilerOptions implements Serializable {
 
   /**
    * Charset to use when generating code.  If null, then output ASCII.
-   * This needs to be a string because CompilerOptions is serializable.
+   * This is a string because CompilerOptions used to be serializable.
+   * TODO(tbreisacher): Switch to java.nio.Charset.
    */
   String outputCharset;
 
@@ -928,6 +921,8 @@ public class CompilerOptions implements Serializable {
    * Instrument code for the purpose of collecting coverage data.
    */
   public boolean instrumentForCoverage;
+
+  String instrumentationTemplateFile;
 
   /** List of conformance configs to use in CheckConformance */
   private ImmutableList<ConformanceConfig> conformanceConfigs = ImmutableList.of();
@@ -1037,6 +1032,7 @@ public class CompilerOptions implements Serializable {
     jqueryPass = false;
     angularPass = false;
     polymerPass = false;
+    dartPass = false;
     removeAbstractMethods = true;
     removeClosureAsserts = false;
     stripTypes = Collections.emptySet();
@@ -1067,6 +1063,7 @@ public class CompilerOptions implements Serializable {
     // Instrumentation
     instrumentationTemplate = null;  // instrument functions
     instrumentForCoverage = false;  // instrument lines
+    instrumentationTemplateFile = "";
 
     // Output
     preserveTypeAnnotations = false;
@@ -1495,6 +1492,10 @@ public class CompilerOptions implements Serializable {
 
   public void setPolymerPass(boolean polymerPass) {
     this.polymerPass = polymerPass;
+  }
+
+  public void setDartPass(boolean dartPass) {
+    this.dartPass = dartPass;
   }
 
   public void setCodingConvention(CodingConvention codingConvention) {
@@ -2147,6 +2148,10 @@ public class CompilerOptions implements Serializable {
     this.instrumentationTemplate = instrumentationTemplate;
   }
 
+  public void setInstrumentationTemplateFile(String filename){
+    this.instrumentationTemplateFile = filename;
+  }
+
   public void setRecordFunctionInformation(boolean recordFunctionInformation) {
     this.recordFunctionInformation = recordFunctionInformation;
   }
@@ -2530,10 +2535,7 @@ public class CompilerOptions implements Serializable {
   static final AliasTransformationHandler NULL_ALIAS_TRANSFORMATION_HANDLER =
       new NullAliasTransformationHandler();
 
-  private static class NullAliasTransformationHandler
-      implements AliasTransformationHandler, Serializable {
-    private static final long serialVersionUID = 0L;
-
+  private static class NullAliasTransformationHandler implements AliasTransformationHandler {
     private static final AliasTransformation NULL_ALIAS_TRANSFORMATION =
         new NullAliasTransformation();
 
@@ -2544,10 +2546,7 @@ public class CompilerOptions implements Serializable {
       return NULL_ALIAS_TRANSFORMATION;
     }
 
-    private static class NullAliasTransformation
-        implements AliasTransformation, Serializable {
-      private static final long serialVersionUID = 0L;
-
+    private static class NullAliasTransformation implements AliasTransformation {
       @Override
       public void addAlias(String alias, String definition) {
       }

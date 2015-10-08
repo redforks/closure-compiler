@@ -2810,6 +2810,14 @@ chrome.i18n.getUILanguage = function() {};
 
 
 /**
+ * @param {string} text User input string to be detected.
+ * @param {function(!Object)} callback The callback for passing back the
+ *     language detection result.
+ */
+chrome.i18n.detectLanguage = function(text, callback) {};
+
+
+/**
  * @const
  * @see https://developer.chrome.com/extensions/pageAction.html
  */
@@ -5305,6 +5313,10 @@ chrome.storage.sync;
 chrome.storage.local;
 
 
+/** @type {!StorageArea} */
+chrome.storage.managed;
+
+
 /** @type {!StorageChangeEvent} */
 chrome.storage.onChanged;
 
@@ -6428,22 +6440,35 @@ function StorageArea() {}
 
 
 /**
- * Removes all items from storage.
- * @param {function(): void=} opt_callback Callback function.
- */
-StorageArea.prototype.clear = function(opt_callback) {};
-
-
-/**
- * @param {(string|!Array<string>|!Object|null)=} opt_keys
+ * @param {(string|!Array<string>|!Object|null|function(!Object))=}
+ * keysOrCallback
  *    A single key to get, list of keys to get, or a dictionary
  *    specifying default values (see description of the
  *    object). An empty list or object will return an empty
  *    result object. Pass in null to get the entire contents of storage.
- * @param {function(Object)=} opt_callback Callback with storage items, or null
+ * @param {function(!Object)=} opt_callback Callback with storage items, or null
  *    on failure.
  */
-StorageArea.prototype.get = function(opt_keys, opt_callback) {};
+StorageArea.prototype.get = function(keysOrCallback, opt_callback) {};
+
+
+/**
+ * @param {(string|!Array<string>|null|function(!Object))=} keysOrCallback
+ *    A single key or list of keys to get the total usage for. An empty list
+ *    will return 0. Pass in null to get the total usage of all of storage.
+ * @param {function(number)=} opt_callback
+ *    Callback with the amount of space being used by storage.
+ */
+StorageArea.prototype.getBytesInUse = function(keysOrCallback, opt_callback) {};
+
+
+/**
+ * @param {!Object<string>} items
+ *    Object specifying items to augment storage
+ *    with. Values that cannot be serialized (functions, etc) will be ignored.
+ * @param {function()=} opt_callback Callback.
+ */
+StorageArea.prototype.set = function(items, opt_callback) { };
 
 
 /**
@@ -6455,22 +6480,10 @@ StorageArea.prototype.remove = function(keys, opt_callback) {};
 
 
 /**
- * @param {!Object<string>} keys
- *    Object specifying items to augment storage
- *    with. Values that cannot be serialized (functions, etc) will be ignored.
- * @param {function()=} opt_callback Callback.
+ * Removes all items from storage.
+ * @param {function(): void=} opt_callback Callback function.
  */
-StorageArea.prototype.set = function(keys, opt_callback) { };
-
-
-/**
- * @param {(string|!Array<string>|null)=} opt_keys
- *    A single key or list of keys to get the total usage for. An empty list
- *    will return 0. Pass in null to get the total usage of all of storage.
- * @param {function(number)=} opt_callback
- *    Callback with the amount of space being used by storage.
- */
-StorageArea.prototype.getBytesInUse = function(opt_keys, opt_callback) { };
+StorageArea.prototype.clear = function(opt_callback) {};
 
 
 

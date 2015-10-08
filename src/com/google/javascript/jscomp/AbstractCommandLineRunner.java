@@ -140,7 +140,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     "browser/w3c_css.js",
     "browser/gecko_css.js",
     "browser/ie_css.js",
-    "browser/webkit_css.js"
+    "browser/webkit_css.js",
+    "browser/w3c_touch_event.js"
   );
 
   private final CommandLineConfig config;
@@ -430,6 +431,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     options.angularPass = config.angularPass;
     options.tracer = config.tracerMode;
     options.useNewTypeInference = config.useNewTypeInference;
+    options.instrumentationTemplateFile = config.instrumentationTemplateFile;
   }
 
   protected final A getCompiler() {
@@ -2210,13 +2212,6 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     private List<String> moduleRoots = ImmutableList.of(ES6ModuleLoader.DEFAULT_FILENAME_PREFIX);
 
     /**
-     * Sets the CommonJS module path prefix (maps to {@link #setModuleRoots(List)}).
-     */
-    CommandLineConfig setCommonJSModulePathPrefix(String prefix) {
-      return setModuleRoots(ImmutableList.of(prefix));
-    }
-
-    /**
      * Sets the module roots.
      */
     CommandLineConfig setModuleRoots(List<String> jsModuleRoots) {
@@ -2258,6 +2253,14 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       this.useNewTypeInference = useNewTypeInference;
       return this;
     }
+
+    private String instrumentationTemplateFile = "";
+
+    CommandLineConfig setInstrumentationTemplateFile(String fileName) {
+        this.instrumentationTemplateFile = fileName;
+        return this;
+    }
+
   }
 
   /**

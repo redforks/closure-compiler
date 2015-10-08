@@ -222,7 +222,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
    * explicitly annotated.
    */
   public boolean makesStructs() {
-    if (!isConstructor()) {
+    if (!hasInstanceType()) {
       return false;
     }
     if (propAccess == PropAccess.STRUCT) {
@@ -593,22 +593,6 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     } else {
       throw new UnsupportedOperationException();
     }
-  }
-
-  /**
-   * Returns all extended interfaces declared by an interfaces or its super-
-   * interfaces. If this is called before all types are resolved, it may return
-   * an incomplete set.
-   */
-  public Iterable<ObjectType> getAllExtendedInterfaces() {
-    // Store them in a linked hash set, so that the compile job is
-    // deterministic.
-    Set<ObjectType> extendedInterfaces = new LinkedHashSet<>();
-
-    for (ObjectType interfaceType : getExtendedInterfaces()) {
-      addRelatedExtendedInterfaces(interfaceType, extendedInterfaces);
-    }
-    return extendedInterfaces;
   }
 
   private void addRelatedExtendedInterfaces(ObjectType instance,
@@ -1026,11 +1010,6 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   public boolean hasEqualCallType(FunctionType otherType) {
     return this.call.checkArrowEquivalenceHelper(
         otherType.call, EquivalenceMethod.IDENTITY, EqCache.create());
-  }
-
-  public boolean hasEqualCallType(FunctionType otherType, EqCache eqCache) {
-    return this.call.checkArrowEquivalenceHelper(
-        otherType.call, EquivalenceMethod.IDENTITY, eqCache);
   }
 
   /**
@@ -1470,7 +1449,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
    */
   @Override
   public Map<String, JSType> getPropertyTypeMap() {
-    Map<String, JSType> propTypeMap = new HashMap<String, JSType>();
+    Map<String, JSType> propTypeMap = new HashMap<>();
     updatePropertyTypeMap(this, propTypeMap, new HashSet<FunctionType>());
     return propTypeMap;
   }

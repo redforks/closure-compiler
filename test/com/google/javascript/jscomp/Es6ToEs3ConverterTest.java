@@ -15,6 +15,10 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.Es6ToEs3Converter.CANNOT_CONVERT;
+import static com.google.javascript.jscomp.Es6ToEs3Converter.CANNOT_CONVERT_YET;
+import static com.google.javascript.jscomp.Es6ToEs3Converter.CONFLICTING_GETTER_SETTER_TYPE;
+
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 
 /**
@@ -94,6 +98,12 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
 
   public void testObjectLiteralStringKeysWithNoValue() {
     test("var x = {a, b};", "var x = {a: a, b: b};");
+  }
+
+  public void testObjectLiteralMemberFunctionDef() {
+    test(
+        "var x = {/** @return {number} */ a() { return 0; } };",
+        "var x = {/** @return {number} */ a: function() { return 0; } };");
   }
 
   public void testClassGenerator() {
@@ -186,7 +196,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testAnonymousSuper() {
-    testError("f(class extends D { f() { super.g() } })", Es6ToEs3Converter.CANNOT_CONVERT);
+    testError("f(class extends D { f() { super.g() } })", CANNOT_CONVERT);
   }
 
   public void testClassWithJsDoc() {
@@ -218,7 +228,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
         LINE_JOINER.join(
             "/**",
             " * Converts Xs to Ys.",
-            " * @interface",
+            " * @struct @interface",
             " */",
             "var Converter = function() { };",
             "",
@@ -312,14 +322,9 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
    * will be very difficult to typecheck.
    */
   public void testClassExpression() {
-    testError("var C = new (class {})();",
-        Es6ToEs3Converter.CANNOT_CONVERT);
-
-    testError("var C = new (foo || (foo = class { }))();",
-        Es6ToEs3Converter.CANNOT_CONVERT);
-
-    testError("(condition ? obj1 : obj2).prop = class C { };",
-        Es6ToEs3Converter.CANNOT_CONVERT);
+    testError("var C = new (class {})();", CANNOT_CONVERT);
+    testError("var C = new (foo || (foo = class { }))();", CANNOT_CONVERT);
+    testError("(condition ? obj1 : obj2).prop = class C { };", CANNOT_CONVERT);
   }
 
   public void testExtends() {
@@ -390,10 +395,10 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "  g() {}",
             "}"),
         LINE_JOINER.join(
-            "/** @interface */",
+            "/** @struct @interface */",
             "var D = function() {};",
             "D.prototype.f = function() {};",
-            "/** @interface @extends{D} */",
+            "/** @struct @interface @extends{D} */",
             "var C = function(var_args) { D.apply(this, arguments); };",
             "C.prototype.g = function() {};"));
   }
@@ -410,7 +415,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "  f() {console.log('hi');}",
             "}"),
         LINE_JOINER.join(
-            "/** @interface */",
+            "/** @struct @interface */",
             "var D = function() {};",
             "D.prototype.f = function() {};",
             "/** @constructor @struct @implements{D} */",
@@ -510,6 +515,21 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "}"));
   }
 
+  public void testComputedSuper() {
+    testError(
+        LINE_JOINER.join(
+            "class Foo {",
+            "  ['m']() { return 1; }",
+            "}",
+            "",
+            "class Bar extends Foo {",
+            "  ['m']() {",
+            "    return super['m']() + 1;",
+            "  }",
+            "}"),
+        CANNOT_CONVERT_YET);
+  }
+
   public void testMultiNameClass() {
     test("var F = class G {}",
         "/** @constructor @struct */ var F = function() {};");
@@ -543,35 +563,35 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
 
   public void testSuperGet() {
     testError("class D {} class C extends D { f() {var i = super.c;} }",
-              Es6ToEs3Converter.CANNOT_CONVERT_YET);
+              CANNOT_CONVERT_YET);
 
     testError("class D {} class C extends D { static f() {var i = super.c;} }",
-              Es6ToEs3Converter.CANNOT_CONVERT_YET);
+              CANNOT_CONVERT_YET);
 
     testError("class D {} class C extends D { f() {var i; i = super[s];} }",
-              Es6ToEs3Converter.CANNOT_CONVERT_YET);
+              CANNOT_CONVERT_YET);
 
     testError("class D {} class C extends D { f() {return super.s;} }",
-              Es6ToEs3Converter.CANNOT_CONVERT_YET);
+              CANNOT_CONVERT_YET);
 
     testError("class D {} class C extends D { f() {m(super.s);} }",
-              Es6ToEs3Converter.CANNOT_CONVERT_YET);
+              CANNOT_CONVERT_YET);
 
     testError(
         "class D {} class C extends D { foo() { return super.m.foo(); } }",
-        Es6ToEs3Converter.CANNOT_CONVERT_YET);
+        CANNOT_CONVERT_YET);
 
     testError(
         "class D {} class C extends D { static foo() { return super.m.foo(); } }",
-        Es6ToEs3Converter.CANNOT_CONVERT_YET);
+        CANNOT_CONVERT_YET);
   }
 
   public void testSuperNew() {
     testError("class D {} class C extends D { f() {var s = new super;} }",
-              Es6ToEs3Converter.CANNOT_CONVERT_YET);
+              CANNOT_CONVERT_YET);
 
     testError("class D {} class C extends D { f(str) {var s = new super(str);} }",
-              Es6ToEs3Converter.CANNOT_CONVERT_YET);
+              CANNOT_CONVERT_YET);
   }
 
   public void testSuperSpread() {
@@ -705,6 +725,21 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "C.prototype.g = function() {};"));
   }
 
+  public void testInheritFromExterns() {
+    test(
+        LINE_JOINER.join(
+            "/** @constructor */ function ExternsClass() {}",
+            "ExternsClass.m = function() {};"),
+        "class CodeClass extends ExternsClass {}",
+        LINE_JOINER.join(
+            "/** @constructor @struct @extends {ExternsClass} */",
+            "var CodeClass = function(var_args) {",
+            "  ExternsClass.apply(this,arguments)",
+            "};",
+            "$jscomp.inherits(CodeClass,ExternsClass)"),
+        null, null);
+  }
+
   public void testMockingInFunction() {
     // Classes cannot be reassigned in function scope.
     testError("function f() { class C {} C = function() {};}",
@@ -714,14 +749,14 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   // Make sure we don't crash on this code.
   // https://github.com/google/closure-compiler/issues/752
   public void testGithub752() {
-    testError("function f() { var a = b = class {};}", Es6ToEs3Converter.CANNOT_CONVERT);
+    testError("function f() { var a = b = class {};}", CANNOT_CONVERT);
 
     testError("var ns = {}; function f() { var self = ns.Child = class {};}",
-              Es6ToEs3Converter.CANNOT_CONVERT);
+              CANNOT_CONVERT);
   }
 
   public void testInvalidClassUse() {
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
 
     test(
         EXTERNS_BASE,
@@ -941,11 +976,11 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "  /** @param {number} v */",
             "  set value(v) { }",
             "}"),
-        Es6ToEs3Converter.CONFLICTING_GETTER_SETTER_TYPE);
+        CONFLICTING_GETTER_SETTER_TYPE);
   }
 
   public void testClassEs5GetterSetterIncorrectTypes() {
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
     languageOut = LanguageMode.ECMASCRIPT5;
 
     // Using @type instead of @return on a getter.
@@ -1123,10 +1158,12 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
     languageOut = LanguageMode.ECMASCRIPT5;
 
     test(
-        "/** @unrestricted */ class C { get [foo]() { return 4; }}",
+        "/** @unrestricted */ class C { /** @return {number} */ get [foo]() { return 4; }}",
         LINE_JOINER.join(
             "/** @constructor @unrestricted */",
             "var C = function() {};",
+            "/** @type {number} */",
+            "C.prototype[foo];",
             "var $jscomp$compprop0 = {};",
             "Object.defineProperties(",
             "  C.prototype,",
@@ -1137,17 +1174,19 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "    get: function() { return 4; }",
             "  }, $jscomp$compprop0));"));
 
-    testError("class C { get [add + expr]() {} }", Es6ToEs3Converter.CANNOT_CONVERT);
+    testError("class C { get [add + expr]() {} }", CANNOT_CONVERT);
   }
 
   public void testClassComputedPropSetter() {
     languageOut = LanguageMode.ECMASCRIPT5;
 
     test(
-        "/** @unrestricted */ class C { set [foo](val) {}}",
+        "/** @unrestricted */ class C { /** @param {string} val */ set [foo](val) {}}",
         LINE_JOINER.join(
             "/** @constructor @unrestricted */",
             "var C = function() {};",
+            "/** @type {string} */",
+            "C.prototype[foo];",
             "var $jscomp$compprop0={};",
             "Object.defineProperties(",
             "  C.prototype,",
@@ -1158,7 +1197,14 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "    set: function(val) {}",
             "  }, $jscomp$compprop0));"));
 
-    testError("class C { get [sub - expr]() {} }", Es6ToEs3Converter.CANNOT_CONVERT);
+    testError("class C { get [sub - expr]() {} }", CANNOT_CONVERT);
+  }
+
+  public void testClassStaticComputedProps() {
+    languageOut = LanguageMode.ECMASCRIPT5;
+
+    testError("/** @unrestricted */ class C { static set [foo](val) {}}", CANNOT_CONVERT_YET);
+    testError("/** @unrestricted */ class C { static get [foo]() {}}", CANNOT_CONVERT_YET);
   }
 
   public void testClassComputedPropGetterAndSetter() {
@@ -1168,12 +1214,16 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
         LINE_JOINER.join(
             "/** @unrestricted */",
             "class C {",
+            "  /** @return {boolean} */",
             "  get [foo]() {}",
+            "  /** @param {boolean} val */",
             "  set [foo](val) {}",
             "}"),
         LINE_JOINER.join(
             "/** @constructor @unrestricted */",
             "var C = function() {};",
+            "/** @type {boolean} */",
+            "C.prototype[foo];",
             "var $jscomp$compprop0={};",
             "Object.defineProperties(",
             "  C.prototype,",
@@ -1185,14 +1235,25 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "    /** @this {C} */",
             "    set: function(val) {},",
             "  }, $jscomp$compprop0));"));
+
+    testError(
+        LINE_JOINER.join(
+            "/** @unrestricted */",
+            "class C {",
+            "  /** @return {boolean} */",
+            "  get [foo]() {}",
+            "  /** @param {string} val */",
+            "  set [foo](val) {}",
+            "}"),
+        CONFLICTING_GETTER_SETTER_TYPE);
   }
 
   /**
    * ES5 getters and setters should report an error if the languageOut is ES3.
    */
   public void testEs5GettersAndSetters_es3() {
-    testError("var x = { get y() {} };", Es6ToEs3Converter.CANNOT_CONVERT);
-    testError("var x = { set y(value) {} };", Es6ToEs3Converter.CANNOT_CONVERT);
+    testError("var x = { get y() {} };", CANNOT_CONVERT);
+    testError("var x = { set y(value) {} };", CANNOT_CONVERT);
   }
 
   /**
@@ -1375,7 +1436,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "($jscomp$spread$args1 = G.d()).n.apply($jscomp$spread$args1,",
             "    [].concat(b));"));
 
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
 
     test(
         EXTERNS_BASE,
@@ -1584,8 +1645,8 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testComputedPropCannotConvert() {
-    testError("var o = { get [foo]() {}}", Es6ToEs3Converter.CANNOT_CONVERT_YET);
-    testError("var o = { set [foo](val) {}}", Es6ToEs3Converter.CANNOT_CONVERT_YET);
+    testError("var o = { get [foo]() {}}", CANNOT_CONVERT_YET);
+    testError("var o = { set [foo](val) {}}", CANNOT_CONVERT_YET);
   }
 
   public void testNoComputedProperties() {
@@ -1625,28 +1686,28 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
         "tag``",
         LINE_JOINER.join(
             "var $jscomp$templatelit$0 = [''];",
-            "$jscomp$templatelit$0['raw'] = [''];",
+            "$jscomp$templatelit$0.raw = [''];",
             "tag($jscomp$templatelit$0);"));
 
     test(
         "tag`${hello} world`",
         LINE_JOINER.join(
             "var $jscomp$templatelit$0 = ['', ' world'];",
-            "$jscomp$templatelit$0['raw'] = ['', ' world'];",
+            "$jscomp$templatelit$0.raw = ['', ' world'];",
             "tag($jscomp$templatelit$0, hello);"));
 
     test(
         "tag`${hello} ${world}`",
         LINE_JOINER.join(
             "var $jscomp$templatelit$0 = ['', ' ', ''];",
-            "$jscomp$templatelit$0['raw'] = ['', ' ', ''];",
+            "$jscomp$templatelit$0.raw = ['', ' ', ''];",
             "tag($jscomp$templatelit$0, hello, world);"));
 
     test(
         "tag`\"`",
         LINE_JOINER.join(
             "var $jscomp$templatelit$0 = ['\\\"'];",
-            "$jscomp$templatelit$0['raw'] = ['\\\"'];",
+            "$jscomp$templatelit$0.raw = ['\\\"'];",
             "tag($jscomp$templatelit$0);"));
 
     // The cooked string and the raw string are different.
@@ -1654,21 +1715,21 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
         "tag`a\tb`",
         LINE_JOINER.join(
             "var $jscomp$templatelit$0 = ['a\tb'];",
-            "$jscomp$templatelit$0['raw'] = ['a\\tb'];",
+            "$jscomp$templatelit$0.raw = ['a\\tb'];",
             "tag($jscomp$templatelit$0);"));
 
     test(
         "tag()`${hello} world`",
         LINE_JOINER.join(
             "var $jscomp$templatelit$0 = ['', ' world'];",
-            "$jscomp$templatelit$0['raw'] = ['', ' world'];",
+            "$jscomp$templatelit$0.raw = ['', ' world'];",
             "tag()($jscomp$templatelit$0, hello);"));
 
     test(
         "a.b`${hello} world`",
         LINE_JOINER.join(
             "var $jscomp$templatelit$0 = ['', ' world'];",
-            "$jscomp$templatelit$0['raw'] = ['', ' world'];",
+            "$jscomp$templatelit$0.raw = ['', ' world'];",
             "a.b($jscomp$templatelit$0, hello);"));
   }
 

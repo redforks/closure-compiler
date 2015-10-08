@@ -400,6 +400,10 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(false, "a");
     assertSideEffect(false, "[b, c [d, [e]]]");
     assertSideEffect(false, "({a: x, b: y, c: z})");
+    assertSideEffect(false, "({a, b, c})");
+    assertSideEffect(false, "({[a]: x})");
+    assertSideEffect(true, "({[a()]: x})");
+    assertSideEffect(true, "({[a]: x()})");
     assertSideEffect(false, "/abc/gi");
     assertSideEffect(false, "'a'");
     assertSideEffect(false, "0");
@@ -453,6 +457,9 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(false, "({},[]).foo = 2;");
 
     assertSideEffect(true, "delete a.b");
+
+    assertSideEffect(false, "Math.random();");
+    assertSideEffect(true, "Math.random(seed);");
   }
 
   public void testObjectMethodSideEffects() {

@@ -711,18 +711,16 @@ class IRFactory {
   }
 
   /**
-   * NAMEs in parameters or variable declarations are special, because they can
-   * have inline type docs attached.
+   * Names and destructuring patterns, in parameters or variable declarations are special,
+   * because they can have inline type docs attached.
    *
-   * function f(/** string &#42;/ x) {}
-   * annotates 'x' as a string.
+   * <pre>function f(/** string &#42;/ x) {}</pre> annotates 'x' as a string.
    *
    * @see <a href="http://code.google.com/p/jsdoc-toolkit/wiki/InlineDocs">
    *   Using Inline Doc Comments</a>
    */
-  private Node transformNodeWithInlineJsDoc(
-      ParseTree node, boolean optionalInline) {
-    JSDocInfo info = handleInlineJsDoc(node, optionalInline);
+  private Node transformNodeWithInlineJsDoc(ParseTree node) {
+    JSDocInfo info = handleInlineJsDoc(node);
     Node irNode = justTransform(node);
     if (info != null) {
       irNode.setJSDocInfo(info);
@@ -731,21 +729,18 @@ class IRFactory {
     return irNode;
   }
 
-  private JSDocInfo handleInlineJsDoc(ParseTree node, boolean optional) {
-    return handleInlineJsDoc(node.location, optional);
+  private JSDocInfo handleInlineJsDoc(ParseTree node) {
+    return handleInlineJsDoc(node.location);
   }
 
   private JSDocInfo handleInlineJsDoc(
-      com.google.javascript.jscomp.parsing.parser.Token token,
-      boolean optional) {
-    return handleInlineJsDoc(token.location, optional);
+      com.google.javascript.jscomp.parsing.parser.Token token) {
+    return handleInlineJsDoc(token.location);
   }
 
-  private JSDocInfo handleInlineJsDoc(
-      SourceRange location,
-      boolean optional) {
+  private JSDocInfo handleInlineJsDoc(SourceRange location) {
     Comment comment = getJsDoc(location);
-    if (comment != null && (!optional || !comment.value.contains("@"))) {
+    if (comment != null && !comment.value.contains("@")) {
       return recordJsDoc(location, parseInlineTypeDoc(comment));
     } else {
       return handleJsDoc(comment);
@@ -953,7 +948,7 @@ class IRFactory {
 
       Node node = newNode(Token.ARRAY_PATTERN);
       for (ParseTree child : tree.elements) {
-        node.addChildToBack(transform(child));
+        node.addChildToBack(transformNodeWithInlineJsDoc(child));
       }
       return node;
     }
@@ -963,7 +958,7 @@ class IRFactory {
 
       Node node = newNode(Token.OBJECT_PATTERN);
       for (ParseTree child : tree.fields) {
-        node.addChildToBack(transform(child));
+        node.addChildToBack(transformNodeWithInlineJsDoc(child));
       }
       return node;
     }
@@ -1239,7 +1234,7 @@ class IRFactory {
       Node params = newNode(Token.PARAM_LIST);
       if (checkParameters(tree.parameters)) {
         for (ParseTree param : tree.parameters) {
-          Node paramNode = transformNodeWithInlineJsDoc(param, false);
+          Node paramNode = transformNodeWithInlineJsDoc(param);
           // Children must be simple names, default parameters, rest
           // parameters, or destructuring patterns.
           Preconditions.checkState(paramNode.isName() || paramNode.isRest()
@@ -1354,7 +1349,7 @@ class IRFactory {
     }
 
     Node processNameWithInlineJSDoc(IdentifierToken identifierToken) {
-      JSDocInfo info = handleInlineJsDoc(identifierToken, true);
+      JSDocInfo info = handleInlineJsDoc(identifierToken);
       if (isReservedKeyword(identifierToken.toString())) {
         errorReporter.error(
           "identifier is a reserved word",
@@ -1407,6 +1402,14 @@ class IRFactory {
       Node node = newNode(Token.OBJECTLIT);
       boolean maybeWarn = false;
       for (ParseTree el : objTree.propertyNameAndValues) {
+        if (el.type == ParseTreeType.DEFAULT_PARAMETER) {
+          // (e.g. var o = { x=4 };) This is only parsed for compatibility with object patterns.
+          errorReporter.error(
+              "Default value cannot appear at top level of an object literal.",
+              sourceName,
+              lineno(el), 0);
+          continue;
+        }
         if (config.languageMode == LanguageMode.ECMASCRIPT3) {
           if (el.type == ParseTreeType.GET_ACCESSOR) {
             reportGetter(el);
@@ -1479,6 +1482,7 @@ class IRFactory {
       function.useSourceInfoIfMissingFromForTree(body);
       Node n = newNode(Token.COMPUTED_PROP, key, function);
       n.putBooleanProp(Node.COMPUTED_PROP_GETTER, true);
+      n.putBooleanProp(Node.STATIC_MEMBER, tree.isStatic);
       return n;
     }
 
@@ -1492,6 +1496,7 @@ class IRFactory {
       function.useSourceInfoIfMissingFromForTree(body);
       Node n = newNode(Token.COMPUTED_PROP, key, function);
       n.putBooleanProp(Node.COMPUTED_PROP_SETTER, true);
+      n.putBooleanProp(Node.STATIC_MEMBER, tree.isStatic);
       return n;
     }
 
@@ -1527,6 +1532,9 @@ class IRFactory {
     }
 
     Node processPropertyNameAssignment(PropertyNameAssignmentTree tree) {
+      // TODO(tbreisacher): Allow inline JSDoc here (but then forbid it in CheckJSDoc)
+      // so that it's clear we don't support annotations like
+      //   function f({x: /** string */ y}) {}
       Node key = processObjectLitKeyAsString(tree.name);
       key.setType(Token.STRING_KEY);
       if (tree.value != null) {
@@ -1543,7 +1551,22 @@ class IRFactory {
       }
     }
 
+    private void checkParenthesizedExpression(ParenExpressionTree exprNode) {
+      if (exprNode.expression.type == ParseTreeType.COMMA_EXPRESSION) {
+        List<ParseTree> commaNodes = exprNode.expression.asCommaExpression().expressions;
+        ParseTree lastChild = commaNodes.get(commaNodes.size() - 1);
+        if (lastChild.type == ParseTreeType.REST_PARAMETER) {
+          errorReporter.error(
+              "A rest parameter must be in a parameter list.",
+              sourceName,
+              lineno(lastChild),
+              charno(lastChild));
+        }
+      }
+    }
+
     Node processParenthesizedExpression(ParenExpressionTree exprNode) {
+      checkParenthesizedExpression(exprNode);
       return transform(exprNode.expression);
     }
 
@@ -1800,14 +1823,13 @@ class IRFactory {
 
       Node node = newNode(declType);
       for (VariableDeclarationTree child : decl.declarations) {
-        node.addChildToBack(
-            transformNodeWithInlineJsDoc(child, true));
+        node.addChildToBack(transformNodeWithInlineJsDoc(child));
       }
       return node;
     }
 
     Node processVariableDeclaration(VariableDeclarationTree decl) {
-      Node node = transformNodeWithInlineJsDoc(decl.lvalue, true);
+      Node node = transformNodeWithInlineJsDoc(decl.lvalue);
       if (decl.initializer != null) {
         Node initializer = transform(decl.initializer);
         node.addChildToBack(initializer);
@@ -2008,10 +2030,13 @@ class IRFactory {
     }
 
     Node processExportSpec(ExportSpecifierTree tree) {
-      Node exportSpec = newNode(Token.EXPORT_SPEC,
-          processName(tree.importedName));
+      Node importedName = processName(tree.importedName, true);
+      importedName.setType(Token.NAME);
+      Node exportSpec = newNode(Token.EXPORT_SPEC, importedName);
       if (tree.destinationName != null) {
-        exportSpec.addChildToBack(processName(tree.destinationName));
+        Node destinationName = processName(tree.destinationName, true);
+        destinationName.setType(Token.NAME);
+        exportSpec.addChildToBack(destinationName);
       }
       return exportSpec;
     }
@@ -2029,8 +2054,9 @@ class IRFactory {
     }
 
     Node processImportSpec(ImportSpecifierTree tree) {
-      Node importSpec = newNode(Token.IMPORT_SPEC,
-          processName(tree.importedName));
+      Node importedName = processName(tree.importedName, true);
+      importedName.setType(Token.NAME);
+      Node importSpec = newNode(Token.IMPORT_SPEC, importedName);
       if (tree.destinationName != null) {
         importSpec.addChildToBack(processName(tree.destinationName));
       }

@@ -89,7 +89,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    super.enableTypeCheck(CheckLevel.OFF);
+    super.enableTypeCheck();
     super.enableClosurePass();
     configuration = DEFAULT_CONFORMANCE;
   }
@@ -325,7 +325,8 @@ public final class CheckConformanceTest extends CompilerTestCase {
         EXTERNS,
         "foo.blink();",
         CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION,
-        "Possible violation: blink is annoying");
+        "Possible violation: blink is annoying\n"
+        + "The type information available for this expression is too loose ensure conformance.");
   }
 
   public void testBannedDep1() {
@@ -995,6 +996,37 @@ public final class CheckConformanceTest extends CompilerTestCase {
         null);
   }
 
+  public void testCustomBanUnknownInterfaceProp1() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testSame(
+        EXTERNS,
+        LINE_JOINER.join(
+            "/** @interface */ function I() {}",
+            "I.prototype.method = function() {};",
+            "/** @param {!I} a */ function f(a) {",
+            "  a.gak();",
+            "}"),
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message\nThe property \"gak\" on type \"I\"");
+  }
+
+  public void testCustomBanUnknownInterfaceProp2() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testSame(
+        EXTERNS,
+        LINE_JOINER.join(
+            "/** @interface */ function I() {}",
+            "I.prototype.method = function() {};",
+            "/** @param {I} a */ function f(a) {",
+            "  a.method();",
+            "}"),
+        null);
+  }
+
   public void testCustomBanGlobalVars1() {
     configuration =
         "requirement: {\n" +
@@ -1205,6 +1237,12 @@ public final class CheckConformanceTest extends CompilerTestCase {
     testSame(
         EXTERNS,
         "/** @param {string|null} n */ function f(n) { alert(n['prop']); }",
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message");
+
+    testSame(
+        EXTERNS,
+        "/** @param {string|null} n */ function f(n) { alert('prop' in n); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 

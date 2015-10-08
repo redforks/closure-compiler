@@ -218,14 +218,22 @@ class CollapseProperties implements CompilerPass {
     // Ensure that the alias is assigned to global name at that the
     // declaration.
     Node aliasParent = alias.node.getParent();
-    if (aliasParent.isAssign() && NodeUtil.isExecutedExactlyOnce(aliasParent)
+    if ((aliasParent.isAssign() || aliasParent.isName())
+        && NodeUtil.isExecutedExactlyOnce(aliasParent)
         // We special-case for constructors here, to inline constructor aliases
         // more aggressively in global scope.
         // We do this because constructor properties are always collapsed,
         // so we want to inline the aliases also to avoid breakages.
+        // TODO(tbreisacher): Do we still need this special case?
         || aliasParent.isName() && name.isConstructor()) {
       Node lvalue = aliasParent.isName() ? aliasParent : aliasParent.getFirstChild();
       if (!lvalue.isQualifiedName()) {
+        return false;
+      }
+      if (lvalue.isName()
+          && compiler.getCodingConvention().isExported(
+              lvalue.getString(),
+              /* local */ false)) {
         return false;
       }
       name = namespace.getSlot(lvalue.getQualifiedName());
@@ -239,6 +247,8 @@ class CollapseProperties implements CompilerPass {
               continue;
             case DIRECT_GET:
             case ALIASING_GET:
+            case PROTOTYPE_GET:
+            case CALL_GET:
               Node newNode = alias.node.cloneTree();
               Node node = ref.node;
               node.getParent().replaceChild(node, newNode);
@@ -277,7 +287,9 @@ class CollapseProperties implements CompilerPass {
     if (name.props == null) {
       return;
     }
-    Preconditions.checkState(!value.matchesQualifiedName(name.getFullName()));
+    Preconditions.checkState(
+        !value.matchesQualifiedName(name.getFullName()),
+        "%s should not match name %s", value, name.getFullName());
     for (Name prop : name.props) {
       rewriteAliasProps(prop, value, depth + 1, newNodes);
       List<Ref> refs = new ArrayList<>(prop.getRefs());
@@ -1124,13 +1136,19 @@ class CollapseProperties implements CompilerPass {
     return numStubs;
   }
 
-  private static String appendPropForAlias(String root, String prop) {
+  private String appendPropForAlias(String root, String prop) {
     if (prop.indexOf('$') != -1) {
       // Encode '$' in a property as '$0'. Because '0' cannot be the
       // start of an identifier, this will never conflict with our
       // encoding from '.' -> '$'.
       prop = prop.replace("$", "$0");
     }
-    return root + '$' + prop;
+    String result = root + '$' + prop;
+    int id = 1;
+    while (nameMap.containsKey(result)) {
+      result = root + '$' + prop + '$' + id;
+      id++;
+    }
+    return result;
   }
 }

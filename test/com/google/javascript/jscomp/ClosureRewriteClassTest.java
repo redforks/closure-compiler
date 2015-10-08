@@ -15,7 +15,9 @@
  */
 package com.google.javascript.jscomp;
 
+
 import static com.google.javascript.jscomp.ClosureRewriteClass.GOOG_CLASS_CONSTRUCTOR_MISSING;
+import static com.google.javascript.jscomp.ClosureRewriteClass.GOOG_CLASS_CONSTRUCTOR_NOT_VALID;
 import static com.google.javascript.jscomp.ClosureRewriteClass.GOOG_CLASS_CONSTRUCTOR_ON_INTERFACE;
 import static com.google.javascript.jscomp.ClosureRewriteClass.GOOG_CLASS_DESCRIPTOR_NOT_VALID;
 import static com.google.javascript.jscomp.ClosureRewriteClass.GOOG_CLASS_ES6_ARROW_FUNCTION_NOT_SUPPORTED;
@@ -152,7 +154,7 @@ public final class ClosureRewriteClassTest extends CompilerTestCase {
 
   public void testAnnotations1() {
     // verify goog.defineClass values are constructible, by default
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
     testRewrite(
         "var x = goog.defineClass(Object, {\n"
         + "  constructor: function(){}\n"
@@ -166,7 +168,7 @@ public final class ClosureRewriteClassTest extends CompilerTestCase {
 
   public void testAnnotations2a() {
     // @interface is preserved
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
     testRewriteWarning(
         "var x = goog.defineClass(null, {\n"
         + "  /** @interface */\n"
@@ -174,7 +176,7 @@ public final class ClosureRewriteClassTest extends CompilerTestCase {
         + "});"
         + "new x();",
 
-        "/** @interface */\n"
+        "/** @struct @interface */\n"
         + "var x = function() {};"
         + "new x();",
         TypeCheck.NOT_A_CONSTRUCTOR);
@@ -182,13 +184,13 @@ public final class ClosureRewriteClassTest extends CompilerTestCase {
 
   public void testAnnotations2b() {
     // @interface is preserved, at the class level too
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
     testRewriteWarning(
         "/** @interface */\n"
         + "var x = goog.defineClass(null, {});"
         + "new x();",
 
-        "/** @interface */\n"
+        "/** @struct @interface */\n"
         + "var x = function() {};"
         + "new x();",
         TypeCheck.NOT_A_CONSTRUCTOR);
@@ -196,7 +198,7 @@ public final class ClosureRewriteClassTest extends CompilerTestCase {
 
   public void testAnnotations3a() {
     // verify goog.defineClass is a @struct by default
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
     testRewriteWarning(
         "var y = goog.defineClass(null, {\n"
         + "  constructor: function(){}\n"
@@ -217,7 +219,7 @@ public final class ClosureRewriteClassTest extends CompilerTestCase {
 
   public void testAnnotations3b() {
     // verify goog.defineClass is a @struct by default, but can be overridden
-    enableTypeCheck(CheckLevel.WARNING);
+    enableTypeCheck();
     testRewrite(
         "/** @unrestricted */"
         + "var y = goog.defineClass(null, {\n"
@@ -436,6 +438,14 @@ public final class ClosureRewriteClassTest extends CompilerTestCase {
     testRewriteError("var x = goog.defineClass() || null;", GOOG_CLASS_TARGET_INVALID);
 
     testRewriteError("({foo: goog.defineClass()});", GOOG_CLASS_TARGET_INVALID);
+  }
+
+  public void testInvalid7() {
+    testRewriteError(LINE_JOINER.join(
+        "var x = goog.defineClass(null, {",
+        "  constructor: foo",
+        "});"),
+        GOOG_CLASS_CONSTRUCTOR_NOT_VALID);
   }
 
   public void testNgInject() {

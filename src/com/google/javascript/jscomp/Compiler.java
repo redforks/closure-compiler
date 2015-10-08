@@ -204,6 +204,9 @@ public class Compiler extends AbstractCompiler {
 
   public PerformanceTracker tracker;
 
+  // Used by optimize-returns, optimize-parameters and remove-unused-variables
+  private SimpleDefinitionFinder defFinder = null;
+
   // For use by the new type inference
   private GlobalTypeInfo symbolTable;
 
@@ -294,8 +297,8 @@ public class Compiler extends AbstractCompiler {
   }
 
   /**
-   * Initialize the compiler options. Only necessary if you're not doing
-   * a normal compile() job.
+   * Initializes the compiler options. It's called as part of a normal compile() job.
+   * Public for the callers that are not doing a normal compile() job.
    */
   public void initOptions(CompilerOptions options) {
     this.options = options;
@@ -1126,6 +1129,17 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  void forwardDeclareType(String typeName) {
+    // Always add it to the old type registry, since OTI runs after NTI to
+    // provide types for the remaining passes.
+    // TODO(dimvar): change this when we stop running OTI after NTI.
+    getTypeRegistry().forwardDeclareType(typeName);
+    if (this.options.useNewTypeInference) {
+      getSymbolTable().addUnknownTypeName(typeName);
+    }
+  }
+
+  @Override
   // Only used by jsdev
   public MemoizedScopeCreator getTypedScopeCreator() {
     return getPassConfig().getTypedScopeCreator();
@@ -1218,14 +1232,25 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   GlobalTypeInfo getSymbolTable() {
-    GlobalTypeInfo gti = symbolTable;
-    symbolTable = null; // GC this after type inference
-    return gti;
+    if (this.symbolTable == null) {
+      this.symbolTable = new GlobalTypeInfo(this);
+    }
+    return this.symbolTable;
   }
 
   @Override
   void setSymbolTable(GlobalTypeInfo symbolTable) {
     this.symbolTable = symbolTable;
+  }
+
+  @Override
+  SimpleDefinitionFinder getSimpleDefinitionFinder() {
+    return this.defFinder;
+  }
+
+  @Override
+  void setSimpleDefinitionFinder(SimpleDefinitionFinder defFinder) {
+    this.defFinder = defFinder;
   }
 
   //------------------------------------------------------------------------
@@ -2027,23 +2052,6 @@ public class Compiler extends AbstractCompiler {
     return options.ideMode;
   }
 
-  @Override
-  public boolean acceptEcmaScript5() {
-    switch (options.getLanguageIn()) {
-      case ECMASCRIPT5:
-      case ECMASCRIPT5_STRICT:
-      case ECMASCRIPT6:
-      case ECMASCRIPT6_STRICT:
-      case ECMASCRIPT6_TYPED:
-        return true;
-      case ECMASCRIPT3:
-        return false;
-      default:
-        throw new IllegalStateException(
-            "unexpected language mode: " + options.getLanguageIn());
-    }
-  }
-  @Override
   Config getParserConfig(ConfigContext context) {
     if (parserConfig == null) {
       switch (options.getLanguageIn()) {

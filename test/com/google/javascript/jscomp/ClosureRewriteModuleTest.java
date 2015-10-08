@@ -63,6 +63,30 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
         "});");
   }
 
+  public void testDestructuring() {
+    testEs6(
+        LINE_JOINER.join(
+            "goog.module('ns.a');",
+            "var {foo, bar} = goog.require('ns.b');"),
+        LINE_JOINER.join(
+            "goog.provide('ns.a');",
+            "goog.require('ns.b');",
+            "goog.scope(function(){",
+            "  var {foo, bar} = ns.b;",
+            "});"));
+
+    testEs6(
+        LINE_JOINER.join(
+            "goog.module('ns.a');",
+            "const {foo, bar} = goog.require('ns.b');"),
+        LINE_JOINER.join(
+            "goog.provide('ns.a');",
+            "goog.require('ns.b');",
+            "goog.scope(function(){",
+            "  const {foo, bar} = ns.b;",
+            "});"));
+  }
+
   public void testDeclareLegacyNamespace() {
     test(
         "goog.module('ns.a');"
@@ -394,6 +418,22 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
         + "goog.scope(function(){"
         + "  ns.a = goog.defineClass({});"
         + "});");
+  }
+
+  public void testExportEnhancedObjectLiteral() {
+    testEs6(
+        "goog.module('ns.a');" +
+        "exports = { something };",
+
+        "goog.provide('ns.a');" +
+        "goog.scope(function(){" +
+        "  /** @const */ ns.a = { /** @const */ something };" +
+        "});");
+
+    testErrorEs6(
+        "goog.module('ns.a');" +
+        "exports = { [something]: 3 };",
+        ClosureRewriteModule.INVALID_EXPORT_COMPUTED_PROPERTY);
   }
 
   public void testRequiresRetainOrder() {

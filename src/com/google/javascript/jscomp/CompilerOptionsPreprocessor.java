@@ -42,6 +42,13 @@ final class CompilerOptionsPreprocessor {
           + "remove_unused_prototype_properties to be turned on.");
     }
 
+    if (options.getLanguageOut().isEs6OrHigher()
+        && !options.skipNonTranspilationPasses && !options.skipTranspilationAndCrash) {
+      throw new InvalidOptionsException(
+          "ES6 is only supported for transpilation to a lower ECMAScript"
+          + " version. Set --language_out to ES3, ES5, or ES5_STRICT.");
+    }
+
     if (!options.inlineFunctions
         && options.maxFunctionSizeAfterInlining
         != CompilerOptions.UNLIMITED_FUN_SIZE_AFTER_INLINING) {
@@ -58,6 +65,15 @@ final class CompilerOptionsPreprocessor {
     if (options.jqueryPass && options.closurePass) {
       throw new InvalidOptionsException(
           "The jQuery pass and the Closure pass cannot both be enabled.");
+    }
+
+    if (options.dartPass) {
+      if (!options.getLanguageOut().isEs5OrHigher()) {
+        throw new InvalidOptionsException("Dart requires --language_out=ES5 or higher.");
+      }
+      // --dart_pass does not support type-aware property renaming yet.
+      options.setAmbiguateProperties(false);
+      options.setDisambiguateProperties(false);
     }
 
     if (options.removeUnusedPrototypePropertiesInExterns

@@ -816,7 +816,6 @@ Float64Array.prototype.fill = function(value, opt_begin, opt_end) {};
  * @param {number=} opt_byteLength
  * @constructor
  * @extends {ArrayBufferView}
- * @implements {IArrayLike<number>}
  * @noalias
  * @throws {Error}
  * @nosideeffects
@@ -1054,8 +1053,8 @@ Promise.race = function(iterable) {};
 
 
 /**
- * @param {?(function(TYPE):VALUE)=} opt_onFulfilled
- * @param {?(function(*): *)=} opt_onRejected
+ * @param {?(function(this:void, TYPE):VALUE)=} opt_onFulfilled
+ * @param {?(function(this:void, *): *)=} opt_onRejected
  * @return {RESULT}
  * @template VALUE
  *
@@ -1092,6 +1091,26 @@ Array.prototype.keys;
  * @return {!Array<!Array>} An array of [key, value] pairs.
  */
 Array.prototype.entries;
+
+
+/**
+ * @param {!function(this:S, T, number, !Array<T>): boolean} predicate
+ * @param {S=} opt_this
+ * @return {T|undefined}
+ * @template T,S
+ * @see http://www.ecma-international.org/ecma-262/6.0/#sec-array.prototype.find
+ */
+Array.prototype.find = function(predicate, opt_this) {};
+
+
+/**
+ * @param {!function(this:S, T, number, !Array<T>): boolean} predicate
+ * @param {S=} opt_this
+ * @return {number}
+ * @template T,S
+ * @see http://www.ecma-international.org/ecma-262/6.0/#sec-array.prototype.findindex
+ */
+Array.prototype.findIndex = function(predicate, opt_this) {};
 
 
 /** @return {!Array<symbol>} */

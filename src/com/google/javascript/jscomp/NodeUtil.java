@@ -818,30 +818,6 @@ public final class NodeUtil {
     return false;
   }
 
-  static boolean isAliasedNominalTypeDecl(Node n) {
-    if (n.isName()) {
-      n = n.getParent();
-    }
-    if (n.isVar() && n.getChildCount() == 1) {
-      Node name = n.getFirstChild();
-      Node init = name.getFirstChild();
-      JSDocInfo jsdoc = getBestJSDocInfo(n);
-      return jsdoc != null
-          && jsdoc.isConstructorOrInterface()
-          && init != null
-          && init.isQualifiedName();
-    }
-    Node parent = n.getParent();
-    if (n.isGetProp() && n.isQualifiedName()
-        && parent.isAssign() && parent.getParent().isExprResult()) {
-      JSDocInfo jsdoc = getBestJSDocInfo(n);
-      return jsdoc != null
-          && jsdoc.isConstructorOrInterface()
-          && parent.getLastChild().isQualifiedName();
-    }
-    return false;
-  }
-
   /**
    * Returns true iff this node defines a namespace, such as goog or goog.math.
    */
@@ -910,6 +886,8 @@ public final class NodeUtil {
 
   /**
    * Returns true if the node which may have side effects when executed.
+   * This version default to the "safe" assumptions when the compiler object is not
+   * provided (RegExp have side-effects, etc).
    */
   public static boolean mayHaveSideEffects(Node n) {
     return mayHaveSideEffects(n, null);
@@ -940,10 +918,11 @@ public final class NodeUtil {
         if (checkForNewObjects) {
           return true;
         }
-        for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
-          if (checkForStateChangeHelper(
-                  c.getFirstChild(), checkForNewObjects, compiler)) {
-            return true;
+        for (Node key = n.getFirstChild(); key != null; key = key.getNext()) {
+          for (Node c = key.getFirstChild(); c != null; c = c.getNext()) {
+            if (checkForStateChangeHelper(c, checkForNewObjects, compiler)) {
+              return true;
+            }
           }
         }
         return false;
@@ -991,7 +970,7 @@ public final class NodeUtil {
         return true;
 
       case Token.TAGGED_TEMPLATELIT:
-        return functionCallHasSideEffects(n);
+        return functionCallHasSideEffects(n, compiler);
 
       case Token.CAST:
       case Token.AND:
@@ -1144,8 +1123,8 @@ public final class NodeUtil {
       return false;
     }
 
-    if (callNode.isOnlyModifiesArgumentsCall() &&
-        allArgsUnescapedLocal(callNode)) {
+    if (callNode.isOnlyModifiesArgumentsCall()
+        && allArgsUnescapedLocal(callNode)) {
       return false;
     }
 
@@ -1207,6 +1186,8 @@ public final class NodeUtil {
           case "tanh":
           case "trunc":
             return false;
+          case "random":
+            return !callNode.hasOneChild(); // no parameters
         }
       }
 
@@ -1992,6 +1973,10 @@ public final class NodeUtil {
   static boolean isExprCall(Node n) {
     return n.isExprResult()
         && n.getFirstChild().isCall();
+  }
+
+  static boolean isVanillaFunction(Node n) {
+    return n.isFunction() && !n.isArrowFunction();
   }
 
   static boolean isVanillaFor(Node n) {
@@ -3063,11 +3048,6 @@ public final class NodeUtil {
     return isValidSimpleName(parts.get(0));
   }
 
-  @Deprecated
-  static boolean isValidPropertyName(String name) {
-    return isValidSimpleName(name);
-  }
-
   /**
    * Determines whether the given name can appear on the right side of
    * the dot operator. Many properties (like reserved words) cannot, in ES3.
@@ -3318,7 +3298,7 @@ public final class NodeUtil {
   static final Predicate<Node> MATCH_NOT_THIS_BINDING = new Predicate<Node>() {
     @Override
     public boolean apply(Node n) {
-      return !n.isFunction() || n.isArrowFunction();
+      return !NodeUtil.isVanillaFunction(n);
     }
   };
 

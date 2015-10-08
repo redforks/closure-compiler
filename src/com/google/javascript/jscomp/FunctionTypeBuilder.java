@@ -330,11 +330,11 @@ final class FunctionTypeBuilder {
   FunctionTypeBuilder inferInheritance(@Nullable JSDocInfo info) {
     if (info != null) {
       isConstructor = info.isConstructor();
+      isInterface = info.isInterface();
       makesStructs = info.makesStructs();
       makesDicts = info.makesDicts();
-      isInterface = info.isInterface();
 
-      if (makesStructs && !isConstructor) {
+      if (makesStructs && !(isConstructor || isInterface)) {
         reportWarning(CONSTRUCTOR_REQUIRED, "@struct", formatFnName());
       } else if (makesDicts && !isConstructor) {
         reportWarning(CONSTRUCTOR_REQUIRED, "@dict", formatFnName());
@@ -597,11 +597,7 @@ final class FunctionTypeBuilder {
           info.getTypeTransformations();
       if (!infoTemplateTypeNames.isEmpty()) {
         for (String key : infoTemplateTypeNames) {
-          if (typeRegistry.isIObjectValueKey(fnName, key)) {
-            builder.add(typeRegistry.getIObjectValueKey());
-          } else {
-            builder.add(typeRegistry.createTemplateType(key));
-          }
+          builder.add(typeRegistry.createTemplateType(key));
         }
       }
       if (!infoTypeTransformations.isEmpty()) {
@@ -713,7 +709,7 @@ final class FunctionTypeBuilder {
       fnType = getOrCreateConstructor();
     } else if (isInterface) {
       fnType = typeRegistry.createInterfaceType(
-          fnName, contents.getSourceNode(), classTemplateTypeNames);
+          fnName, contents.getSourceNode(), classTemplateTypeNames, makesStructs);
       if (getScopeDeclaredIn().isGlobal() && !fnName.isEmpty()) {
         typeRegistry.declareType(fnName, fnType.getInstanceType());
       }
