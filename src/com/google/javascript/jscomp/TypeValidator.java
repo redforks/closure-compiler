@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.BOOLEAN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NO_OBJECT_TYPE;
@@ -392,7 +393,7 @@ class TypeValidator {
           .getTemplateTypeMap()
           .hasTemplateKey(typeRegistry.getObjectIndexKey())) {
         expectCanAssignTo(t, indexNode, indexType, dereferenced
-            .getTemplateTypeMap().getTemplateType(typeRegistry.getObjectIndexKey()),
+            .getTemplateTypeMap().getResolvedTemplateType(typeRegistry.getObjectIndexKey()),
             "restricted index type");
       } else if (dereferenced != null && dereferenced.isArrayType()) {
         expectNumber(t, indexNode, indexType, "array access");
@@ -683,11 +684,17 @@ class TypeValidator {
     if (propSlot == null) {
       // Not implemented
       String sourceName = n.getSourceFileName();
-      sourceName = sourceName == null ? "" : sourceName;
-      registerMismatch(instance, implementedInterface,
-          report(JSError.make(n,
-          INTERFACE_METHOD_NOT_IMPLEMENTED,
-          prop, implementedInterface.toString(), instance.toString())));
+      sourceName = nullToEmpty(sourceName);
+      registerMismatch(
+          instance,
+          implementedInterface,
+          report(
+              JSError.make(
+                  n,
+                  INTERFACE_METHOD_NOT_IMPLEMENTED,
+                  prop,
+                  implementedInterface.toString(),
+                  instance.toString())));
     } else {
       Node propNode = propSlot.getDeclaration() == null ?
           null : propSlot.getDeclaration().getNode();

@@ -15,11 +15,17 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+
 import com.google.javascript.jscomp.parsing.parser.util.format.SimpleFormat;
 
 /**
  * Checks for combinations of options that are incompatible, i.e. will produce
  * incorrect code.
+ *
+ * This is run by Compiler#compileInternal, which is not run during unit tests.
+ * The catch is that it's run after Compiler#initOptions, so if for example
+ * you want to change the warningsGuard, you can't do it here.
  *
  * <p>Also, turns off options if the provided options don't make sense together.
  *
@@ -29,8 +35,7 @@ final class CompilerOptionsPreprocessor {
 
   static void preprocess(CompilerOptions options) {
     if (options.checkMissingGetCssNameLevel.isOn()
-        && (options.checkMissingGetCssNameBlacklist == null
-            || options.checkMissingGetCssNameBlacklist.isEmpty())) {
+        && (isNullOrEmpty(options.checkMissingGetCssNameBlacklist))) {
       throw new InvalidOptionsException(
           "Cannot check use of goog.getCssName because of empty blacklist.");
     }
@@ -57,7 +62,7 @@ final class CompilerOptionsPreprocessor {
           + " disabled.");
     }
 
-    if (options.useNewTypeInference) {
+    if (options.getNewTypeInference()) {
       options.checkMissingReturn = CheckLevel.OFF;
       options.checkGlobalThisLevel = CheckLevel.OFF;
     }

@@ -28,6 +28,7 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import com.google.common.io.ByteStreams;
 import com.google.javascript.jscomp.CompilerOptions.TweakProcessing;
 import com.google.javascript.jscomp.deps.ClosureBundler;
@@ -430,7 +431,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     options.moduleRoots = config.moduleRoots;
     options.angularPass = config.angularPass;
     options.tracer = config.tracerMode;
-    options.useNewTypeInference = config.useNewTypeInference;
+    options.setNewTypeInference(config.useNewTypeInference);
     options.instrumentationTemplateFile = config.instrumentationTemplateFile;
   }
 
@@ -817,7 +818,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       List<JSModule> modules) throws FlagUsageException {
     Preconditions.checkState(specs != null);
 
-    Map<String, String> wrappers = new HashMap<>(modules.size());
+    Map<String, String> wrappers = Maps.newHashMapWithExpectedSize(modules.size());
 
     // Prepopulate the map with module names.
     for (JSModule m : modules) {

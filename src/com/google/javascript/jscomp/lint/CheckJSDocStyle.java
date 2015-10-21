@@ -58,6 +58,10 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       DiagnosticType.warning("JSC_INCORRECT_PARAM_NAME",
           "Incorrect param name. Are your @param annotations in the wrong order?");
 
+  public static final DiagnosticType EXTERNS_FILES_SHOULD_BE_ANNOTATED =
+      DiagnosticType.warning("JSC_EXTERNS_FILES_SHOULD_BE_ANNOTATED",
+          "Externs files should be annotated with @externs in the @fileoverview block.");
+
   private final AbstractCompiler compiler;
 
   public CheckJSDocStyle(AbstractCompiler compiler) {
@@ -67,6 +71,7 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
   @Override
   public void process(Node externs, Node root) {
     NodeTraversal.traverseEs6(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, externs, new ExternsCallback());
   }
 
   @Override
@@ -136,7 +141,8 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       // can have any param name.
 
       JSTypeExpression paramType = jsDoc.getParameterType(paramsFromJsDoc.get(i));
-      boolean jsDocOptional = paramType.isOptionalArg();
+      // TODO(tbreisacher): Do we want to warn if there is a @param with no type information?
+      boolean jsDocOptional = paramType != null && paramType.isOptionalArg();
       if (nameOptional && !jsDocOptional) {
         t.report(param, OPTIONAL_PARAM_NOT_MARKED_OPTIONAL, param.getString());
       } else if (!nameOptional && jsDocOptional) {
@@ -144,6 +150,23 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       }
 
       param = param.getNext();
+    }
+  }
+
+  private static class ExternsCallback implements NodeTraversal.Callback {
+    @Override
+    public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
+      return parent == null || n.isScript();
+    }
+
+    @Override
+    public void visit(NodeTraversal t, Node n, Node parent) {
+      if (n.isScript()) {
+        JSDocInfo info = n.getJSDocInfo();
+        if (info == null || !info.isExterns()) {
+          t.report(n, EXTERNS_FILES_SHOULD_BE_ANNOTATED);
+        }
+      }
     }
   }
 }

@@ -56,8 +56,8 @@ import com.google.javascript.rhino.jstype.UnionType;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -228,7 +228,7 @@ class TypeInference
               JSType iterKeyType = getNativeType(STRING_TYPE);
               ObjectType objType = getJSType(obj).dereference();
               JSType objIndexType = objType == null ?
-                  null : objType.getTemplateTypeMap().getTemplateType(
+                  null : objType.getTemplateTypeMap().getResolvedTemplateType(
                       registry.getObjectIndexKey());
               if (objIndexType != null && !objIndexType.isUnknownType()) {
                 JSType narrowedKeyType =
@@ -1237,8 +1237,8 @@ class TypeInference
         TemplateTypeMap argTypeMap = argObjectType.getTemplateTypeMap();
         for (TemplateType key : paramTypeMap.getTemplateKeys()) {
           maybeResolveTemplatedType(
-              paramTypeMap.getTemplateType(key),
-              argTypeMap.getTemplateType(key),
+              paramTypeMap.getResolvedTemplateType(key),
+              argTypeMap.getResolvedTemplateType(key),
               resolvedTypes, seenTypes);
         }
       }
@@ -1316,7 +1316,7 @@ class TypeInference
    */
   private Map<String, JSType> buildTypeVariables(
       Map<TemplateType, JSType> inferredTypes) {
-    Map<String, JSType> typeVars = new HashMap<>();
+    Map<String, JSType> typeVars = new LinkedHashMap<>();
     for (Entry<TemplateType, JSType> e : inferredTypes.entrySet()) {
       // Only add the template type that do not have a type transformation
       if (!e.getKey().isTypeTransformation()) {
@@ -1344,7 +1344,7 @@ class TypeInference
         if (ttlObj == null) {
           ttlObj = new TypeTransformation(compiler, syntacticScope);
           typeVars = buildTypeVariables(inferredTypes);
-          result = new HashMap<>();
+          result = new LinkedHashMap<>();
         }
         // Evaluate the type transformation expression using the current
         // known types for the template type variables

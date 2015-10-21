@@ -20,6 +20,7 @@ import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.lint.CheckArguments;
 import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckForInOverArray;
@@ -221,6 +222,7 @@ public class DiagnosticGroups {
   // Part of the new type inference
   public static final DiagnosticGroup NEW_CHECK_TYPES =
       DiagnosticGroups.registerGroup("newCheckTypes",
+          JSTypeCreatorFromJSDoc.ALL_DIAGNOSTICS,
           GlobalTypeInfo.ALL_DIAGNOSTICS,
           NewTypeInference.ALL_DIAGNOSTICS);
 
@@ -429,12 +431,14 @@ public class DiagnosticGroups {
   // provide optional suggestions.
   public static final DiagnosticGroup LINT_CHECKS =
       DiagnosticGroups.registerGroup("lintChecks", // undocumented
+          CheckArguments.BAD_ARGUMENTS_USAGE,
           CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
           CheckEnums.DUPLICATE_ENUM_VALUE,
           // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
           // checkTypes DiagnosticGroup
           CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
           CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
+          CheckJSDocStyle.EXTERNS_FILES_SHOULD_BE_ANNOTATED,
           CheckJSDocStyle.INCORRECT_PARAM_NAME,
           CheckJSDocStyle.MIXED_PARAM_JSDOC_STYLES,
           CheckJSDocStyle.MUST_BE_PRIVATE,

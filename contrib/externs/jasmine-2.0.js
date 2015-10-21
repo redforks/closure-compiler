@@ -77,7 +77,7 @@ jasmine.Clock.prototype.mockDate = function(date) {};
 
 
 
-/** @constructor */
+/** @constructor @template T */
 jasmine.Matchers = function() {};
 
 
@@ -85,7 +85,7 @@ jasmine.Matchers = function() {};
 jasmine.Matchers.prototype.not;
 
 
-/** @type {*} */
+/** @type {T} */
 jasmine.Matchers.prototype.actual;
 
 
@@ -363,12 +363,12 @@ jasmine.Env.prototype.beforeEach = function(handler) {};
 jasmine.getEnv = function() {};
 
 
-/** @param {function(this:jasmine.Spec)} handler */
+/** @param {function(this:jasmine.Spec, function())} handler */
 function afterEach(handler) {}
 
 
-/** @param {function(this:jasmine.Spec, function()=)} handler */
-function beforeEach(handler, opt_done) {}
+/** @param {function(this:jasmine.Spec, function())} handler */
+function beforeEach(handler) {}
 
 
 /**
@@ -394,14 +394,14 @@ function expect(expectedValue) {}
 
 /**
  * @param {string} description
- * @param {function(this:jasmine.Spec, function()=)} handler
+ * @param {function(this:jasmine.Spec, function())} handler
  */
 function it(description, handler) {}
 
 
 /**
  * @param {string} description
- * @param {function(this:jasmine.Spec, function()=)} handler
+ * @param {function(this:jasmine.Spec, function())} handler
  */
 function fit(description, handler) {}
 

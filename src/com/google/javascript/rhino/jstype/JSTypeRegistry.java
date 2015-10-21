@@ -50,6 +50,8 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
+import java.util.HashMap;
+import java.util.HashSet;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -62,8 +64,8 @@ import com.google.javascript.rhino.jstype.RecordTypeBuilder.RecordProperty;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -132,7 +134,7 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   // undecidable territory. Instead, we "pre-declare" enum types and typedefs,
   // so that the expression resolver can decide whether a given name is
   // nullable or not.
-  private final Set<String> nonNullableTypeNames = new HashSet<>();
+  private final Set<String> nonNullableTypeNames = new LinkedHashSet<>();
 
   // Types that have been "forward-declared."
   // If these types are not declared anywhere in the binary, we shouldn't
@@ -148,7 +150,7 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   // properties have been declared. Each type has a unique name used
   // for de-duping.
   private final Map<String, Map<String, ObjectType>>
-      eachRefTypeIndexedByProperty = new HashMap<>();
+      eachRefTypeIndexedByProperty = new LinkedHashMap<>();
 
   // A map of properties to the greatest subtype on which those properties have
   // been declared. This is filled lazily from the types declared in
@@ -248,9 +250,6 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   }
 
   private void initializeBuiltInTypes() {
-    iObjectIndexTemplateKey = new TemplateType(this, I_OBJECT_INDEX_TEMPLATE);
-    iObjectElementTemplateKey = new TemplateType(this, I_OBJECT_ELEMENT_TEMPLATE);
-
     // These locals shouldn't be all caps.
     BooleanType BOOLEAN_TYPE = new BooleanType(this);
     registerNativeType(JSTypeNative.BOOLEAN_TYPE, BOOLEAN_TYPE);
@@ -275,6 +274,10 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
 
     AllType ALL_TYPE = new AllType(this);
     registerNativeType(JSTypeNative.ALL_TYPE, ALL_TYPE);
+
+    // Template Types
+    iObjectIndexTemplateKey = new TemplateType(this, I_OBJECT_INDEX_TEMPLATE);
+    iObjectElementTemplateKey = new TemplateType(this, I_OBJECT_ELEMENT_TEMPLATE);
 
     // Top Level Prototype (the One)
     // The initializations of TOP_LEVEL_PROTOTYPE and OBJECT_FUNCTION_TYPE
@@ -651,7 +654,7 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
       Map<String, ObjectType> typeSet =
           eachRefTypeIndexedByProperty.get(propertyName);
       if (typeSet == null) {
-        typeSet = new HashMap<>();
+        typeSet = new LinkedHashMap<>();
         eachRefTypeIndexedByProperty.put(propertyName, typeSet);
       }
       ObjectType objType = (ObjectType) type;

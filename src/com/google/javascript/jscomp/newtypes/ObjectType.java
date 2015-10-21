@@ -167,6 +167,10 @@ final class ObjectType implements TypeWithProperties {
     return this.fn != null && hasNonPrototypeProperties();
   }
 
+  boolean isInterfaceInstance() {
+    return this.nominalType != null && this.nominalType.isInterface();
+  }
+
   private boolean hasNonPrototypeProperties() {
     for (String pname : this.props.keySet()) {
       if (!pname.equals("prototype")) {
@@ -274,7 +278,9 @@ final class ObjectType implements TypeWithProperties {
       String objName = qname.getLeftmostName();
       QualifiedName objQname = new QualifiedName(objName);
       if (!mayHaveProp(objQname)) {
-        Preconditions.checkState(type == null);
+        Preconditions.checkState(type == null,
+            "Trying to update property %s on type %s, but sub-property %s does"
+            + " not exist", qname, this, objName);
         return this;
       }
       QualifiedName innerProps = qname.getAllButLeftmost();
@@ -506,7 +512,12 @@ final class ObjectType implements TypeWithProperties {
       return false;
     }
 
-    if (otherNt == null && !this.objectKind.isSubtypeOf(other.objectKind)) {
+    if (otherNt == null
+        && !this.objectKind.isSubtypeOf(other.objectKind)
+        // Interfaces are structs but we allow them to be used in a context that
+        // expects a record type, even though it is unsound.
+        // TODO(dimvar): Remove this when we switch to structural interfaces.
+        && !(this.isInterfaceInstance() && other.objectKind.isUnrestricted())) {
       return false;
     }
 
@@ -905,12 +916,13 @@ final class ObjectType implements TypeWithProperties {
           propsEntry.getValue().substituteGenerics(concreteTypes);
       newProps = newProps.with(pname, newProp);
     }
+    FunctionType newFn = fn == null ? null : fn.substituteGenerics(concreteTypes);
     return makeObjectType(
         nominalType == null ? null :
         nominalType.instantiateGenerics(concreteTypes),
         newProps,
-        fn == null ? null : fn.substituteGenerics(concreteTypes),
-        isLoose,
+        newFn,
+        newFn != null && newFn.isQmarkFunction() || isLoose,
         objectKind);
   }
 

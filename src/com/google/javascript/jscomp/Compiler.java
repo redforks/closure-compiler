@@ -343,6 +343,13 @@ public class Compiler extends AbstractCompiler {
               RhinoErrorReporter.TYPE_PARSE_ERROR),
           CheckLevel.OFF);
     }
+    // With NTI, we still need OTI to run because the later passes that use
+    // types only understand OTI types at the moment.
+    // But we do not want to see the warnings from OTI.
+    if (options.getNewTypeInference()) {
+      options.checkTypes = true;
+      options.setWarningLevel(DiagnosticGroups.CHECK_TYPES, CheckLevel.OFF);
+    }
 
     if (options.checkGlobalThisLevel.isOn() &&
         !options.disables(DiagnosticGroups.GLOBAL_THIS)) {
@@ -1134,7 +1141,7 @@ public class Compiler extends AbstractCompiler {
     // provide types for the remaining passes.
     // TODO(dimvar): change this when we stop running OTI after NTI.
     getTypeRegistry().forwardDeclareType(typeName);
-    if (this.options.useNewTypeInference) {
+    if (this.options.getNewTypeInference()) {
       getSymbolTable().addUnknownTypeName(typeName);
     }
   }
@@ -2096,6 +2103,7 @@ public class Compiler extends AbstractCompiler {
     return ParserRunner.createConfig(
         isIdeMode(),
         options.isParseJsDocDocumentation(),
+        options.isPreserveJsDocWhitespace(),
         mode,
         options.extraAnnotationNames);
   }

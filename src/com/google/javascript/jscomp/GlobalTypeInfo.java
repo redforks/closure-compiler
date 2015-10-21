@@ -401,7 +401,7 @@ class GlobalTypeInfo implements CompilerPass {
     nominaltypesByNode = null;
     propertyDefs = null;
     for (NTIScope s : scopes) {
-      s.removeTmpData();
+      s.finalizeScope();
     }
     Map<Node, String> unknownTypes = typeParser.getUnknownTypesMap();
     for (Map.Entry<Node, String> unknownTypeEntry : unknownTypes.entrySet()) {
@@ -1445,7 +1445,8 @@ class GlobalTypeInfo implements CompilerPass {
 
     private void visitClassPropertyDeclaration(Node getProp) {
       Preconditions.checkArgument(getProp.isGetProp());
-      NominalType thisType = currentScope.getDeclaredFunctionType().getThisType();
+      JSType t = currentScope.getDeclaredFunctionType().getThisType();
+      NominalType thisType = t == null ? null : t.getNominalTypeIfSingletonObj();
       if (thisType == null) {
         // This will get caught in NewTypeInference
         return;
@@ -1795,7 +1796,8 @@ class GlobalTypeInfo implements CompilerPass {
           declNode.isFunction() ? nominaltypesByNode.get(declNode) : null;
       FunctionAndSlotType result = typeParser.getFunctionType(
           fnDoc, functionName, declNode, ctorType, ownerType, parentScope);
-      Node qnameNode = declNode.isGetProp() ? declNode : NodeUtil.getFunctionNameNode(declNode);
+      Node qnameNode = declNode.isGetProp()
+          ? declNode : NodeUtil.getFunctionNameNode(declNode);
       if (result.slotType != null && qnameNode != null && qnameNode.isName()) {
         parentScope.addSimpleType(qnameNode, result.slotType);
       }
@@ -1832,7 +1834,9 @@ class GlobalTypeInfo implements CompilerPass {
       Preconditions.checkNotNull(declaredTypeAsJSType);
 
       FunctionType funType = declaredTypeAsJSType.getFunType();
-      if (funType == null || funType.isConstructor() || funType.isInterfaceDefinition()) {
+      if (funType == null
+          || funType.isUniqueConstructor()
+          || funType.isInterfaceDefinition()) {
         return null;
       }
       DeclaredFunctionType declType = funType.toDeclaredFunctionType();
@@ -1870,7 +1874,7 @@ class GlobalTypeInfo implements CompilerPass {
         // Use typeParser for the formals, and only add the receiver type here.
         DeclaredFunctionType allButRecvType = typeParser.getFunctionType(
             null, functionName, declNode, null, null, parentScope).functionType;
-        return allButRecvType.withReceiverType(recvType.getNominalTypeIfSingletonObj());
+        return allButRecvType.withReceiverType(recvType);
       }
 
       // The function literal is an argument at a call

@@ -134,6 +134,7 @@ public class CompilerOptions {
   public boolean ideMode;
 
   private boolean parseJsDocDocumentation = false;
+  private boolean preserveJsDocWhitespace = false;
 
   /**
    * Even if checkTypes is disabled, clients might want to still infer types.
@@ -141,7 +142,7 @@ public class CompilerOptions {
    */
   boolean inferTypes;
 
-  boolean useNewTypeInference;
+  private boolean useNewTypeInference;
 
   /**
    * Configures the compiler to skip as many passes as possible.
@@ -1135,7 +1136,7 @@ public class CompilerOptions {
    */
   private static Map<String, Node> getReplacementsHelper(
       Map<String, Object> source) {
-    Map<String, Node> map = new HashMap<>();
+    ImmutableMap.Builder<String, Node> map = ImmutableMap.builder();
     for (Map.Entry<String, Object> entry : source.entrySet()) {
       String name = entry.getKey();
       Object value = entry.getValue();
@@ -1150,7 +1151,7 @@ public class CompilerOptions {
         map.put(name, IR.string((String) value));
       }
     }
-    return map;
+    return map.build();
   }
 
   /**
@@ -1158,7 +1159,7 @@ public class CompilerOptions {
    * to a boolean literal.
    */
   public void setDefineToBooleanLiteral(String defineName, boolean value) {
-    defineReplacements.put(defineName, new Boolean(value));
+    defineReplacements.put(defineName, value);
   }
 
   /**
@@ -1174,7 +1175,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setDefineToNumberLiteral(String defineName, int value) {
-    defineReplacements.put(defineName, new Integer(value));
+    defineReplacements.put(defineName, value);
   }
 
   /**
@@ -1182,7 +1183,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setDefineToDoubleLiteral(String defineName, double value) {
-    defineReplacements.put(defineName, new Double(value));
+    defineReplacements.put(defineName, value);
   }
 
   /**
@@ -1190,7 +1191,7 @@ public class CompilerOptions {
    * to a boolean literal.
    */
   public void setTweakToBooleanLiteral(String tweakId, boolean value) {
-    tweakReplacements.put(tweakId, new Boolean(value));
+    tweakReplacements.put(tweakId, value);
   }
 
   /**
@@ -1206,7 +1207,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setTweakToNumberLiteral(String tweakId, int value) {
-    tweakReplacements.put(tweakId, new Integer(value));
+    tweakReplacements.put(tweakId, value);
   }
 
   /**
@@ -1214,7 +1215,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setTweakToDoubleLiteral(String tweakId, double value) {
-    tweakReplacements.put(tweakId, new Double(value));
+    tweakReplacements.put(tweakId, value);
   }
 
   /**
@@ -1709,11 +1710,11 @@ public class CompilerOptions {
   }
 
   public boolean getNewTypeInference() {
-    return useNewTypeInference;
+    return this.useNewTypeInference;
   }
 
   public void setNewTypeInference(boolean enable) {
-    useNewTypeInference = enable;
+    this.useNewTypeInference = enable;
   }
 
   /**
@@ -1752,7 +1753,7 @@ public class CompilerOptions {
   public void setPropertyInvalidationErrors(
       Map<String, CheckLevel> propertyInvalidationErrors) {
     this.propertyInvalidationErrors =
-         new HashMap<>(propertyInvalidationErrors);
+         ImmutableMap.copyOf(propertyInvalidationErrors);
   }
 
   public void setIdeMode(boolean ideMode) {
@@ -1777,6 +1778,28 @@ public class CompilerOptions {
    */
   public boolean isParseJsDocDocumentation() {
     return this.ideMode || this.parseJsDocDocumentation;
+  }
+
+  /**
+   * Enables or disables the preservation of all whitespace and formatting within a JSDoc
+   * comment. By default, whitespace is collapsed for all comments except @license and
+   * @preserve blocks,
+   *
+   * <p>Setting this option has no effect if {@link #isParseJsDocDocumentation()}
+   * returns false.
+   *
+   * @param preserveJsDocWhitespace
+   *           True to preserve whitespace in text extracted from JSDoc comments.
+   */
+  public void setPreserveJsDocWhitespace(boolean preserveJsDocWhitespace) {
+    this.preserveJsDocWhitespace = preserveJsDocWhitespace;
+  }
+
+  /**
+   * @return Whether to preserve whitespace in all text extracted from JSDoc comments.
+   */
+  public boolean isPreserveJsDocWhitespace() {
+    return preserveJsDocWhitespace;
   }
 
   /**

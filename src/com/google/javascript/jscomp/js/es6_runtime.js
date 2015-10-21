@@ -92,8 +92,9 @@ $jscomp.makeIterator = function(iterable) {
   if (iterable[Symbol.iterator]) {
     return iterable[Symbol.iterator]();
   }
-  if (!(iterable instanceof Array) && typeof iterable != 'string') {
-    throw new Error(iterable + ' is not iterable');
+  if (!(iterable instanceof Array) && typeof iterable != 'string' &&
+      !(iterable instanceof String)) {
+    throw new TypeError(iterable + ' is not iterable');
   }
   var index = 0;
   return /** @type {!Iterator} */ ({
@@ -109,6 +110,54 @@ $jscomp.makeIterator = function(iterable) {
     }
   });
 };
+
+
+/**
+ * Copies the values from an Iterator into an Array. The important difference
+ * between this and $jscomp.arrayFromIterable is that if the iterator's
+ * next() method has already been called one or more times, this method returns
+ * only the values that haven't been yielded yet.
+ * @param {!Iterator<T>} iterator
+ * @return {!Array<T>}
+ * @template T
+ */
+$jscomp.arrayFromIterator = function(iterator) {
+  var i, arr = [];
+  while (!(i = iterator.next()).done) {
+    arr.push(i.value);
+  }
+  return arr;
+};
+
+
+/**
+ * Copies the values from an Iterable into an Array.
+ * @param {string|!Array<T>|!Iterable<T>} iterable
+ * @return {!Array<T>}
+ * @template T
+ */
+$jscomp.arrayFromIterable = function(iterable) {
+  if (iterable instanceof Array) {
+    return iterable;
+  } else {
+    return $jscomp.arrayFromIterator($jscomp.makeIterator(iterable));
+  }
+};
+
+
+/**
+ * Copies the values from an Arguments object into an Array.
+ * @param {!Arguments} args
+ * @return {!Array}
+ */
+$jscomp.arrayFromArguments = function(args) {
+  var result = [];
+  for (var i = 0; i < args.length; i++) {
+    result.push(args[i]);
+  }
+  return result;
+};
+
 
 /**
  * Inherit the prototype methods and static methods from one constructor
