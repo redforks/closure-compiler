@@ -1390,6 +1390,20 @@ final class NewTypeInference implements CompilerPass {
       // For now, we don't warn for global variables
       return new EnvTypePair(inEnv, JSType.UNKNOWN);
     }
+
+    // For known functions, we want to use the summary type, if any.
+    // It is wrong to use the context to specialize the type;
+    // a function can correctly be used in two contexts whose types
+    // are incompatible.
+    // NOTE(dimvar): To stop specialization of known functions declared as
+    // properties, we end up stopping specialization of all namespace props.
+    // This reduces precision but it helps performance; namespaces have a lot of
+    // properties, so type operations on them are expensive.
+    if (currentScope.isKnownFunction(varName)
+        || maybeIsNamespace(varName, inferredType)) {
+      return new EnvTypePair(inEnv, inferredType);
+    }
+
     println(varName, "'s inferredType: ", inferredType,
         " requiredType:  ", requiredType,
         " specializedType:  ", specializedType);
@@ -1426,6 +1440,14 @@ final class NewTypeInference implements CompilerPass {
       preciseType = preciseType.withLoose();
     }
     return EnvTypePair.addBinding(inEnv, varName, preciseType);
+  }
+
+  // A heuristic to detect if a variable is a namespace during NTI.
+  // NOTE(dimvar): consider keeping around Namespace.java instances during NTI.
+  // (But if we keep them around, they need to be finalized during GTI.)
+  private boolean maybeIsNamespace(String varName, JSType inferredType) {
+    return currentScope.isConstVar(varName)
+        && inferredType.isSubtypeOf(JSType.TOP_OBJECT);
   }
 
   private EnvTypePair analyzeLogicalOpFwd(
@@ -1783,7 +1805,9 @@ final class NewTypeInference implements CompilerPass {
     FunctionType origFunType = funType; // save for later
     if (funType.isGeneric()) {
       Map<String, JSType> typeMap = calcTypeInstantiationFwd(
-          expr, expr.getChildAtIndex(1), funType, inEnv);
+          expr,
+          callee.isGetProp() ? callee.getFirstChild() : null,
+          expr.getChildAtIndex(1), funType, inEnv);
       funType = funType.instantiateGenerics(typeMap);
       println("Instantiated function type: " + funType);
     }
@@ -1881,34 +1905,13 @@ final class NewTypeInference implements CompilerPass {
     // can completely calculate the type instantiation at the .bind call site.
     // We don't support splitting the instantiation between call sites.
     //
-    // Also, we don't use the THIS argument when calculating the instantiation
-    // of a .bind call.
-    // See the following snippet:
-    // /**
-    //  * @constructor
-    //  * @template T
-    //  * @param {T} x
-    //  */
-    // function Foo(x) {}
-    // /**
-    //  * @template T
-    //  * @param {T} x
-    //  */
-    // Foo.prototype.f = function(x) {};
-    // Foo.prototype.f.bind(new Foo(123), 'asdf');
-    //
-    // Here, the receiver type of f is Foo<T>, but the T is the class's T,
-    // not the T of f's template declaration.
-    // Otoh, if f had an @this annotation that contained T, T would refer to
-    // f's T. There is no way of knowing what's the scope of the type variables
-    // in the receiver of the function type, that's why we don't use it here.
+    Node receiver = bindComponents.thisValue;
     if (boundFunType.isGeneric()) {
       Map<String, JSType> typeMap = calcTypeInstantiationFwd(
-          call, bindComponents.parameters, boundFunType, env);
+          call, receiver, bindComponents.parameters, boundFunType, env);
       boundFunType = boundFunType.instantiateGenerics(typeMap);
     }
     FunctionTypeBuilder builder = new FunctionTypeBuilder();
-    Node receiver = bindComponents.thisValue;
     if (receiver != null) {// receiver is null for goog.partial
       JSType reqThisType = boundFunType.getThisType();
       if (reqThisType == null || boundFunType.isSomeConstructorOrInterface()) {
@@ -2222,14 +2225,14 @@ final class NewTypeInference implements CompilerPass {
   }
 
   private Map<String, JSType> calcTypeInstantiationFwd(
-      Node callNode, Node firstArg, FunctionType funType, TypeEnv typeEnv) {
-    return calcTypeInstantiation(callNode, firstArg, funType, typeEnv, true);
+      Node callNode, Node receiver, Node firstArg, FunctionType funType, TypeEnv typeEnv) {
+    return calcTypeInstantiation(callNode, receiver, firstArg, funType, typeEnv, true);
   }
 
   private Map<String, JSType> calcTypeInstantiationBwd(
       Node callNode, FunctionType funType, TypeEnv typeEnv) {
     return calcTypeInstantiation(
-        callNode, callNode.getChildAtIndex(1), funType, typeEnv, false);
+        callNode, null, callNode.getChildAtIndex(1), funType, typeEnv, false);
   }
 
   /*
@@ -2241,30 +2244,53 @@ final class NewTypeInference implements CompilerPass {
    * 2) It's hard to give good error messages in cases like: id('str') - 5
    *    We want an invalid-operand-type, not a not-unique-instantiation.
    *
+   *
    * We don't take the arg evaluation order into account during instantiation.
+   *
+   *
+   * When calculating the instantiation, when do we use the receiver type?
+   * See the following snippet:
+   * /**
+   *  * @constructor
+   *  * @template T
+   *  * @param {T} x
+   *  * /
+   * function Foo(x) {}
+   * /**
+   *  * @template T
+   *  * @param {T} x
+   *  * /
+   * Foo.prototype.f = function(x) {};
+   * Foo.prototype.f.bind(new Foo(123), 'asdf');
+   *
+   * Here, the receiver type of f is Foo<T>, but the T is the class's T,
+   * not the T of f's template declaration.
+   * OTOH, if f had a @this annotation that contained T, T would refer to
+   * f's T. There is no way of knowing what's the scope of the type variables
+   * in the receiver of the function type.
+   * But when THIS comes from the class, it is always a singleton object. So,
+   * we use a heuristic: if THIS is not a singleton obj, we know it comes from
+   * @this, and we use it for the instantiation.
    */
   private ImmutableMap<String, JSType> calcTypeInstantiation(Node callNode,
-      Node firstArg, FunctionType funType, TypeEnv typeEnv, boolean isFwd) {
+      Node receiver, Node firstArg, FunctionType funType, TypeEnv typeEnv, boolean isFwd) {
+    Preconditions.checkState(receiver == null || isFwd);
     List<String> typeParameters = funType.getTypeParameters();
     Multimap<String, JSType> typeMultimap = LinkedHashMultimap.create();
+    JSType funRecvType = funType.getThisType();
+    if (receiver != null && funRecvType != null && !funRecvType.isSingletonObj()) {
+      EnvTypePair pair = analyzeExprFwd(receiver, typeEnv);
+      unifyWithSubtypeWarnIfFail(funRecvType, pair.type, typeParameters,
+          typeMultimap, receiver, isFwd);
+      typeEnv = pair.env;
+    }
     Node arg = firstArg;
     int i = 0;
     while (arg != null) {
       EnvTypePair pair =
           isFwd ? analyzeExprFwd(arg, typeEnv) : analyzeExprBwd(arg, typeEnv);
-      JSType formalType = funType.getFormalType(i);
-      JSType passedArgType = pair.type;
-      if (!formalType.unifyWithSubtype(passedArgType, typeParameters, typeMultimap)) {
-        // Unification may fail b/c of types irrelevant to generics, eg,
-        // number vs string.
-        // In this case, don't warn here; we'll show invalid-arg-type later.
-        JSType formalAfterInstantiation = formalType.substituteGenericsWithUnknown();
-        if (!formalType.equals(formalAfterInstantiation)
-            && passedArgType.isSubtypeOf(formalAfterInstantiation)) {
-          warnings.add(JSError.make(arg, FAILED_TO_UNIFY,
-                  formalType.toString(), passedArgType.toString()));
-        }
-      }
+      unifyWithSubtypeWarnIfFail(funType.getFormalType(i), pair.type,
+          typeParameters, typeMultimap, arg, isFwd);
       arg = arg.getNext();
       typeEnv = pair.env;
       i++;
@@ -2287,6 +2313,22 @@ final class NewTypeInference implements CompilerPass {
       }
     }
     return builder.build();
+  }
+
+  private void unifyWithSubtypeWarnIfFail(JSType genericType, JSType concreteType,
+      List<String> typeParameters, Multimap<String, JSType> typeMultimap,
+      Node toWarnOn, boolean isFwd) {
+    if (!genericType.unifyWithSubtype(concreteType, typeParameters, typeMultimap) && isFwd) {
+      // Unification may fail b/c of types irrelevant to generics, eg,
+      // number vs string.
+      // In this case, don't warn here; we'll show invalid-arg-type later.
+      JSType afterInstantiation = genericType.substituteGenericsWithUnknown();
+      if (!genericType.equals(afterInstantiation)
+          && concreteType.isSubtypeOf(afterInstantiation)) {
+        warnings.add(JSError.make(toWarnOn, FAILED_TO_UNIFY,
+                genericType.toString(), concreteType.toString()));
+      }
+    }
   }
 
   private EnvTypePair analyzeNonStrictComparisonFwd(
@@ -3040,6 +3082,10 @@ final class NewTypeInference implements CompilerPass {
         " requiredType:  ", requiredType);
     if (inferredType == null) {
       return new EnvTypePair(outEnv, JSType.UNKNOWN);
+    }
+    if (currentScope.isKnownFunction(varName)
+        || maybeIsNamespace(varName, inferredType)) {
+      return new EnvTypePair(outEnv, inferredType);
     }
     JSType preciseType = inferredType.specialize(requiredType);
     if (currentScope.isUndeclaredFormal(varName)
@@ -3820,10 +3866,6 @@ final class NewTypeInference implements CompilerPass {
       case Token.GETPROP:
         return JSType.TOP_STRUCT;
       case Token.GETELEM:
-      case Token.IN:
-        return JSType.TOP_DICT;
-      case Token.FOR:
-        Preconditions.checkState(NodeUtil.isForIn(expr));
         return JSType.TOP_DICT;
       case Token.OBJECTLIT: {
         JSDocInfo jsdoc = expr.getJSDocInfo();
@@ -3835,6 +3877,11 @@ final class NewTypeInference implements CompilerPass {
         }
         return JSType.TOP_OBJECT;
       }
+      case Token.FOR:
+        Preconditions.checkState(NodeUtil.isForIn(expr));
+        return JSType.TOP_OBJECT;
+      case Token.IN:
+        return JSType.TOP_OBJECT;
       default:
         throw new RuntimeException(
             "Unhandled node for pickReqObjType: " + Token.name(exprKind));

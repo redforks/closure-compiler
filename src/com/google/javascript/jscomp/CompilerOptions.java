@@ -41,10 +41,6 @@ import java.util.Set;
  */
 public class CompilerOptions {
 
-  // Unused. For people using reflection to circumvent access control.
-  @SuppressWarnings("unused")
-  private boolean manageClosureDependencies = false;
-
   /**
    * A common enum for compiler passes that can run either globally or locally.
    */
@@ -223,9 +219,14 @@ public class CompilerOptions {
     checkGlobalNamesLevel = level;
   }
 
+  @Deprecated
   public CheckLevel brokenClosureRequiresLevel;
 
-  /** Sets the check level for bad Closure require calls. */
+  /**
+   * Sets the check level for bad Closure require calls.
+   * Do not use; this should always be an error.
+   */
+  @Deprecated
   public void setBrokenClosureRequiresLevel(CheckLevel level) {
     brokenClosureRequiresLevel = level;
   }
@@ -285,6 +286,20 @@ public class CompilerOptions {
     return checkEventfulObjectDisposalPolicy;
   }
 
+  /**
+   * Used for projects that are not well maintained, but are still used.
+   * Does not allow promoting warnings to errors, and disables some potentially
+   * risky optimizations.
+   */
+  boolean legacyCodeCompile = false;
+
+  public boolean getLegacyCodeCompile() {
+    return this.legacyCodeCompile;
+  }
+
+  public void setLegacyCodeCompile(boolean legacy) {
+    this.legacyCodeCompile = legacy;
+  }
 
   //--------------------------------
   // Optimizations
@@ -589,6 +604,9 @@ public class CompilerOptions {
   /** Whether to declare globals declared in externs as properties on window */
   boolean declaredGlobalExternsOnWindow;
 
+  /** Shared name generator */
+  NameGenerator nameGenerator;
+
   //--------------------------------
   // Special-purpose alterations
   //--------------------------------
@@ -714,6 +732,11 @@ public class CompilerOptions {
   public boolean checksOnly;
 
   public boolean generateExports;
+
+  // TODO(dimvar): generate-exports should always run after typechecking.
+  // If it runs before, it adds a bunch of properties to Object, which masks
+  // many type warnings. Cleanup all clients and remove this.
+  boolean generateExportsAfterTypeChecking;
 
   boolean exportLocalPropertyDefinitions;
 
@@ -1020,6 +1043,7 @@ public class CompilerOptions {
     anonymousFunctionNaming = AnonymousFunctionNamingPolicy.OFF;
     exportTestFunctions = false;
     declaredGlobalExternsOnWindow = true;
+    nameGenerator = new DefaultNameGenerator();
 
     // Alterations
     runtimeTypeCheck = false;
@@ -1050,6 +1074,7 @@ public class CompilerOptions {
     recordFunctionInformation = false;
     checksOnly = false;
     generateExports = false;
+    generateExportsAfterTypeChecking = true;
     exportLocalPropertyDefinitions = false;
     cssRenamingMap = null;
     cssRenamingWhitelist = null;
@@ -1230,7 +1255,7 @@ public class CompilerOptions {
    * group of warnings.
    */
   boolean enables(DiagnosticGroup type) {
-    return warningsGuard.enables(type);
+    return this.warningsGuard.enables(type);
   }
 
   /**
@@ -1238,7 +1263,7 @@ public class CompilerOptions {
    * group of warnings.
    */
   boolean disables(DiagnosticGroup type) {
-    return warningsGuard.disables(type);
+    return this.warningsGuard.disables(type);
   }
 
   /**
@@ -1260,14 +1285,14 @@ public class CompilerOptions {
   }
 
   WarningsGuard getWarningsGuard() {
-    return warningsGuard;
+    return this.warningsGuard;
   }
 
   /**
    * Reset the warnings guard.
    */
   public void resetWarningsGuard() {
-    warningsGuard = new ComposeWarningsGuard();
+    this.warningsGuard = new ComposeWarningsGuard();
   }
 
   /**
@@ -1275,14 +1300,18 @@ public class CompilerOptions {
    * warnings guards.
    */
   void useEmergencyFailSafe() {
-    warningsGuard = warningsGuard.makeEmergencyFailSafeGuard();
+    this.warningsGuard = this.warningsGuard.makeEmergencyFailSafeGuard();
+  }
+
+  void useNonStrictWarningsGuard() {
+    this.warningsGuard = this.warningsGuard.makeNonStrict();
   }
 
   /**
    * Add a guard to the set of warnings guards.
    */
   public void addWarningsGuard(WarningsGuard guard) {
-    warningsGuard.addGuard(guard);
+    this.warningsGuard.addGuard(guard);
   }
 
   /**
@@ -1530,7 +1559,6 @@ public class CompilerOptions {
     dependencyOptions.setDependencyPruning(
         newVal || dependencyOptions.shouldPruneDependencies());
     dependencyOptions.setMoocherDropping(false);
-    manageClosureDependencies = newVal;
   }
 
   /**

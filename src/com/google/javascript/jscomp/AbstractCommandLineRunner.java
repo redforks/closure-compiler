@@ -1374,6 +1374,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     }
 
     String outName = expandSourceMapPath(options, null);
+    File outPath = new File(outName);
+    maybeCreateDirsForPath(outPath.getParent());
     try (Writer out = fileNameToOutputWriter2(outName)) {
       compiler.getSourceMap().appendTo(out, associatedName);
     }

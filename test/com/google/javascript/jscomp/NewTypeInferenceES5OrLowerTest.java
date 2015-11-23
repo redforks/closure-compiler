@@ -5748,6 +5748,11 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         JSTypeCreatorFromJSDoc.UNION_WITH_UNKNOWN);
 
     typeCheck(Joiner.on('\n').join(
+        "goog.forwardDeclare('a');",
+        "/** @type {a|number} */",
+        "var x;"));
+
+    typeCheck(Joiner.on('\n').join(
         "",
         "/**",
         " * @return {T|S}",
@@ -6240,8 +6245,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "   */",
         "  function f(x, y) {}",
         "  f(a, b);",
-        "}"),
-        NewTypeInference.NOT_UNIQUE_INSTANTIATION);
+        "}"));
 
     typeCheck(Joiner.on('\n').join(
         "function f(/** string */ b) {",
@@ -6263,8 +6267,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "   */",
         "  function f(x, y) {}",
         "  f({r:'str'}, {p:20, r:b});",
-        "}"),
-        NewTypeInference.NOT_UNIQUE_INSTANTIATION);
+        "}"));
 
     typeCheck(Joiner.on('\n').join(
         "function g(x) {",
@@ -6482,8 +6485,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "function g(x) {}",
         "/** @type {function(?, string)} */",
         "function h(x, y) {}",
-        "f(g, h);"),
-        NewTypeInference.NOT_UNIQUE_INSTANTIATION);
+        "f(g, h);"));
 
     typeCheck(Joiner.on('\n').join(
         "/**",
@@ -8762,8 +8764,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "    return assertInstanceof(obj, ctor);",
         "  }",
         "}"),
-        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE,
-        NewTypeInference.INVALID_OPERAND_TYPE);
+        GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE);
   }
 
   public void testGetpropOnPossiblyInexistentPropertyDoesntCrash() {
@@ -11738,6 +11739,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "goog.addDependency = function(file, provides, requires){};",
         "goog.forwardDeclare = function(name){};");
 
+  // A forward declaration for a name A.B allows the name to appear only in
+  // types, not in code. Also, only A.B may appear in the type, not A or A.B.C.
   public void testForwardDeclarations() {
     typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
         "goog.addDependency('', ['Foo'], []);",
@@ -11757,37 +11760,6 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "goog.forwardDeclare('ns.Bar');",
         "function f(/** !ns.Baz */ x) {}"),
         GlobalTypeInfo.UNRECOGNIZED_TYPE_NAME);
-
-    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
-        "goog.addDependency('', ['Foo'], []);",
-        "goog.forwardDeclare('Bar');",
-        "var f = new Foo;",
-        "var b = new Bar;"));
-
-    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
-        "/** @const */ var ns = {};",
-        "goog.addDependency('', ['ns.Foo'], []);",
-        "goog.forwardDeclare('ns.Bar');",
-        "var f = new ns.Foo;",
-        "var b = new ns.Bar;"));
-
-    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
-        "/** @const */ var ns = {};",
-        "goog.addDependency('', ['ns.subns.Foo'], []);",
-        "goog.forwardDeclare('ns.subns.Bar');",
-        "var f = new ns.subns.Foo;",
-        "var b = new ns.subns.Bar;"));
-
-    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
-        "goog.addDependency('', ['ns.subns.Foo'], []);",
-        "goog.forwardDeclare('ns.subns.Bar');",
-        "var f = new ns.subns.Foo;",
-        "var b = new ns.subns.Bar;"));
-
-    typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
-        "goog.forwardDeclare('ns.subns');",
-        "goog.forwardDeclare('ns.subns.Bar');",
-        "var b = new ns.subns.Bar;"));
 
     typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
         "goog.forwardDeclare('num');",
@@ -11838,19 +11810,44 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
             "ns.ns2 = {};",
             "/** @const */",
             "var c = ns;",
-            "var x = new ns.ns2.Foo();"));
+            "var x = new ns.ns2.Foo();"),
+        NewTypeInference.INEXISTENT_PROPERTY);
 
     typeCheck(Joiner.on('\n').join(FORWARD_DECLARATION_DEFINITIONS,
             "goog.forwardDeclare('Foo.Bar');",
             "/** @constructor */",
             "function Foo() {}",
-            "var x = new Foo.Bar()"));
+            "var x = new Foo.Bar()"),
+        NewTypeInference.INEXISTENT_PROPERTY);
 
     typeCheckCustomExterns(Joiner.on('\n').join(
         DEFAULT_EXTERNS,
         "/** @constructor */",
         "function Document() {}"),
         "goog.forwardDeclare('Document')");
+
+    typeCheck(Joiner.on('\n').join(
+        "goog.forwardDeclare('a.b');",
+        "/** @type {a.b} */",
+        "var x;"));
+
+    typeCheck(Joiner.on('\n').join(
+        "goog.forwardDeclare('a');",
+        "/** @type {a.b.c} */",
+        "var x;"),
+        GlobalTypeInfo.UNRECOGNIZED_TYPE_NAME);
+
+    typeCheck(Joiner.on('\n').join(
+        "goog.forwardDeclare('a.b');",
+        "/** @type {a} */",
+        "var x;"),
+        GlobalTypeInfo.UNRECOGNIZED_TYPE_NAME);
+
+    typeCheck(Joiner.on('\n').join(
+        "goog.forwardDeclare('a.b');",
+        "/** @const */",
+        "var a = {};",
+        "function f() { /** @type {a.b} */ var x; }"));
   }
 
   public void testDontLookupInParentScopeForNamesWithoutDeclaredType() {
@@ -11864,20 +11861,18 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
   public void testSpecializationInPropertyAccesses() {
     typeCheck(Joiner.on('\n').join(
-        "/** @const */",
-        "var ns = {};",
-        "/** @type {?number} */ ns.n = 123;",
-        "if (ns.n === null) {",
+        "var obj = {};",
+        "/** @type {?number} */ obj.n = 123;",
+        "if (obj.n === null) {",
         "} else {",
-        "  ns.n - 5;",
+        "  obj.n - 5;",
         "}"));
 
     typeCheck(Joiner.on('\n').join(
-        "/** @const */",
-        "var ns = {};",
-        "/** @type {?number} */ ns.n = 123;",
-        "if (ns.n !== null) {",
-        "  ns.n - 5;",
+        "var obj = {};",
+        "/** @type {?number} */ obj.n = 123;",
+        "if (obj.n !== null) {",
+        "  obj.n - 5;",
         "}"));
 
     typeCheck(Joiner.on('\n').join(
@@ -14075,10 +14070,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "function Obj() {}",
         "/** @this {?} */",
         "Obj.prototype.toString = function() { return ''; };",
-        // ? is specialized to Object here b/c @this has a more precise type
-        // on Object#toString. Can't do much about this.
-        "Obj.prototype.toString.call(123);"),
-        NewTypeInference.INVALID_ARGUMENT_TYPE);
+        "Obj.prototype.toString.call(123);"));
 
     typeCheck(Joiner.on('\n').join(
         "/** @constructor */",
@@ -14113,6 +14105,15 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         " */",
         "Foo.prototype.f = function(x) {};",
         "(new Foo).f(new Foo);"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/**",
+        " * @template T",
+        " * @this {{length:number}|Array<T>}",
+        " */",
+        "Array.prototype.g = function(x) {};",
+        "Array.prototype.g.call({}, 2);"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
   }
 
   public void testCreatingSeveralQmarkFunInstances() {
@@ -14129,5 +14130,222 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "function Foo() {}",
         "(new Foo);"),
         NewTypeInference.NOT_A_CONSTRUCTOR);
+  }
+
+  public void testDontSpecializeKnownFunctions() {
+    typeCheck(Joiner.on('\n').join(
+        "function g(x) { return x; }",
+        "/** @type {function(?):number} */",
+        "var z = g;",
+        "/** @type {function(?):string} */",
+        "var w = g;"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "ns.g = function(x) { return x; }",
+        "/** @type {function(?):number} */",
+        "var z = ns.g;",
+        "/** @type {function(?):string} */",
+        "var w = ns.g;"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @return {void} */",
+        "ns.nullFunction = function() {};",
+        "/** @constructor */",
+        "function Foo() {}",
+        "Foo.prototype.m = ns.nullFunction;",
+        "/** @constructor */",
+        "function Bar() {}",
+        "Bar.prototype.m = ns.nullFunction;"));
+  }
+
+  public void testDontSpecializeInToDict() {
+    typeCheck(Joiner.on('\n').join(
+        "var obj = {};",
+        "function f(x) {",
+        "  var z = x || obj;",
+        "  if (('asdf' in z) && z.prop) {}",
+        "}"));
+  }
+
+  public void testQmarkFunctionAsNamespace() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @type {!Function} */",
+        "var a = function() {};",
+        "a.b = {};"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @type {(function(number)|function(string))} */",
+        "var a = function() {};",
+        "a.b = {};"),
+        JSTypeCreatorFromJSDoc.UNION_IS_UNINHABITABLE);
+  }
+
+  public void testWindowAsNamespace() {
+    typeCheckCustomExterns(Joiner.on('\n').join(
+        DEFAULT_EXTERNS,
+        "/** @type {string} */",
+        "window.prop;"),
+        "123 - window.prop;",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheckCustomExterns(Joiner.on('\n').join(
+        DEFAULT_EXTERNS,
+        "var window;",
+        "/** @type {string} */",
+        "window.prop;"),
+        "123 - window.prop;",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(Joiner.on('\n').join(
+        "function f() {",
+        "  /** @type {string} */",
+        "  window.prop = 'asdf';",
+        "}",
+        "function g() {",
+        "  window.prop - 123;",
+        "}"),
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheckCustomExterns(
+        Joiner.on('\n').join(
+            DEFAULT_EXTERNS,
+            "/** @constructor */",
+            "window.Foo = function() {};",
+            "/** @constructor */",
+            "window.Bar = function() {};"),
+        Joiner.on('\n').join(
+            "/** @type {window.Foo} */",
+            "var x = new window.Bar;"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @type {string} */",
+        "var x = window.closed;"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheckCustomExterns(
+        Joiner.on('\n').join(
+            DEFAULT_EXTERNS,
+            "/** @type {number} */",
+            "window.n;"),
+        Joiner.on('\n').join(
+            "/** @type {string} */",
+            "var x;",
+            "x = window.n;",
+            "x = window.closed;"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testInstantiateToTheSuperType() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @enum {number} */",
+        "var E = { A: 1 };",
+        "/**",
+        " * @template T",
+        " * @param {T} x",
+        " * @param {T} y",
+        " */",
+        "function f(x, y) {}",
+        "f(123, E.A);"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @enum {number} */",
+        "var E = { A: 1 };",
+        "/**",
+        " * @template T",
+        " * @param {T} x",
+        " * @param {T} y",
+        " */",
+        "function f(x, y) {}",
+        "f(E.A, 123);"));
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @enum {number} */",
+        "var E = { A: 1 };",
+        "/**",
+        " * @template T",
+        " * @param {T} x",
+        " * @param {T} y",
+        " * @return {T}",
+        " */",
+        "function f(x, y) {",
+        "  return x;",
+        "}",
+        "/** @type {E} */",
+        "var foo = f(123, E.A);"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testUseThisForTypeInstantiation() {
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @constructor */",
+        "function Bar() {}",
+        "/**",
+        " * @template T",
+        " * @this {T}",
+        " * @param {T} x",
+        " */",
+        "Foo.prototype.f = function(x) {};",
+        "(new Foo).f(new Bar);"),
+        NewTypeInference.NOT_UNIQUE_INSTANTIATION);
+
+    typeCheck(Joiner.on('\n').join(
+        "/**",
+        " * @template T",
+        " * @this {T|number}",
+        " */",
+        "function f() {};",
+        "/** @return {*} */",
+        "function g() { return null; }",
+        "f.bind(g());"),
+        NewTypeInference.FAILED_TO_UNIFY);
+
+    typeCheck(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "/** @constructor */",
+        "function Bar() {}",
+        "/**",
+        " * @template T",
+        " * @this {T}",
+        " * @param {T} x",
+        " */",
+        "function f(x) {}",
+        "f.bind(new Foo, new Bar);"),
+        NewTypeInference.NOT_UNIQUE_INSTANTIATION);
+
+    // We miss the incompatibility between MyArray<number> and  MyArray<string>.
+    // We don't catch it because our heuristic for using the receiver type to
+    // calculate the instantiation is not enough here.
+    typeCheck(Joiner.on('\n').join(
+        "/**",
+        " * @interface",
+        " * @template T",
+        " */",
+        "function MyArrayLike() {}",
+        "/** @type {number} */",
+        "MyArrayLike.length;",
+        "/**",
+        " * @constructor",
+        " * @implements {MyArrayLike<T>}",
+        " * @param {T} x",
+        " * @template T",
+        " */",
+        "function MyArray(x) {}",
+        "MyArray.prototype.length = 123;",
+        "/**",
+        " * @this {!MyArrayLike<T>}",
+        " * @param {!MyArrayLike<T>} x",
+        " * @template T",
+        " */",
+        "MyArray.prototype.m = function(x) {};",
+        "(new MyArray(123)).m(new MyArray('asdf'));"));
   }
 }

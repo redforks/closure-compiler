@@ -317,6 +317,12 @@ public class Compiler extends AbstractCompiler {
 
     reconcileOptionsWithGuards();
 
+    if (options.legacyCodeCompile) {
+      options.disambiguateProperties = false;
+      options.ambiguateProperties = false;
+      options.useNonStrictWarningsGuard();
+    }
+
     // Initialize the warnings guard.
     this.warningsGuard =
         new ComposeWarningsGuard(
@@ -349,6 +355,9 @@ public class Compiler extends AbstractCompiler {
     if (options.getNewTypeInference()) {
       options.checkTypes = true;
       options.setWarningLevel(DiagnosticGroups.CHECK_TYPES, CheckLevel.OFF);
+      options.setWarningLevel(
+          DiagnosticGroup.forType(RhinoErrorReporter.TYPE_PARSE_ERROR),
+          CheckLevel.WARNING);
     }
 
     if (options.checkGlobalThisLevel.isOn() &&
@@ -1823,6 +1832,7 @@ public class Compiler extends AbstractCompiler {
    */
   private String toSource(Node n, SourceMap sourceMap, boolean firstOutput) {
     CodePrinter.Builder builder = new CodePrinter.Builder(n);
+    builder.setTypeRegistry(this.typeRegistry);
     builder.setCompilerOptions(options);
     builder.setSourceMap(sourceMap);
     builder.setTagAsStrict(firstOutput && options.getLanguageOut().isStrict());

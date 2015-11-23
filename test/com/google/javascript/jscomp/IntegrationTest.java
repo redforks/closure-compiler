@@ -503,6 +503,23 @@ public final class IntegrationTest extends IntegrationTestCase {
     test(options, "x = 3;", VarCheck.UNDEFINED_VAR_ERROR);
   }
 
+  public void testNoTypeWarningForDupExternNamespace() {
+    CompilerOptions options = createCompilerOptions();
+    options.setCheckTypes(true);
+    externs = ImmutableList.of(SourceFile.fromCode(
+        "externs",
+        Joiner.on('\n').join(
+            "/** @const */",
+            "var ns = {};",
+            "/** @type {number} */",
+            "ns.prop1;",
+            "/** @const */",
+            "var ns = {};",
+            "/** @type {number} */",
+            "ns.prop2;")));
+    testSame(options, "");
+  }
+
   public void testCheckReferencesOff() {
     CompilerOptions options = createCompilerOptions();
     testSame(options, "x = 3; var x = 5;");
@@ -582,9 +599,11 @@ public final class IntegrationTest extends IntegrationTestCase {
     test(options, "var x = x || {}; x.f = function() {}; x.f(3);", TypeCheck.WRONG_ARGUMENT_COUNT);
   }
 
-  public void testBothTypeCheckersRun() {
+  public void testBothTypeCheckersRunNoDupWarning() {
     CompilerOptions options = createCompilerOptions();
+    options.setCheckTypes(true);
     options.setNewTypeInference(true);
+
     test(
         options,
         "/** @return {number} */\n"
@@ -592,6 +611,59 @@ public final class IntegrationTest extends IntegrationTestCase {
         + "  return 'asdf';\n"
         + "}",
         NewTypeInference.RETURN_NONDECLARED_TYPE);
+
+    test(
+        options,
+        "/** @type {ASDF} */ var x;",
+        GlobalTypeInfo.UNRECOGNIZED_TYPE_NAME);
+  }
+
+  public void testNTInoMaskTypeParseError() {
+    CompilerOptions options = createCompilerOptions();
+    options.setCheckTypes(true);
+    options.setNewTypeInference(true);
+    test(options, Joiner.on('\n').join(
+        "/** @param {(boolean|number} x */",
+        "function f(x) {}"),
+        RhinoErrorReporter.TYPE_PARSE_ERROR);
+  }
+
+  public void testLegacyCompileOverridesStrict() {
+    CompilerOptions options = new CompilerOptions();
+    options.setCheckTypes(true);
+    options.addWarningsGuard(new StrictWarningsGuard());
+    options.setLegacyCodeCompile(true);
+    Compiler compiler = compile(options, "123();");
+    assertThat(compiler.getErrors()).isEmpty();
+    assertThat(compiler.getWarnings()).hasLength(1);
+  }
+
+  public void testLegacyCompileOverridesExplicitPromotionToError() {
+    CompilerOptions options = new CompilerOptions();
+    options.setCheckTypes(true);
+    options.addWarningsGuard(new DiagnosticGroupWarningsGuard(
+        DiagnosticGroups.CHECK_TYPES, CheckLevel.ERROR));
+    options.setLegacyCodeCompile(true);
+    Compiler compiler = compile(options, "123();");
+    assertThat(compiler.getErrors()).isEmpty();
+    assertThat(compiler.getWarnings()).hasLength(1);
+  }
+
+  public void testLegacyCompileTurnsOffDisambiguateProperties() {
+    CompilerOptions options = new CompilerOptions();
+    options.setCheckTypes(true);
+    options.setDisambiguateProperties(true);
+    options.setLegacyCodeCompile(true);
+    testSame(options,
+        Joiner.on('\n').join(
+            "/** @constructor */",
+            "function Foo() {",
+            "  this.p = 123;",
+            "}",
+            "/** @constructor */",
+            "function Bar() {",
+            "  this.p = 234;",
+            "}"));
   }
 
   public void testReplaceCssNames() {
@@ -1155,9 +1227,6 @@ public final class IntegrationTest extends IntegrationTestCase {
 
     options.setInlineVariables(true);
     test(options, code, "(function foo() {})(3);");
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
-    test(options, code, DefaultPassConfig.CANNOT_USE_PROTOTYPE_AND_VAR);
   }
 
   public void testInlineConstants() {
@@ -1235,6 +1304,18 @@ public final class IntegrationTest extends IntegrationTestCase {
     testSame(options, code);
 
     options.setSmartNameRemoval(true);
+    test(options, code, "");
+  }
+
+  public void testClassWithGettersIsRemoved() {
+    CompilerOptions options = createCompilerOptions();
+    String code =
+        "class Foo { get x() {}; set y(v) {}; static get init() {}; static set prop(v) {} }";
+
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
+    options.setSmartNameRemoval(true);
+    options.setRemoveDeadCode(true);
     test(options, code, "");
   }
 
@@ -1561,10 +1642,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setExtractPrototypeMemberDeclarations(true);
     options.setVariableRenaming(VariableRenamingPolicy.ALL);
     test(options, code, expected);
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
-    options.setVariableRenaming(VariableRenamingPolicy.OFF);
-    testSame(options, code);
   }
 
   public void testDevirtualizationAndExtractPrototypeMemberDeclarations() {
@@ -1634,23 +1711,10 @@ public final class IntegrationTest extends IntegrationTestCase {
     String code =
         "function f() { return this.foo + this['bar'] + this.Baz; }" +
         "f.prototype.bar = 3; f.prototype.Baz = 3;";
-    String heuristic =
-        "function f() { return this.foo + this['bar'] + this.a; }"
-            + "f.prototype.bar = 3; f.prototype.a = 3;";
-    String aggHeuristic =
-        "function f() { return this.foo + this['b'] + this.a; } "
-            + "f.prototype.b = 3; f.prototype.a = 3;";
     String all =
         "function f() { return this.c + this['bar'] + this.a; }"
             + "f.prototype.b = 3; f.prototype.a = 3;";
     testSame(options, code);
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
-    test(options, code, heuristic);
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC);
-    test(options, code, aggHeuristic);
-
     options.setPropertyRenaming(PropertyRenamingPolicy.ALL_UNQUOTED);
     test(options, code, all);
   }

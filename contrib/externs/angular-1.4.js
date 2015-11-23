@@ -192,6 +192,12 @@ angular.isUndefined = function(value) {};
  */
 angular.lowercase = function(s) {};
 
+/**
+ * @param {Object} dest
+ * @param {...Object} srcs
+ */
+angular.merge = function(dest, srcs) {};
+
 angular.mock = {};
 
 /**
@@ -1193,9 +1199,9 @@ angular.$compileProvider.prototype.imgSrcSanitizationWhitelist = function(
 angular.$cacheFactory;
 
 /**
- * @typedef {function(string): ?angular.$cacheFactory.Cache}
+ * @return {!angular.$cacheFactory.Cache|undefined}
  */
-angular.$cacheFactory.get;
+angular.$cacheFactory.prototype.get = function() {};
 
 /** @typedef {{capacity: (number|undefined)}} */
 angular.$cacheFactory.Options;
@@ -2108,30 +2114,21 @@ angular.$routeParams;
  * $routeProvider Service
  *****************************************************************************/
 
-/**
- * @typedef {{
- *   otherwise:
- *       function(
- *           (string|!angular.$routeProvider.Params)): !angular.$routeProvider,
- *   when:
- *       function(
- *           string, angular.$routeProvider.Params): !angular.$routeProvider
- *   }}
- */
-angular.$routeProvider;
+/** @constructor */
+angular.$routeProvider = function() {};
 
 /**
  * @param {(string|!angular.$routeProvider.Params)} params
  * @return {!angular.$routeProvider}
  */
-angular.$routeProvider.otherwise = function(params) {};
+angular.$routeProvider.prototype.otherwise = function(params) {};
 
 /**
  * @param {string} path
  * @param {angular.$routeProvider.Params} route
  * @return {!angular.$routeProvider}
  */
-angular.$routeProvider.when = function(path, route) {};
+angular.$routeProvider.prototype.when = function(path, route) {};
 
 /**
  * @typedef {{

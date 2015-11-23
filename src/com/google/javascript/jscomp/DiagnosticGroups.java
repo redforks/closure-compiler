@@ -102,8 +102,8 @@ public class DiagnosticGroups {
       + "missingProvide, missingRequire, missingReturn, msgDescriptions"
       + "newCheckTypes, nonStandardJsDocs, reportUnknownTypes, suspiciousCode, "
       + "strictModuleDepCheck, typeInvalidation, "
-      + "undefinedNames, undefinedVars, unknownDefines, unnecessaryCasts, uselessCode, "
-      + "useOfGoogBase, visibility";
+      + "undefinedNames, undefinedVars, unknownDefines, unnecessaryCasts, unusedLocalVariables, "
+      + "unusedPrivateMembers, uselessCode, useOfGoogBase, visibility";
 
   public static final DiagnosticGroup GLOBAL_THIS =
       DiagnosticGroups.registerGroup("globalThis",
@@ -214,6 +214,9 @@ public class DiagnosticGroups {
           CheckRegExp.REGEXP_REFERENCE,
           CheckRegExp.MALFORMED_REGEXP);
 
+  // NOTE(dimvar): it'd be nice to add TypedScopeCreator.ALL_DIAGNOSTICS here,
+  // but we would first need to cleanup projects that would break because
+  // they set --jscomp_error=checkTypes.
   public static final DiagnosticGroup CHECK_TYPES =
       DiagnosticGroups.registerGroup("checkTypes",
           TypeValidator.ALL_DIAGNOSTICS,
@@ -420,11 +423,20 @@ public class DiagnosticGroups {
           CheckSuspiciousCode.SUSPICIOUS_SEMICOLON,
           CheckSuspiciousCode.SUSPICIOUS_COMPARISON_WITH_NAN,
           CheckSuspiciousCode.SUSPICIOUS_IN_OPERATOR,
-          CheckSuspiciousCode.SUSPICIOUS_INSTANCEOF_LEFT_OPERAND);
+          CheckSuspiciousCode.SUSPICIOUS_INSTANCEOF_LEFT_OPERAND,
+          TypeCheck.DETERMINISTIC_TEST);
 
   public static final DiagnosticGroup DEPRECATED_ANNOTATIONS =
       DiagnosticGroups.registerGroup("deprecatedAnnotations",
           CheckJSDoc.ANNOTATION_DEPRECATED);
+
+  public static final DiagnosticGroup UNUSED_PRIVATE_PROPERTY =
+      DiagnosticGroups.registerGroup("unusedPrivateMembers",
+          CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY);
+
+  public static final DiagnosticGroup UNUSED_LOCAL_VARIABLE =
+      DiagnosticGroups.registerGroup("unusedLocalVariables",
+          VariableReferenceCheck.UNUSED_LOCAL_ASSIGNMENT);
 
   // These checks are not intended to be enabled as errors. It is
   // recommended that you think of them as "linter" warnings that

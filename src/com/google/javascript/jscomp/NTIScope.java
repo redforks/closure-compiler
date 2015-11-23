@@ -67,7 +67,7 @@ final class NTIScope implements DeclaredTypeRegistry {
   // localFunDefs and localNamespaces. After removeTmpData (when NTI runs),
   // the function has an entry in localFunDefs, and in locals or externs.
   private final Map<String, NTIScope> localFunDefs = new LinkedHashMap<>();
-  private Set<String> unknownTypeNames = new LinkedHashSet<>();
+  private ImmutableSet<String> unknownTypeNames = ImmutableSet.of();
   private Map<String, RawNominalType> localClassDefs = new LinkedHashMap<>();
   private Map<String, Typedef> localTypedefs = new LinkedHashMap<>();
   private Map<String, EnumType> localEnums = new LinkedHashMap<>();
@@ -152,16 +152,11 @@ final class NTIScope implements DeclaredTypeRegistry {
     return NodeUtil.isPrototypeMethod(root);
   }
 
-  void addUnknownTypeNames(List<String> names) {
+  void addUnknownTypeNames(Set<String> names) {
     // TODO(dimvar): if sm uses a goog.forwardDeclare in a local scope, give
     // an error instead of crashing.
     Preconditions.checkState(this.isTopLevel());
-    unknownTypeNames.addAll(names);
-  }
-
-  Set<String> getUnknownTypeNames() {
-    Preconditions.checkState(this.isTopLevel());
-    return this.unknownTypeNames;
+    this.unknownTypeNames = ImmutableSet.copyOf(names);
   }
 
   void addLocalFunDef(String name, NTIScope scope) {
@@ -272,6 +267,17 @@ final class NTIScope implements DeclaredTypeRegistry {
     Preconditions.checkArgument(!name.contains("."));
     return !isDefinedLocally(name, false)
         && parent != null && parent.isVisibleInScope(name);
+  }
+
+  boolean isGlobalVar(String varName) {
+    NTIScope s = this;
+    while (s.parent != null) {
+      if (isDefinedLocally(varName, false)) {
+        return false;
+      }
+      s = s.parent;
+    }
+    return true;
   }
 
   boolean isUndeclaredFormal(String name) {
@@ -433,7 +439,7 @@ final class NTIScope implements DeclaredTypeRegistry {
     if (qnameNode.isName()) {
       String varName = qnameNode.getString();
       localNamespaces.put(varName, nslit);
-      if (qnameNode.isFromExterns()) {
+      if (qnameNode.isFromExterns() && !externs.containsKey(varName)) {
         // We don't know the full type of a namespace until after we see all
         // its properties. But we want to add it to the externs, otherwise it
         // is treated as a local and initialized to the wrong thing in NTI.
@@ -588,14 +594,22 @@ final class NTIScope implements DeclaredTypeRegistry {
         "Namespaces are removed from scopes after finalization");
     Namespace ns = getNamespace(qname.getLeftmostName());
     if (ns == null) {
-      return null;
+      return maybeGetForwardDeclaration(qname.toString());
     }
     Declaration decl = ns.getDeclaration(qname.getAllButLeftmost());
-    if (decl == null && unknownTypeNames.contains(qname.toString())) {
+    return decl != null ? decl : maybeGetForwardDeclaration(qname.toString());
+  }
+
+  private Declaration maybeGetForwardDeclaration(String qname) {
+    NTIScope globalScope = this;
+    while (globalScope.parent != null) {
+      globalScope = globalScope.parent;
+    }
+    if (globalScope.unknownTypeNames.contains(qname)) {
       return new Declaration(
           JSType.UNKNOWN, null, null, null, null, null, false, false, true);
     }
-    return decl;
+    return null;
   }
 
   public Declaration getDeclaration(String name, boolean includeTypes) {
@@ -629,29 +643,6 @@ final class NTIScope implements DeclaredTypeRegistry {
     qualifiedEnums = null;
   }
 
-  void mayDeclareUnknownType(QualifiedName qname) {
-    if (qname.isIdentifier() || null == getNamespace(qname.getLeftmostName())) {
-      String name = qname.getLeftmostName();
-      if (!isDefinedLocally(name, false)) {
-        externs.put(name, JSType.UNKNOWN);
-      }
-      return;
-    }
-    Namespace leftmost = getNamespace(qname.getLeftmostName());
-    QualifiedName props = qname.getAllButLeftmost();
-    // The forward declared type may be on an undeclared namespace.
-    // e.g. 'ns.Foo.Bar.Baz' when we don't even have a definition for ns.Foo.
-    // Thus, we need to find the prefix of the qname that is not declared.
-    while (!props.isIdentifier()
-        && !leftmost.hasSubnamespace(props.getAllButRightmost())) {
-      props = props.getAllButRightmost();
-    }
-    Namespace ns = props.isIdentifier()
-        ? leftmost : leftmost.getSubnamespace(props.getAllButRightmost());
-    String pname = props.getRightmostName();
-    ns.addUndeclaredProperty(pname, null, JSType.UNKNOWN, /* isConst */ false);
-  }
-
   void finalizeScope() {
     unknownTypeNames = ImmutableSet.of();
     JSTypes commonTypes = getCommonTypes();
@@ -660,13 +651,18 @@ final class NTIScope implements DeclaredTypeRegistry {
     for (Map.Entry<String, NamespaceLit> entry : localNamespaces.entrySet()) {
       String name = entry.getKey();
       NamespaceLit nslit = entry.getValue();
-      JSType t = nslit.toJSType(commonTypes);
+      JSType objToInclude = null;
       // If it's a function namespace, add the function type to the result
       if (localFunDefs.containsKey(name)) {
-        t = t.withFunction(
-            localFunDefs.get(name).getDeclaredFunctionType().toFunctionType(),
-            commonTypes.getFunctionType());
+        objToInclude = commonTypes.fromFunctionType(
+            localFunDefs.get(name).getDeclaredFunctionType().toFunctionType());
+      } else {
+        // Should only be non-null for window, but we don't check here to avoid
+        // hard-coding the name. Enforced in GlobalTypeInfo.
+        objToInclude = externs.get(name);
       }
+      JSType t = nslit.toJSTypeIncludingObject(commonTypes, objToInclude);
+      constVars.add(name);
       if (externs.containsKey(name)) {
         externs.put(name, t);
       } else {

@@ -125,6 +125,8 @@ public abstract class CompilerTestCase extends TestCase {
    */
   private LanguageMode acceptedLanguage = LanguageMode.ECMASCRIPT5;
 
+  private LanguageMode languageOut = LanguageMode.ECMASCRIPT5;
+
   /**
    * Whether externs changes should be allowed for this pass.
    */
@@ -248,10 +250,22 @@ public abstract class CompilerTestCase extends TestCase {
   }
 
   /**
-   * What language to allow in source parsing.
+   * What language to allow in source parsing. Also sets the output language.
    */
-  protected void setAcceptedLanguage(LanguageMode acceptedLanguage) {
-    this.acceptedLanguage = acceptedLanguage;
+  protected void setAcceptedLanguage(LanguageMode lang) {
+    setLanguage(lang, lang);
+  }
+
+  /**
+   * Sets the input and output language modes..
+   */
+  protected void setLanguage(LanguageMode langIn, LanguageMode langOut) {
+    this.acceptedLanguage = langIn;
+    setLanguageOut(langOut);
+  }
+
+  protected void setLanguageOut(LanguageMode acceptedLanguage) {
+    this.languageOut = acceptedLanguage;
   }
 
   /**
@@ -577,6 +591,8 @@ public abstract class CompilerTestCase extends TestCase {
     CompilerOptions options = getOptions();
 
     options.setLanguageIn(acceptedLanguage);
+    options.setLanguageOut(languageOut);
+
     // Note that in this context, turning on the checkTypes option won't
     // actually cause the type check to run.
     options.setCheckTypes(parseTypeInfo);
@@ -1026,6 +1042,9 @@ public abstract class CompilerTestCase extends TestCase {
       assert_().withFailureMessage("Unexpected parse error(s): " + errorMsg)
           .that(actualError.getType())
           .isEqualTo(error);
+      if (description != null) {
+        assertThat(actualError.description).isEqualTo(description);
+      }
       return;
     }
     assert_().withFailureMessage("Unexpected parse error(s): " + errorMsg).that(root).isNotNull();
@@ -1136,10 +1155,7 @@ public abstract class CompilerTestCase extends TestCase {
     }
 
     if (error == null) {
-      assertEquals(
-          "Unexpected error(s): " + LINE_JOINER.join(compiler.getErrors()),
-          0,
-          compiler.getErrorCount());
+      assertEquals("Unexpected error(s): " + errorMsg, 0, compiler.getErrorCount());
 
       // Verify the symbol table.
       ErrorManager symbolTableErrorManager = new BlackHoleErrorManager();
@@ -1240,7 +1256,8 @@ public abstract class CompilerTestCase extends TestCase {
               fail("\nExpected: "
                   + expectedAsSource
                   + "\nResult:   "
-                  + mainAsSource);
+                  + mainAsSource
+                  + "\n" + explanation);
             }
           }
         } else if (expected != null) {
@@ -1293,14 +1310,13 @@ public abstract class CompilerTestCase extends TestCase {
       }
     } else {
       assertNull("expected must be null if error != null", expected);
-      String errors = "";
-      for (JSError actualError : compiler.getErrors()) {
-        errors += actualError.description + "\n";
-      }
-      assertEquals("There should be one error. " + errors, 1, compiler.getErrorCount());
+      assertEquals("There should be one error. " + errorMsg, 1, compiler.getErrorCount());
       JSError actualError = compiler.getErrors()[0];
-      assertEquals(errors, error, actualError.getType());
+      assertEquals(errorMsg, error, actualError.getType());
       validateSourceLocation(actualError);
+      if (description != null) {
+        assertThat(actualError.description).isEqualTo(description);
+      }
 
       if (warning != null) {
         String warnings = "";
