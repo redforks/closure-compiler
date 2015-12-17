@@ -770,7 +770,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     testSame(options, code);
 
-    options.setCheckMissingReturn(CheckLevel.ERROR);
+    options.setWarningLevel(DiagnosticGroups.MISSING_RETURN, CheckLevel.ERROR);
     testSame(options, code);
 
     options.setCheckTypes(true);
@@ -920,6 +920,32 @@ public final class IntegrationTest extends IntegrationTestCase {
     test(options, code,
         "function Foo(){} Foo.prototype.Foo_prototype$bar = 3;"
         + "function Baz(){} Baz.prototype.Baz_prototype$bar = 3;");
+  }
+
+  // When closure-code-removal runs before disambiguate-properties, make sure
+  // that removing abstract methods doesn't mess up disambiguation.
+  public void testDisambiguateProperties2() {
+    CompilerOptions options = createCompilerOptions();
+    options.setClosurePass(true);
+    options.setCheckTypes(true);
+    options.setDisambiguateProperties(true);
+    options.setRemoveDeadCode(true);
+    test(options,
+        Joiner.on('\n').join(
+            "/** @const */ var goog = {};",
+            "/** @interface */ function I() {}",
+            "I.prototype.a = function(x) {};",
+            "/** @constructor @implements {I} */ function Foo() {}",
+            "/** @override */ Foo.prototype.a = goog.abstractMethod;",
+            "/** @constructor @extends Foo */ function Bar() {}",
+            "/** @override */ Bar.prototype.a = function(x) {};"),
+        Joiner.on('\n').join(
+            "var goog={};",
+            "function I(){}",
+            "I.prototype.a=function(x){};",
+            "function Foo(){}",
+            "function Bar(){}",
+            "Bar.prototype.a=function(x){};"));
   }
 
   public void testMarkPureCalls() {
@@ -1307,18 +1333,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     test(options, code, "");
   }
 
-  public void testClassWithGettersIsRemoved() {
-    CompilerOptions options = createCompilerOptions();
-    String code =
-        "class Foo { get x() {}; set y(v) {}; static get init() {}; static set prop(v) {} }";
-
-    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
-    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
-    options.setSmartNameRemoval(true);
-    options.setRemoveDeadCode(true);
-    test(options, code, "");
-  }
-
   public void testSmartNamePassBug11163486() {
     CompilerOptions options = createCompilerOptions();
 
@@ -1589,7 +1603,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     testSame(options, code);
 
     options.moveFunctionDeclarations = true;
-    test(options, code, "function f() { return 3; } var x = f();");
+    test(options, code, "var f = function() { return 3; }; var x = f();");
   }
 
   public void testNameAnonymousFunctions() {

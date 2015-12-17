@@ -812,13 +812,15 @@ class CodeGenerator {
         break;
 
       case Token.YIELD:
-        Preconditions.checkState(childCount == 1);
         add("yield");
-        cc.maybeInsertSpace();
         if (n.isYieldFor()) {
+          Preconditions.checkNotNull(first);
           add("*");
         }
-        addExpr(first, NodeUtil.precedence(type), Context.OTHER);
+        if (first != null) {
+          cc.maybeInsertSpace();
+          addExpr(first, NodeUtil.precedence(type), Context.OTHER);
+        }
         break;
 
       case Token.FALSE:
@@ -896,12 +898,7 @@ class CodeGenerator {
 
       case Token.STRING:
         Preconditions.checkState(childCount == 0, "A string may not have children");
-        // The string is already processed, don't escape it.
-        if (n.getBooleanProp(Node.COOKED_STRING)) {
-          add("\"" + n.getString() + "\"");
-        } else {
-          addJsString(n);
-        }
+        addJsString(n);
         break;
 
       case Token.DELPROP:

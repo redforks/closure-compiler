@@ -354,7 +354,7 @@ public class Compiler extends AbstractCompiler {
     // But we do not want to see the warnings from OTI.
     if (options.getNewTypeInference()) {
       options.checkTypes = true;
-      options.setWarningLevel(DiagnosticGroups.CHECK_TYPES, CheckLevel.OFF);
+      options.setWarningLevel(DiagnosticGroups.OLD_CHECK_TYPES, CheckLevel.OFF);
       options.setWarningLevel(
           DiagnosticGroup.forType(RhinoErrorReporter.TYPE_PARSE_ERROR),
           CheckLevel.WARNING);
@@ -2529,7 +2529,8 @@ public class Compiler extends AbstractCompiler {
   @Override
   Node ensureLibraryInjected(String resourceName,
       boolean normalizeAndUniquifyNames) {
-    if (injectedLibraries.containsKey(resourceName)) {
+    if (injectedLibraries.containsKey(resourceName)
+        || options.preventLibraryInjection.contains(resourceName)) {
       return null;
     }
 
@@ -2544,7 +2545,7 @@ public class Compiler extends AbstractCompiler {
     Node lastChild = firstChild.getLastSibling();
 
     Node parent = getNodeForCodeInsertion(null);
-    if (isBase) {
+    if (isBase || options.preventLibraryInjection.contains("base")) {
       parent.addChildrenToFront(firstChild);
     } else {
       parent.addChildrenAfter(

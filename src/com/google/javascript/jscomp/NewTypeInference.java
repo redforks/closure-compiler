@@ -107,6 +107,8 @@ final class NewTypeInference implements CompilerPass {
           "JSC_NTI_POSSIBLY_INEXISTENT_PROPERTY",
           "Property {0} may not be present on {1}.");
 
+  // Not part of ALL_DIAGNOSTICS because it should not be enabled with
+  // --jscomp_error=newCheckTypes. It should only be enabled explicitly.
   static final DiagnosticType NULLABLE_DEREFERENCE =
       DiagnosticType.disabled(
           "JSC_NTI_NULLABLE_DEREFERENCE",
@@ -287,7 +289,6 @@ final class NewTypeInference implements CompilerPass {
       NOT_A_CONSTRUCTOR,
       NOT_CALLABLE,
       NOT_UNIQUE_INSTANTIATION,
-      NULLABLE_DEREFERENCE,
       POSSIBLY_INEXISTENT_PROPERTY,
       PROPERTY_ACCESS_ON_NONOBJECT,
       RETURN_NONDECLARED_TYPE,
@@ -1861,7 +1862,7 @@ final class NewTypeInference implements CompilerPass {
 
   private EnvTypePair analyzeFunctionBindFwd(Node call, TypeEnv inEnv) {
     Preconditions.checkArgument(call.isCall());
-    Bind bindComponents = convention.describeFunctionBind(call, true, false);
+    Bind bindComponents = this.convention.describeFunctionBind(call, true, false);
     Node boundFunNode = bindComponents.target;
     EnvTypePair pair = analyzeExprFwd(boundFunNode, inEnv);
     TypeEnv env = pair.env;
@@ -2736,8 +2737,8 @@ final class NewTypeInference implements CompilerPass {
     JSType recvReqType, recvSpecType;
 
     // First, analyze the receiver object.
-    if (specializedType.isTrueOrTruthy()
-        || propAccessNode.getParent().isTypeOf()) {
+    if (NodeUtil.isPropertyTest(compiler, propAccessNode)
+        && !specializedType.isFalseOrFalsy()) {
       recvReqType = reqObjType;
       recvSpecType = reqObjType.withProperty(propQname, specializedType);
     } else if (specializedType.isFalseOrFalsy()) {
@@ -2762,7 +2763,7 @@ final class NewTypeInference implements CompilerPass {
       return new EnvTypePair(pair.env,
           commonTypes.fromFunctionType(ft.transformByApplyProperty(commonTypes)));
     }
-    if (convention.isSuperClassReference(pname)) {
+    if (this.convention.isSuperClassReference(pname)) {
       if (ft != null && ft.isUniqueConstructor()) {
         JSType result = ft.getSuperPrototype();
         pair.type = result != null ? result : JSType.UNDEFINED;
@@ -3360,8 +3361,6 @@ final class NewTypeInference implements CompilerPass {
     Node propAccessNode = receiver.getParent();
     QualifiedName qname = new QualifiedName(pname);
     JSType reqObjType = pickReqObjType(propAccessNode).withLoose();
-    // In the BWD direction we don't have specialized types, so we use
-    // isPropertyTest to avoid spurious addition of properties to loose objects.
     if (!NodeUtil.isPropertyTest(compiler, propAccessNode)) {
       reqObjType = reqObjType.withProperty(qname, requiredType);
     }
@@ -3430,7 +3429,7 @@ final class NewTypeInference implements CompilerPass {
       return false;
     }
     return expr.getFirstChild().isQualifiedName()
-        && convention.isPropertyTestFunction(expr);
+        && this.convention.isPropertyTestFunction(expr);
   }
 
   private boolean isFunctionBind(Node expr, TypeEnv env, boolean isFwd) {

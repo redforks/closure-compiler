@@ -90,11 +90,6 @@ public class CompilerOptions {
   }
 
   /**
-   * Whether the compiler accepts type syntax ({@code var foo: string;}).
-   */
-  boolean acceptTypeSyntax;
-
-  /**
    * Whether to infer consts. This should not be configurable by
    * external clients. This is a transitional flag for a new type
    * of const analysis.
@@ -202,11 +197,16 @@ public class CompilerOptions {
     setWarningLevel(DiagnosticGroups.MISSING_REQUIRE, level);
   }
 
+  @Deprecated
   public CheckLevel checkProvides;
 
-  /** Checks for missing goog.provides() calls **/
+  /**
+   * Checks for missing goog.provides() calls.
+   * @deprecated Use setWarningLevel(DiagnosticGroups.MISSING_PROVIDE, level)
+   */
+  @Deprecated
   public void setCheckProvides(CheckLevel level) {
-    checkProvides = level;
+    setWarningLevel(DiagnosticGroups.MISSING_PROVIDE, level);
   }
 
   public CheckLevel checkGlobalNamesLevel;
@@ -383,13 +383,6 @@ public class CompilerOptions {
 
   /** Removes code that will never execute */
   public boolean removeDeadCode;
-
-  public CheckLevel checkMissingReturn;
-
-  /** Checks for missing return statements */
-  public void setCheckMissingReturn(CheckLevel level) {
-    this.checkMissingReturn = level;
-  }
 
   public enum ExtractPrototypeMemberDeclarationsMode {
     OFF,
@@ -673,6 +666,9 @@ public class CompilerOptions {
   /** Processes the output of the Dart Dev Compiler */
   boolean dartPass;
 
+  /** Processes the output of J2CL */
+  boolean j2clPass;
+
   /** Remove goog.abstractMethod assignments. */
   boolean removeAbstractMethods;
 
@@ -783,6 +779,15 @@ public class CompilerOptions {
   /** CommonJS module prefix. */
   List<String> moduleRoots = ImmutableList.of(ES6ModuleLoader.DEFAULT_FILENAME_PREFIX);
 
+  /** Rewrite polyfills. */
+  boolean rewritePolyfills = false;
+
+  /** Runtime libraries to always inject. */
+  List<String> forceLibraryInjection = ImmutableList.of();
+
+  /** Runtime libraries to never inject. */
+  Set<String> preventLibraryInjection = ImmutableSet.of();
+
 
   //--------------------------------
   // Output options
@@ -830,6 +835,9 @@ public class CompilerOptions {
   }
 
   String reportPath;
+
+  // Should only be used when debugging compiler bugs using small JS inputs.
+  boolean printSourceAfterEachPass;
 
   /** Where to save a report of global name usage */
   public void setReportPath(String reportPath) {
@@ -965,9 +973,6 @@ public class CompilerOptions {
     // Which environment to use
     environment = Environment.BROWSER;
 
-    // Language variation
-    acceptTypeSyntax = false;
-
     // Checks
     skipNonTranspilationPasses = false;
     devMode = DevMode.OFF;
@@ -980,7 +985,6 @@ public class CompilerOptions {
     checkGlobalNamesLevel = CheckLevel.OFF;
     brokenClosureRequiresLevel = CheckLevel.ERROR;
     checkGlobalThisLevel = CheckLevel.OFF;
-    checkMissingReturn = CheckLevel.OFF;
     checkMissingGetCssNameLevel = CheckLevel.OFF;
     checkMissingGetCssNameBlacklist = null;
     computeFunctionSideEffects = false;
@@ -1058,6 +1062,7 @@ public class CompilerOptions {
     angularPass = false;
     polymerPass = false;
     dartPass = false;
+    j2clPass = false;
     removeAbstractMethods = true;
     removeClosureAsserts = false;
     stripTypes = Collections.emptySet();
@@ -1109,6 +1114,7 @@ public class CompilerOptions {
     // Debugging
     aliasHandler = NULL_ALIAS_TRANSFORMATION_HANDLER;
     errorHandler = null;
+    printSourceAfterEachPass = false;
     useDebugLog = false;
   }
 
@@ -1526,6 +1532,10 @@ public class CompilerOptions {
 
   public void setDartPass(boolean dartPass) {
     this.dartPass = dartPass;
+  }
+
+  public void setJ2clPass(boolean j2clPass) {
+    this.j2clPass = j2clPass;
   }
 
   public void setCodingConvention(CodingConvention codingConvention) {
@@ -2339,6 +2349,20 @@ public class CompilerOptions {
   }
 
   /**
+   * Sets list of libraries to always inject, even if not needed.
+   */
+  public void setForceLibraryInjection(Iterable<String> libraries) {
+    this.forceLibraryInjection = ImmutableList.copyOf(libraries);
+  }
+
+  /**
+   * Sets the set of libraries to never inject, even if required.
+   */
+  public void setPreventLibraryInjection(Iterable<String> libraries) {
+    this.preventLibraryInjection = ImmutableSet.copyOf(libraries);
+  }
+
+  /**
    * Set whether or not code should be modified to provide coverage
    * information.
    */
@@ -2618,5 +2642,31 @@ public class CompilerOptions {
      * Only language externs are loaded.
      */
     CUSTOM
+  }
+
+  /**
+   * Whether standard input or standard output should be an array of
+   * JSON encoded files
+   */
+  static enum JsonStreamMode {
+    /**
+     * stdin/out are both single files.
+     */
+    NONE,
+
+    /**
+     * stdin is a json stream.
+     */
+    IN,
+
+    /**
+     * stdout is a json stream.
+     */
+    OUT,
+
+    /**
+     * stdin and stdout are both json streams.
+     */
+    BOTH
   }
 }

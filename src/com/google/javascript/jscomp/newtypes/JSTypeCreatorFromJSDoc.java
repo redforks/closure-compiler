@@ -72,6 +72,8 @@ public final class JSTypeCreatorFromJSDoc {
           "JSC_NTI_IMPLEMENTS_WITHOUT_CONSTRUCTOR",
           "@implements used without @constructor or @interface for {0}");
 
+  // Not part of ALL_DIAGNOSTICS because it should not be enabled with
+  // --jscomp_error=newCheckTypes. It should only be enabled explicitly.
   public static final DiagnosticType CONFLICTING_SHAPE_TYPE =
       DiagnosticType.disabled(
           "JSC_NTI_CONFLICTING_SHAPE_TYPE",
@@ -103,11 +105,6 @@ public final class JSTypeCreatorFromJSDoc {
     DiagnosticType.warning(
         "JSC_NTI_BAD_ARRAY_TYPE_SYNTAX",
         "The [] type syntax is not supported. Please use Array.<T> instead");
-
-  public static final DiagnosticType UNION_WITH_UNKNOWN =
-    DiagnosticType.warning(
-        "JSC_NTI_UNION_WITH_UNKNOWN",
-        "A union type that includes ? is equivalent to '?'");
 
   public static final DiagnosticType CANNOT_MAKE_TYPEVAR_NON_NULL =
     DiagnosticType.warning(
@@ -147,12 +144,12 @@ public final class JSTypeCreatorFromJSDoc {
   public static final DiagnosticType IMPLEMENTS_NON_INTERFACE =
     DiagnosticType.warning(
         "JSC_NTI_IMPLEMENTS_NON_INTERFACE",
-        "Cannot implement non-interface");
+        "Cannot implement non-interface {0}");
 
   public static final DiagnosticType EXTENDS_NON_INTERFACE =
     DiagnosticType.warning(
         "JSC_NTI_EXTENDS_NON_INTERFACE",
-        "Cannot extend non-interface");
+        "Cannot extend non-interface {0}");
 
   public static final DiagnosticType FUNCTION_WITH_NONFUNC_JSDOC =
     DiagnosticType.warning(
@@ -176,7 +173,6 @@ public final class JSTypeCreatorFromJSDoc {
       CIRCULAR_TYPEDEF_ENUM,
       CONFLICTING_EXTENDED_TYPE,
       CONFLICTING_IMPLEMENTED_TYPE,
-      CONFLICTING_SHAPE_TYPE,
       DICT_IMPLEMENTS_INTERF,
       ENUM_IS_TOP,
       ENUM_IS_UNION,
@@ -193,7 +189,6 @@ public final class JSTypeCreatorFromJSDoc {
       TEMPLATED_GETTER_SETTER,
       TWO_JSDOCS,
       UNION_IS_UNINHABITABLE,
-      UNION_WITH_UNKNOWN,
       WRONG_PARAMETER_ORDER);
 
   private final CodingConvention convention;
@@ -291,6 +286,9 @@ public final class JSTypeCreatorFromJSDoc {
       case Token.EMPTY: // for function types that don't declare a return type
         return JSType.UNKNOWN;
       case Token.VOID:
+        // TODO(dimvar): void can be represented in 2 ways: Token.VOID and a
+        // Token.STRING whose getString() is "void".
+        // Change jsdoc parsing to only have one representation.
         return JSType.UNDEFINED;
       case Token.LB:
         warnings.add(JSError.make(n, BAD_ARRAY_TYPE_SYNTAX));
@@ -307,15 +305,8 @@ public final class JSTypeCreatorFromJSDoc {
           // TODO(dimvar): When the union has many things, we join and throw
           // away types, except the result of the last join. Very inefficient.
           // Consider optimizing.
-          JSType nextType =
-              getTypeFromCommentHelper(child, registry, typeParameters);
+          JSType nextType = getTypeFromCommentHelper(child, registry, typeParameters);
           if (nextType.isUnknown()) {
-            if (child.getType() == Token.QMARK
-                && child.getFirstChild() == null) {
-              // Only warn for explicit ?, not for other unknowns such as
-              // forward-declared types.
-              warnings.add(JSError.make(n, UNION_WITH_UNKNOWN));
-            }
             return JSType.UNKNOWN;
           }
           JSType nextUnion = JSType.join(union, nextType);
@@ -355,6 +346,22 @@ public final class JSTypeCreatorFromJSDoc {
     }
   }
 
+  // Looks at the type AST without evaluating it
+  private boolean isUnionWithUndefined(Node n) {
+    if (n == null || n.getType() != Token.PIPE) {
+      return false;
+    }
+    for (Node child : n.children()) {
+      if (child.getType() == Token.VOID
+          || child.getType() == Token.STRING
+          && (child.getString().equals("void")
+              || child.getString().equals("undefined"))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private JSType getRecordTypeHelper(Node n, DeclaredTypeRegistry registry,
       ImmutableList<String> typeParameters)
       throws UnknownTypeException {
@@ -372,8 +379,8 @@ public final class JSTypeCreatorFromJSDoc {
           ? JSType.UNKNOWN
           : getTypeFromCommentHelper(propNode.getLastChild(), registry, typeParameters);
       Property prop;
-      if (!propType.isUnknown() && !propType.isTop()
-          && JSType.UNDEFINED.isSubtypeOf(propType)) {
+      if (propType.equals(JSType.UNDEFINED)
+          || isUnionWithUndefined(propNode.getLastChild())) {
         prop = Property.makeOptional(null, propType, propType);
       } else {
         prop = Property.make(propType, propType);
@@ -640,9 +647,11 @@ public final class JSTypeCreatorFromJSDoc {
         if (nt != null && nt.isInterface()) {
           builder.add(nt);
         } else if (implementedIntfs) {
-          warnings.add(JSError.make(expRoot, IMPLEMENTS_NON_INTERFACE));
+          warnings.add(JSError.make(
+              expRoot, IMPLEMENTS_NON_INTERFACE, interfaceType.toString()));
         } else {
-          warnings.add(JSError.make(expRoot, EXTENDS_NON_INTERFACE));
+          warnings.add(JSError.make(
+              expRoot, EXTENDS_NON_INTERFACE, interfaceType.toString()));
         }
       }
     }
@@ -697,7 +706,7 @@ public final class JSTypeCreatorFromJSDoc {
       }
       DeclaredFunctionType declType = getFunTypeFromTypicalFunctionJsdoc(
           jsdoc, functionName, declNode,
-          constructorType, ownerType, registry, builder, false);
+          constructorType, ownerType, registry, builder);
       return new FunctionAndSlotType(null, declType);
     } catch (FunctionTypeBuilder.WrongParameterOrderException e) {
       warnings.add(JSError.make(declNode, WRONG_PARAMETER_ORDER));
@@ -754,10 +763,7 @@ public final class JSTypeCreatorFromJSDoc {
   private DeclaredFunctionType getFunTypeFromTypicalFunctionJsdoc(
       JSDocInfo jsdoc, String functionName, Node funNode,
       RawNominalType constructorType, RawNominalType ownerType,
-      DeclaredTypeRegistry registry, FunctionTypeBuilder builder,
-      boolean ignoreJsdoc /* for when the jsdoc is malformed */) {
-    Preconditions.checkArgument(!ignoreJsdoc || jsdoc == null);
-    Preconditions.checkArgument(!ignoreJsdoc || funNode.isFunction());
+      DeclaredTypeRegistry registry, FunctionTypeBuilder builder) {
     ImmutableList.Builder<String> typeParamsBuilder = new ImmutableList.Builder<>();;
     ImmutableList<String> typeParameters = ImmutableList.of();
     Node parent = funNode.getParent();
@@ -766,6 +772,7 @@ public final class JSTypeCreatorFromJSDoc {
     // - warn for multiple @template annotations
     // - warn for @template annotation w/out usage
 
+    boolean ignoreJsdoc = false;
     if (jsdoc != null) {
       typeParamsBuilder.addAll(jsdoc.getTemplateTypeNames());
       // We don't properly support the type transformation language; we treat

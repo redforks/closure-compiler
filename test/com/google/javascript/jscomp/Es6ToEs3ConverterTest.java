@@ -201,6 +201,18 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
     test(
         "/** @dict */ class C { }",
         "/** @constructor @dict */ var C = function() {};");
+
+    test(
+        "/** @template T */ class C { }",
+        "/** @constructor @struct @template T */ var C = function() {};");
+
+    test(
+        "/** @final */ class C { }",
+        "/** @constructor @struct @final */ var C = function() {};");
+
+    test(
+        "/** @private */ class C { }",
+        "/** @constructor @struct @private */ var C = function() {};");
   }
 
   public void testInterfaceWithJsDoc() {
@@ -231,6 +243,32 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "Converter.prototype.convert = function(x) {};"));
   }
 
+  public void testRecordWithJsDoc() {
+    test(
+        LINE_JOINER.join(
+            "/**",
+            " * @record",
+            " */",
+            "class Converter {",
+            "  /**",
+            "   * @param {X} x",
+            "   * @return {Y}",
+            "   */",
+            "  convert(x) {}",
+            "}"),
+        LINE_JOINER.join(
+            "/**",
+            " * @struct @record",
+            " */",
+            "var Converter = function() { };",
+            "",
+            "/**",
+            " * @param {X} x",
+            " * @return {Y}",
+            " */",
+            "Converter.prototype.convert = function(x) {};"));
+  }
+
   public void testCtorWithJsDoc() {
     test(
         "class C { /** @param {boolean} b */ constructor(b) {} }",
@@ -241,6 +279,36 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             " * @struct",
             " */",
             "var C = function(b) {};"));
+
+    test(
+        "class C { /** @throws {Error} */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @throws {Error}",
+            " * @constructor",
+            " * @struct",
+            " */",
+            "var C = function() {};"));
+
+    test(
+        "class C { /** @private */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @private",
+            " * @constructor",
+            " * @struct",
+            " */",
+            "var C = function() {};"));
+
+    test(
+        "class C { /** @deprecated */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @deprecated",
+            " * @constructor",
+            " * @struct",
+            " */",
+            "var C = function() {};"));
   }
 
   public void testMemberWithJsDoc() {
@@ -1761,6 +1829,20 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "var $jscomp$templatelit$0 = ['', ' world'];",
             "$jscomp$templatelit$0.raw = ['', ' world'];",
             "a.b($jscomp$templatelit$0, hello);"));
+
+    // https://github.com/google/closure-compiler/issues/1299
+    test(
+        "tag`<p class=\"foo\">${x}</p>`",
+        LINE_JOINER.join(
+            "var $jscomp$templatelit$0 = ['<p class=\"foo\">', '</p>'];",
+            "$jscomp$templatelit$0.raw = ['<p class=\"foo\">', '</p>'];",
+            "tag($jscomp$templatelit$0, x);"));
+    test(
+        "tag`<p class='foo'>${x}</p>`",
+        LINE_JOINER.join(
+            "var $jscomp$templatelit$0 = ['<p class=\\'foo\\'>', '</p>'];",
+            "$jscomp$templatelit$0.raw = ['<p class=\\'foo\\'>', '</p>'];",
+            "tag($jscomp$templatelit$0, x);"));
   }
 
   public void testUnicodeEscapes() {

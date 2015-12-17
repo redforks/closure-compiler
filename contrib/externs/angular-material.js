@@ -394,7 +394,7 @@ md.$mdThemingProvider.prototype.setDefaultTheme = function(name) {};
 /**
  * @param {string} name
  * @param {string=} opt_parentTheme
- * @return {md.$mdThemingProvider.Theme}
+ * @return {!md.$mdThemingProvider.Theme}
  */
 md.$mdThemingProvider.prototype.theme = function(name, opt_parentTheme) {};
 
@@ -588,6 +588,10 @@ md.VirtualRepeatContainerController.prototype.getScrollOffset = function() {};
 
 /** @param {number} position */
 md.VirtualRepeatContainerController.prototype.scrollTo = function(position) {};
+
+/** @param {number} index */
+md.VirtualRepeatContainerController.prototype.scrollToIndex =
+    function(index) {};
 
 md.VirtualRepeatContainerController.prototype.resetScroll = function() {};
 

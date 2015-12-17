@@ -218,7 +218,7 @@ public final class DefaultPassConfig extends PassConfig {
 
     checks.add(checkSideEffects);
 
-    if (options.checkProvides.isOn() || options.enables(DiagnosticGroups.MISSING_PROVIDE)) {
+    if (options.enables(DiagnosticGroups.MISSING_PROVIDE)) {
       checks.add(checkProvides);
     }
 
@@ -310,6 +310,10 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(convertEs6ToEs3);
       checks.add(rewriteBlockScopedDeclaration);
       checks.add(rewriteGenerators);
+      if (!options.getLanguageOut().isEs6OrHigher() && options.rewritePolyfills) {
+        // TODO(sdh): output version check unnecessary?!?
+        checks.add(rewritePolyfills);
+      }
       checks.add(markTranspilationDone);
     }
 
@@ -317,12 +321,13 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(convertToTypedES6);
     }
 
-    if (options.skipNonTranspilationPasses) {
-      return checks;
+    if ((options.getLanguageIn().isEs6OrHigher() && !options.skipNonTranspilationPasses)
+        || !options.forceLibraryInjection.isEmpty()) {
+      checks.add(es6RuntimeLibrary);
     }
 
-    if (options.getLanguageIn().isEs6OrHigher()) {
-      checks.add(es6RuntimeLibrary);
+    if (options.skipNonTranspilationPasses) {
+      return checks;
     }
 
     checks.add(convertStaticInheritance);
@@ -359,7 +364,7 @@ public final class DefaultPassConfig extends PassConfig {
     }
 
     if (!options.disables(DiagnosticGroups.CHECK_USELESS_CODE) ||
-        options.checkMissingReturn.isOn()) {
+        (!options.getNewTypeInference() && !options.disables(DiagnosticGroups.MISSING_RETURN))) {
       checks.add(checkControlFlow);
     }
 
@@ -460,6 +465,15 @@ public final class DefaultPassConfig extends PassConfig {
 
     if (options.runtimeTypeCheck) {
       passes.add(runtimeTypeCheck);
+    }
+
+    // Inlines functions that perform dynamic accesses to static properties of parameters that are
+    // typed as {Function}.
+    //
+    // Inlining these functions turns a dynamic access to a static property of a class definition
+    // into a fully qualified access and in so doing enables better dead code stripping.
+    if (options.j2clPass) {
+      passes.add(j2clPass);
     }
 
     passes.add(createEmptyPass("beforeStandardOptimizations"));
@@ -873,9 +887,8 @@ public final class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkSideEffects", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new CheckSideEffects(compiler,
-          options.checkSuspiciousCode ? CheckLevel.WARNING : CheckLevel.OFF,
-              protectHiddenSideEffects);
+      return new CheckSideEffects(
+          compiler, options.checkSuspiciousCode, protectHiddenSideEffects);
     }
   };
 
@@ -979,7 +992,7 @@ public final class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkProvides", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      return new CheckProvides(compiler, options.checkProvides);
+      return new CheckProvides(compiler);
     }
   };
 
@@ -990,9 +1003,9 @@ public final class DefaultPassConfig extends PassConfig {
           "functions are set.");
 
   /** Verifies JSDoc annotations are used properly. */
-  private final PassFactory checkJsDoc = new PassFactory("checkJsDoc", true) {
+  private final HotSwapPassFactory checkJsDoc = new HotSwapPassFactory("checkJsDoc", true) {
     @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       return new CheckJSDoc(compiler);
     }
   };
@@ -1158,10 +1171,10 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
-  private final PassFactory es6RewriteDestructuring =
-      new PassFactory("Es6RewriteDestructuring", true) {
+  private final HotSwapPassFactory es6RewriteDestructuring =
+      new HotSwapPassFactory("Es6RewriteDestructuring", true) {
         @Override
-        protected CompilerPass create(final AbstractCompiler compiler) {
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
           return new Es6RewriteDestructuring(compiler);
         }
       };
@@ -1174,11 +1187,19 @@ public final class DefaultPassConfig extends PassConfig {
         }
       };
 
-  private final PassFactory es6RewriteArrowFunction =
-      new PassFactory("Es6RewriteArrowFunction", true) {
+  private final HotSwapPassFactory es6RewriteArrowFunction =
+      new HotSwapPassFactory("Es6RewriteArrowFunction", true) {
         @Override
-        protected CompilerPass create(final AbstractCompiler compiler) {
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
           return new Es6RewriteArrowFunction(compiler);
+        }
+      };
+
+  private final HotSwapPassFactory rewritePolyfills =
+      new HotSwapPassFactory("RewritePolyfills", true) {
+        @Override
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+          return new RewritePolyfills(compiler);
         }
       };
 
@@ -1575,9 +1596,9 @@ public final class DefaultPassConfig extends PassConfig {
       if (!options.disables(DiagnosticGroups.CHECK_USELESS_CODE)) {
         callbacks.add(new CheckUnreachableCode(compiler));
       }
-      if (options.checkMissingReturn.isOn()) {
+      if (!options.getNewTypeInference() && !options.disables(DiagnosticGroups.MISSING_RETURN)) {
         callbacks.add(
-            new CheckMissingReturn(compiler, options.checkMissingReturn));
+            new CheckMissingReturn(compiler));
       }
       return combineChecks(compiler, callbacks);
     }
@@ -2624,6 +2645,15 @@ public final class DefaultPassConfig extends PassConfig {
       return new DartSuperAccessorsPass(compiler);
     }
   };
+
+  /** Rewrites J2CL constructs to be more optimizable. */
+  private final PassFactory j2clPass =
+      new PassFactory("j2clPass", true) {
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new J2clPass(compiler);
+        }
+      };
 
   /**
    * A pass-factory that is good for {@code HotSwapCompilerPass} passes.

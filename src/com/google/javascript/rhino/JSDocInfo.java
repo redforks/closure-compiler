@@ -823,11 +823,14 @@ public class JSDocInfo implements Serializable {
         || hasTypedefType()
         || hasThisType()
         || getParameterCount() > 0
+        || visibility != Visibility.INHERITED
         || getFlag(MASK_CONSTANT
             | MASK_CONSTRUCTOR
             | MASK_DEFINE
             | MASK_OVERRIDE
             | MASK_NOALIAS
+            | MASK_EXPORT
+            | MASK_EXPOSE
             | MASK_DEPRECATED
             | MASK_INTERFACE
             | MASK_IMPLICITCAST
@@ -1332,7 +1335,7 @@ public class JSDocInfo implements Serializable {
    * Get the message for a given thrown type.
    */
   public String getThrowsDescriptionForType(JSTypeExpression type) {
-    if (info == null || documentation.throwsDescriptions == null) {
+    if (documentation == null || documentation.throwsDescriptions == null) {
       return null;
     }
 
