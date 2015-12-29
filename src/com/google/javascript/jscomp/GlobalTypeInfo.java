@@ -588,7 +588,7 @@ class GlobalTypeInfo implements CompilerPass {
       // Add property from interface to class
       propTypesToProcess.put(pname, inheritedPropType);
     } else if (!getsTypeInfoFromParentMethod(localPropDef)
-        && !localPropType.isSubtypeOf(inheritedPropType)) {
+        && !isValidOverride(localPropType, inheritedPropType)) {
       warnings.add(JSError.make(
           localPropDef.defSite, INVALID_PROP_OVERRIDE, pname,
           inheritedPropType.toString(), localPropType.toString()));
@@ -600,6 +600,18 @@ class GlobalTypeInfo implements CompilerPass {
               inheritedPropDef.methodType.substituteNominalGenerics(superType));
         }
       }
+    }
+  }
+
+  private boolean isValidOverride(JSType localPropType, JSType inheritedPropType) {
+    FunctionType localFunType = localPropType.getFunTypeIfSingletonObj();
+    FunctionType inheritedFunType = inheritedPropType.getFunTypeIfSingletonObj();
+    if (localFunType == null) {
+      return localPropType.isSubtypeOf(inheritedPropType);
+    } else if (inheritedFunType == null) {
+      return false;
+    } else {
+      return localFunType.isValidOverride(inheritedFunType);
     }
   }
 
@@ -1454,8 +1466,11 @@ class GlobalTypeInfo implements CompilerPass {
       } else if (mayAddPropToType(getProp, rawNominalType)) {
         rawNominalType.addUndeclaredClassProperty(pname, getProp);
       }
-      propertyDefs.put(rawNominalType, pname,
-          new PropertyDef(getProp, null, null));
+      // Only add the definition node if the property is not already defined.
+      if (!propertyDefs.contains(rawNominalType, pname)) {
+        propertyDefs.put(rawNominalType, pname,
+            new PropertyDef(getProp, null, null));
+      }
     }
 
     private void visitOtherPropertyDeclaration(Node getProp) {

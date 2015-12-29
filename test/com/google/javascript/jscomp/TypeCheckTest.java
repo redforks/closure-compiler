@@ -4053,6 +4053,22 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         " */ function derived() {}");
   }
 
+  public void testDontCrashOnDupPropDefinition() throws Exception {
+    testTypes(Joiner.on('\n').join(
+        "/** @const */",
+        "var ns = {};",
+        "/** @interface */",
+        "ns.I = function() {};",
+        "/** @interface */",
+        "ns.A = function() {};",
+        "/**",
+        " * @constructor",
+        " * @implements {ns.I}",
+        " */",
+        "ns.A = function() {};"),
+        "variable ns.A redefined, original definition at [testcode]:6");
+  }
+
   public void testBadInterfaceExtends1() throws Exception {
     testTypes("/** @interface \n * @extends {nonExistent} */function A() {}",
         "Bad type annotation. Unknown type nonExistent");
@@ -13335,6 +13351,19 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         TypeCheck.NON_STRINGIFIABLE_OBJECT_KEY);
   }
 
+  public void testCheckObjectKeysBadKey11() throws Exception {
+    testTypes(
+        "/** @constructor */\n" +
+        "function X() {}\n" +
+        "/** @constructor @extends {X} */\n" +
+        "function X2() {}\n" +
+        "/** @enum {!X} */\n" +
+        "var XE = {A:new X};\n" +
+        "/** @type {Object<(!XE|!X2), string>} */\n" +
+        "var Y = {};",
+        TypeCheck.NON_STRINGIFIABLE_OBJECT_KEY);
+  }
+
   public void testCheckObjectKeysVariousTags1() throws Exception {
     testTypes("/** @type {!Object<!Object, number>} */ var k;",
         TypeCheck.NON_STRINGIFIABLE_OBJECT_KEY);
@@ -15562,6 +15591,19 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "required: {str: string, unknown: ?}"));
   }
 
+  public void testRecordWithTopProperty() throws Exception {
+    testTypes(
+        LINE_JOINER.join(
+            "/**  @constructor */ function Foo() {};",
+            "Foo.prototype.str = 'foo';",
+            "",
+            "var /** {str: string, top: *} */ x = new Foo;"),
+        LINE_JOINER.join(
+            "initializing variable",
+            "found   : Foo",
+            "required: {str: string, top: *}"));
+  }
+
   public void testStructuralInterfaceWithOptionalProperty() throws Exception {
     testTypes(
         LINE_JOINER.join(
@@ -15581,6 +15623,23 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "/** @record */ function Rec() {}",
             "/** @type {string} */ Rec.prototype.str;",
             "/** @type {?} */ Rec.prototype.unknown;",
+            "",
+            "/** @constructor */ function Foo() {}",
+            "Foo.prototype.str = 'foo';",
+            "",
+            "var /** !Rec */ x = new Foo;"),
+        LINE_JOINER.join(
+            "initializing variable",
+            "found   : Foo",
+            "required: Rec"));
+  }
+
+  public void testStructuralInterfaceWithTopProperty() throws Exception {
+    testTypes(
+        LINE_JOINER.join(
+            "/** @record */ function Rec() {}",
+            "/** @type {string} */ Rec.prototype.str;",
+            "/** @type {*} */ Rec.prototype.top;",
             "",
             "/** @constructor */ function Foo() {}",
             "Foo.prototype.str = 'foo';",

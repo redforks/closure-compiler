@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.SourceMap.LocationMapping;
+import com.google.javascript.rhino.TokenStream;
 import com.google.protobuf.TextFormat;
 
 import org.kohsuke.args4j.Argument;
@@ -44,6 +45,7 @@ import org.kohsuke.args4j.spi.StringOptionHandler;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
@@ -115,6 +117,9 @@ public class CommandLineRunner extends
 
   // UTF-8 BOM is 0xEF, 0xBB, 0xBF, of which character code is 65279.
   public static final int UTF8_BOM_CODE = 65279;
+
+  // Allowable module name characters that aren't valid in a JS identifier
+  private static final Pattern extraModuleNameChars = Pattern.compile("[-.]+");
 
   private static class GuardLevel {
     final String name;
@@ -614,7 +619,7 @@ public class CommandLineRunner extends
     @Option(name = "--instrumentation_template",
             hidden = true,
             usage = "A file containing an instrumentation template.")
-        private String instrumentationFile = "";
+    private String instrumentationFile = "";
 
     @Option(name = "--json_streams",
         hidden = true,
@@ -625,6 +630,17 @@ public class CommandLineRunner extends
             + "Options: NONE, IN, OUT, BOTH. Defaults to NONE.")
     private CompilerOptions.JsonStreamMode jsonStreamMode =
         CompilerOptions.JsonStreamMode.NONE;
+
+    @Option(name = "--preserve_type_annotations",
+        hidden = true,
+        handler = BooleanOptionHandler.class,
+        usage = "Preserves type annotations.")
+    private boolean preserveTypeAnnotations = false;
+
+    @Option(name = "--noinject_library",
+        hidden = true,
+        usage = "Prevent injecting the named runtime libraries.")
+    private List<String> noinjectLibrary = new ArrayList<>();
 
     @Argument
     private List<String> arguments = new ArrayList<>();
@@ -908,6 +924,11 @@ public class CommandLineRunner extends
     initConfigFromFlags(args, out, err);
   }
 
+  protected CommandLineRunner(String[] args, InputStream in, PrintStream out, PrintStream err) {
+    super(in, out, err);
+    initConfigFromFlags(args, out, err);
+  }
+
   private static List<String> processArgs(String[] args) {
     // Args4j has a different format that the old command-line parser.
     // So we use some voodoo to get the args into the format that args4j
@@ -1156,6 +1177,15 @@ public class CommandLineRunner extends
   }
 
   @Override
+  protected void checkModuleName(String name)
+      throws FlagUsageException {
+    if (!TokenStream.isJSIdentifier(
+        extraModuleNameChars.matcher(name).replaceAll("_"))) {
+      throw new FlagUsageException("Invalid module name: '" + name + "'");
+    }
+  }
+
+  @Override
   protected CompilerOptions createOptions() {
     CompilerOptions options = new CompilerOptions();
     if (flags.processJqueryPrimitives) {
@@ -1210,6 +1240,10 @@ public class CommandLineRunner extends
 
     options.renamePrefixNamespace = flags.renamePrefixNamespace;
 
+    options.setPreserveTypeAnnotations(flags.preserveTypeAnnotations);
+
+    options.setPreventLibraryInjection(flags.noinjectLibrary);
+
     if (!flags.translationsFile.isEmpty()) {
       try {
         options.messageBundle = new XtbMessageBundle(
@@ -1228,7 +1262,7 @@ public class CommandLineRunner extends
       // so we might as well inline it. But shut off the i18n warnings,
       // because the user didn't really ask for i18n.
       options.messageBundle = new EmptyMessageBundle();
-      options.setWarningLevel(JsMessageVisitor.MSG_CONVENTIONS, CheckLevel.OFF);
+      options.setWarningLevel(DiagnosticGroups.MSG_CONVENTIONS, CheckLevel.OFF);
     }
 
     options.setConformanceConfigs(loadConformanceConfigs(flags.conformanceConfigs));
