@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.GwtIncompatible;
@@ -80,7 +81,7 @@ import javax.annotation.Nullable;
  *
  * <pre>
  * class MyCommandLineRunner extends
- *     AbstractCommandLineRunner<MyCompiler, MyOptions> {
+ *     AbstractCommandLineRunner&lt;MyCompiler, MyOptions&gt; {
  *   MyCommandLineRunner(String[] args) {
  *     super(args);
  *   }
@@ -167,7 +168,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   // New outputs should use outputCharset2, which is how I would have
   // designed this if I had a time machine.
   private Charset outputCharset2;
-  private String legacyOutputCharset;
+  private Charset legacyOutputCharset;
 
   private boolean testMode = false;
   private Supplier<List<SourceFile>> externsSupplierForTesting = null;
@@ -276,34 +277,26 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    * A helper function for creating the dependency options object.
    */
   static DependencyOptions createDependencyOptions(
-      boolean manageClosureDependencies,
-      boolean onlyClosureDependencies,
-      boolean processCommonJSModules,
-      List<String> closureEntryPoints)
+      CompilerOptions.DependencyMode dependencyMode,
+      List<DependencyOptions.ModuleIdentifier> entryPoints)
       throws FlagUsageException {
-    if (onlyClosureDependencies) {
-      if (closureEntryPoints.isEmpty()) {
-        throw new FlagUsageException("When only_closure_dependencies is "
-          + "on, you must specify at least one closure_entry_point");
+    if (dependencyMode == CompilerOptions.DependencyMode.STRICT) {
+      if (entryPoints.isEmpty()) {
+        throw new FlagUsageException(
+            "When dependency_mode=STRICT, you must " + "specify at least one entry_point");
       }
 
       return new DependencyOptions()
           .setDependencyPruning(true)
           .setDependencySorting(true)
           .setMoocherDropping(true)
-          .setEntryPoints(closureEntryPoints);
-    } else if (processCommonJSModules) {
-      return new DependencyOptions()
-        .setDependencyPruning(false)
-        .setDependencySorting(true)
-        .setMoocherDropping(false)
-        .setEntryPoints(closureEntryPoints);
-    } else if (manageClosureDependencies || !closureEntryPoints.isEmpty()) {
+          .setEntryPoints(entryPoints);
+    } else if (dependencyMode == CompilerOptions.DependencyMode.LOOSE || !entryPoints.isEmpty()) {
       return new DependencyOptions()
           .setDependencyPruning(true)
           .setDependencySorting(true)
           .setMoocherDropping(false)
-          .setEntryPoints(closureEntryPoints);
+          .setEntryPoints(entryPoints);
     }
     return null;
   }
@@ -322,18 +315,17 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     DiagnosticGroups diagnosticGroups = getDiagnosticGroups();
 
     if (config.warningGuards != null) {
-      for (WarningGuardSpec.Entry entry : config.warningGuards.entries) {
-        if ("*".equals(entry.groupName)) {
+      for (FlagEntry<CheckLevel> entry : config.warningGuards) {
+        if ("*".equals(entry.value)) {
           Set<String> groupNames =
               diagnosticGroups.getRegisteredGroups().keySet();
           for (String groupName : groupNames) {
             if (!DiagnosticGroups.wildcardExcludedGroups.contains(groupName)) {
-              diagnosticGroups.setWarningLevel(options, groupName, entry.level);
+              diagnosticGroups.setWarningLevel(options, groupName, entry.flag);
             }
           }
         } else {
-          diagnosticGroups.setWarningLevel(options, entry.groupName,
-              entry.level);
+          diagnosticGroups.setWarningLevel(options, entry.value, entry.flag);
         }
       }
     }
@@ -351,11 +343,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     options.setTweakProcessing(config.tweakProcessing);
     createDefineOrTweakReplacements(config.tweak, options, true);
 
-    DependencyOptions depOptions = createDependencyOptions(
-        config.manageClosureDependencies,
-        config.onlyClosureDependencies,
-        config.processCommonJSModules,
-        config.closureEntryPoints);
+    DependencyOptions depOptions =
+        createDependencyOptions(config.dependencyMode, config.entryPoints);
     if (depOptions != null) {
       options.setDependencyOptions(depOptions);
     }
@@ -605,14 +594,16 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    * Can be overridden by subclasses who want to pull files from different
    * places.
    *
-   * @param files A list of filenames
+   * @param files A list of flag entries indicates js and zip file names.
    * @param allowStdIn Whether '-' is allowed appear as a filename to represent
    *        stdin. If true, '-' is only allowed to appear once.
+   * @param jsModuleSpecs A list js module specs.
    * @return An array of inputs
    */
-  protected List<SourceFile> createInputs(List<String> files,
-      boolean allowStdIn) throws FlagUsageException, IOException {
-    return createInputs(files, new ArrayList<String>() /* zips */, allowStdIn);
+  protected List<SourceFile> createInputs(List<FlagEntry<JsSourceType>> files,
+      boolean allowStdIn, List<JsModuleSpec> jsModuleSpecs)
+      throws FlagUsageException, IOException {
+    return createInputs(files, null /* jsonFiles */, allowStdIn, jsModuleSpecs);
   }
 
   /**
@@ -621,30 +612,15 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    * Can be overridden by subclasses who want to pull files from different
    * places.
    *
-   * @param files A list of filenames.
+   * @param files A list of flag entries indicates js and zip file names.
    * @param jsonFiles A list of json encoded files.
+   * @param jsModuleSpecs A list js module specs.
    * @return An array of inputs
    */
-  protected List<SourceFile> createInputs(List<String> files,
-      List<JsonFileSpec> jsonFiles) throws FlagUsageException, IOException {
-    return createInputs(files, new ArrayList<String>() /* zips */, jsonFiles, false);
-  }
-
-  /**
-   * Creates inputs from a list of source files and zips.
-   *
-   * Can be overridden by subclasses who want to pull files from different
-   * places.
-   *
-   * @param files A list of filenames.
-   * @param zips A list of zip filenames.
-   * @param allowStdIn Whether '-' is allowed appear as a filename to represent
-   *        stdin. If true, '-' is only allowed to appear once.
-   * @return An array of inputs
-   */
-  protected List<SourceFile> createInputs(List<String> files,
-      List<String> zips, boolean allowStdIn) throws FlagUsageException, IOException {
-    return createInputs(files, zips, null, allowStdIn);
+  protected List<SourceFile> createInputs(List<FlagEntry<JsSourceType>> files,
+      List<JsonFileSpec> jsonFiles, List<JsModuleSpec> jsModuleSpecs)
+      throws FlagUsageException, IOException {
+    return createInputs(files, jsonFiles, false, jsModuleSpecs);
   }
 
   /**
@@ -653,20 +629,34 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    * Can be overridden by subclasses who want to pull files from different
    * places.
    *
-   * @param files A list of filenames.
-   * @param zips A list of zip filenames.
+   * @param files A list of flag entries indicates js and zip file names
    * @param jsonFiles A list of json encoded files.
    * @param allowStdIn Whether '-' is allowed appear as a filename to represent
    *        stdin. If true, '-' is only allowed to appear once.
+   * @param jsModuleSpecs A list js module specs.
    * @return An array of inputs
    */
-  protected List<SourceFile> createInputs(List<String> files,
-      List<String> zips, List<JsonFileSpec> jsonFiles, boolean allowStdIn)
-      throws FlagUsageException, IOException {
+  protected List<SourceFile> createInputs(List<FlagEntry<JsSourceType>> files,
+      List<JsonFileSpec> jsonFiles, boolean allowStdIn,
+      List<JsModuleSpec> jsModuleSpecs) throws FlagUsageException, IOException {
     List<SourceFile> inputs = new ArrayList<>(files.size());
     boolean usingStdin = false;
-    for (String filename : files) {
-      if (!"-".equals(filename)) {
+    int jsModuleIndex = 0;
+    JsModuleSpec jsModuleSpec = jsModuleSpecs.isEmpty() ? null : jsModuleSpecs.get(0);
+    int cumulatedInputFilesExpected =
+        jsModuleSpec == null ? Integer.MAX_VALUE : jsModuleSpec.numInputs;
+    for (int i = 0; i < files.size(); i++) {
+      FlagEntry<JsSourceType> file = files.get(i);
+      String filename = file.value;
+      if (file.flag == JsSourceType.JS_ZIP) {
+        if (!"-".equals(filename)) {
+          List<SourceFile> newFiles = SourceFile.fromZipFile(filename, inputCharset);
+          inputs.addAll(newFiles);
+          if (jsModuleSpec != null) {
+            jsModuleSpec.numJsFiles += newFiles.size() - 1;
+          }
+        }
+      } else if (!"-".equals(filename)) {
         SourceFile newFile = SourceFile.fromFile(filename, inputCharset);
         inputs.add(newFile);
       } else {
@@ -690,11 +680,12 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
         inputs.add(SourceFile.fromInputStream("stdin", this.in, inputCharset));
         usingStdin = true;
       }
-    }
-    for (String zipName : zips) {
-      if (!"-".equals(zipName)) {
-        List<SourceFile> newFiles = SourceFile.fromZipFile(zipName, inputCharset);
-        inputs.addAll(newFiles);
+      if (i >= cumulatedInputFilesExpected - 1) {
+        jsModuleIndex++;
+        if (jsModuleIndex < jsModuleSpecs.size()) {
+          jsModuleSpec = jsModuleSpecs.get(jsModuleIndex);
+          cumulatedInputFilesExpected += jsModuleSpec.numInputs;
+        }
       }
     }
     if (jsonFiles != null) {
@@ -708,22 +699,25 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   /**
    * Creates JS source code inputs from a list of files.
    */
-  private List<SourceFile> createSourceInputs(List<String> files, List<String> zips,
+  private List<SourceFile> createSourceInputs(
+      List<JsModuleSpec> jsModuleSpecs,
+      List<FlagEntry<JsSourceType>> files,
       List<JsonFileSpec> jsonFiles)
       throws FlagUsageException, IOException {
     if (isInTestMode()) {
       return inputsSupplierForTesting != null ? inputsSupplierForTesting.get()
           : null;
     }
-    if (files.isEmpty() && zips.isEmpty() && jsonFiles == null) {
+    if (files.isEmpty() && jsonFiles == null) {
       // Request to read from stdin.
-      files = Collections.singletonList("-");
+      files = Collections.singletonList(
+          new FlagEntry<JsSourceType>(JsSourceType.JS, "-"));
     }
     try {
       if (jsonFiles != null) {
-        return createInputs(files, jsonFiles);
+        return createInputs(files, jsonFiles, jsModuleSpecs);
       } else {
-        return createInputs(files, zips, true);
+        return createInputs(files, true, jsModuleSpecs);
       }
     } catch (FlagUsageException e) {
       throw new FlagUsageException("Bad --js flag. " + e.getMessage());
@@ -738,24 +732,26 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     if (files.isEmpty()) {
       return ImmutableList.of(SourceFile.fromCode("/dev/null", ""));
     }
+    List<FlagEntry<JsSourceType>> externFiles = new ArrayList<>();
+    for (String file : files) {
+      externFiles.add(new FlagEntry<JsSourceType>(JsSourceType.EXTERN, file));
+    }
     try {
-      return createInputs(files, false);
+      return createInputs(externFiles, false, new ArrayList<JsModuleSpec>());
     } catch (FlagUsageException e) {
       throw new FlagUsageException("Bad --externs flag. " + e.getMessage());
     }
   }
 
   /**
-   * Creates module objects from a list of module specifications.
+   * Creates module objects from a list of js module specifications.
    *
-   * @param specs A list of module specifications, not null or empty. The spec
-   *        format is: <code>name:num-js-files[:[dep,...][:]]</code>. Module
-   *        names must not contain the ':' character.
-   * @param jsFiles A list of JS file paths, not null
+   * @param specs A list of js module specifications, not null or empty.
+   * @param inputs A list of JS file paths, not null
    * @return An array of module objects
    */
   List<JSModule> createJsModules(
-      List<String> specs, List<SourceFile> inputs)
+      List<JsModuleSpec> specs, List<SourceFile> inputs)
       throws FlagUsageException, IOException {
     if (isInTestMode()) {
       return modulesSupplierForTesting.get();
@@ -769,79 +765,41 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     Map<String, JSModule> modulesByName = new LinkedHashMap<>();
     Map<String, Integer> modulesFileCountMap = new LinkedHashMap<>();
     int numJsFilesExpected = 0, minJsFilesRequired = 0;
-    boolean isFirstModule = true;
-    for (String spec : specs) {
-      // Format is "<name>:<num-js-files>[:[<dep>,...][:]]".
-      String[] parts = spec.split(":");
-      if (parts.length < 2 || parts.length > 4) {
-        throw new FlagUsageException("Expected 2-4 colon-delimited parts in "
-            + "module spec: " + spec);
+    for (JsModuleSpec spec : specs) {
+      checkModuleName(spec.name);
+      if (modulesByName.containsKey(spec.name)) {
+        throw new FlagUsageException("Duplicate module name: " + spec.name);
       }
+      JSModule module = new JSModule(spec.name);
 
-      // Parse module name.
-      String name = parts[0];
-      checkModuleName(name);
-      if (modulesByName.containsKey(name)) {
-        throw new FlagUsageException("Duplicate module name: " + name);
-      }
-      JSModule module = new JSModule(name);
-
-      if (parts.length > 2) {
-        // Parse module dependencies.
-        String depList = parts[2];
-        if (depList.length() > 0) {
-          String[] deps = depList.split(",");
-          for (String dep : deps) {
-            JSModule other = modulesByName.get(dep);
-            if (other == null) {
-              throw new FlagUsageException("Module '" + name
-                  + "' depends on unknown module '" + dep
-                  + "'. Be sure to list modules in dependency order.");
-            }
-            module.addDependency(other);
-          }
+      for (String dep : spec.deps) {
+        JSModule other = modulesByName.get(dep);
+        if (other == null) {
+          throw new FlagUsageException("Module '" + spec.name
+              + "' depends on unknown module '" + dep
+              + "'. Be sure to list modules in dependency order.");
         }
-      }
-
-      // Parse module inputs.
-      int numJsFiles = -1;
-      try {
-        numJsFiles = Integer.parseInt(parts[1]);
-      } catch (NumberFormatException ignored) {
-        numJsFiles = -1;
+        module.addDependency(other);
       }
 
       // We will allow modules of zero input.
-      if (numJsFiles < 0) {
-        // A size of 'auto' is only allowed on the base module if
-        // and it must also be the first module
-        if (parts.length == 2 && "auto".equals(parts[1])) {
-          if (isFirstModule) {
-            numJsFilesExpected = -1;
-          } else {
-            throw new FlagUsageException("Invalid JS file count '" + parts[1]
-                + "' for module: " + name + ". Only the first module may specify " +
-                "a size of 'auto' and it must have no dependencies.");
-          }
-        } else {
-          throw new FlagUsageException("Invalid JS file count '" + parts[1]
-              + "' for module: " + name);
-        }
+      if (spec.numJsFiles < 0) {
+        numJsFilesExpected = -1;
       } else {
-        minJsFilesRequired += numJsFiles;
+        minJsFilesRequired += spec.numJsFiles;
       }
 
 
       if (numJsFilesExpected >= 0) {
-        numJsFilesExpected += numJsFiles;
+        numJsFilesExpected += spec.numJsFiles;
       }
 
       // Add modules in reverse order so that source files are allocated to
       // modules in reverse order. This allows the first module
       // (presumably the base module) to have a size of 'auto'
-      moduleNames.add(0, name);
-      modulesFileCountMap.put(name, numJsFiles);
-      modulesByName.put(name, module);
+      moduleNames.add(0, spec.name);
+      modulesFileCountMap.put(spec.name, spec.numJsFiles);
+      modulesByName.put(spec.name, module);
     }
 
     final int totalNumJsFiles = inputs.size();
@@ -866,7 +824,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       int numJsFiles = modulesFileCountMap.get(moduleName);
       JSModule module = modulesByName.get(moduleName);
 
-      // Check if the first module specified 'auto' for the number of files
+      // Check if the first js module specified 'auto' for the number of files
       if (moduleIndex == moduleNames.size() - 1 && numJsFiles == -1) {
         numJsFiles = numJsFilesLeft;
       }
@@ -1057,8 +1015,17 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       outputFileNames.add(config.jsOutputFile);
     }
 
-    List<String> jsFiles = config.js;
-    List<String> moduleSpecs = config.module;
+    boolean createCommonJsModules = false;
+    if (options.processCommonJSModules
+        && (config.module.size() == 1 && "auto".equals(config.module.get(0)))) {
+      createCommonJsModules = true;
+      config.module.remove(0);
+    }
+
+    List<JsModuleSpec> jsModuleSpecs = new ArrayList<>();
+    for (int i = 0; i < config.module.size(); i++) {
+      jsModuleSpecs.add(JsModuleSpec.create(config.module.get(i), i == 0));
+    }
     List<JsonFileSpec> jsonFiles = null;
 
     if (config.jsonStreamMode == JsonStreamMode.IN ||
@@ -1085,15 +1052,10 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       }
     }
 
-    boolean createCommonJsModules = false;
-    if (options.processCommonJSModules
-        && (moduleSpecs.size() == 1 && "auto".equals(moduleSpecs.get(0)))) {
-      createCommonJsModules = true;
-      moduleSpecs.remove(0);
-    }
-    List<SourceFile> inputs = createSourceInputs(jsFiles, config.jsZip, jsonFiles);
-    if (!moduleSpecs.isEmpty()) {
-      modules = createJsModules(moduleSpecs, inputs);
+    List<SourceFile> inputs =
+        createSourceInputs(jsModuleSpecs, config.mixedJsSources, jsonFiles);
+    if (!jsModuleSpecs.isEmpty()) {
+      modules = createJsModules(jsModuleSpecs, inputs);
       for (JSModule m : modules) {
         outputFileNames.add(getModuleOutputFileName(m));
       }
@@ -1394,15 +1356,14 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    *    be a supported charset.
    * @throws FlagUsageException if flag is not a valid Charset name.
    */
-  private String getLegacyOutputCharset() throws FlagUsageException {
+  private Charset getLegacyOutputCharset() throws FlagUsageException {
     if (!config.charset.isEmpty()) {
       if (!Charset.isSupported(config.charset)) {
-        throw new FlagUsageException(config.charset +
-            " is not a valid charset name.");
+        throw new FlagUsageException(config.charset + " is not a valid charset name.");
       }
-      return config.charset;
+      return Charset.forName(config.charset);
     }
-    return "US-ASCII";
+    return US_ASCII;
   }
 
   /**
@@ -1769,8 +1730,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
-   * Writes the manifest or bundle of all compiler input files that survived
-   * manage_closure_dependencies, if requested.
+   * Writes the manifest or bundle of all compiler input files that were included
+   * as controlled by --dependency_mode, if requested.
    */
   private void outputManifestOrBundle(List<String> outputFiles,
       boolean isManifest) throws IOException {
@@ -2026,6 +1987,20 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
+    private final List<FlagEntry<JsSourceType>> mixedJsSources =
+        new ArrayList<>();
+
+    /**
+     * The JavaScript source file names, including .js and .zip files. You may
+     * specify multiple.
+     */
+    CommandLineConfig setMixedJsSources(
+        List<FlagEntry<JsSourceType>> mixedJsSources) {
+      this.mixedJsSources.clear();
+      this.mixedJsSources.addAll(mixedJsSources);
+      return this;
+    }
+
     private String jsOutputFile = "";
 
     /**
@@ -2226,13 +2201,14 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
-    private WarningGuardSpec warningGuards = null;
+    private ArrayList<FlagEntry<CheckLevel>> warningGuards = new ArrayList<>();
 
     /**
      * Add warning guards.
      */
-    CommandLineConfig setWarningGuardSpec(WarningGuardSpec spec) {
-      this.warningGuards = spec;
+    CommandLineConfig setWarningGuards(List<FlagEntry<CheckLevel>> warningGuards) {
+      this.warningGuards.clear();
+      this.warningGuards.addAll(warningGuards);
       return this;
     }
 
@@ -2285,39 +2261,55 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
-    private boolean manageClosureDependencies = false;
+    private CompilerOptions.DependencyMode dependencyMode = CompilerOptions.DependencyMode.NONE;
 
     /**
      * Sets whether to sort files by their goog.provide/require deps,
      * and prune inputs that are not required.
      */
-    CommandLineConfig setManageClosureDependencies(boolean newVal) {
-      this.manageClosureDependencies = newVal;
+    CommandLineConfig setDependencyMode(CompilerOptions.DependencyMode newVal) {
+      this.dependencyMode = newVal;
       return this;
     }
 
-    private boolean onlyClosureDependencies = false;
+    private List<DependencyOptions.ModuleIdentifier> entryPoints = ImmutableList.of();
 
     /**
-     * Sets whether to sort files by their goog.provide/require deps,
-     * and prune inputs that are not required, and drop all non-closure
-     * files.
-     */
-    CommandLineConfig setOnlyClosureDependencies(boolean newVal) {
-      this.onlyClosureDependencies = newVal;
-      return this;
-    }
-
-    private List<String> closureEntryPoints = ImmutableList.of();
-
-    /**
-     * Set closure entry points, which makes the compiler only include
+     * Set module entry points, which makes the compiler only include
      * those files and sort them in dependency order.
      */
-    CommandLineConfig setClosureEntryPoints(List<String> entryPoints) {
+    CommandLineConfig setEntryPoints(List<DependencyOptions.ModuleIdentifier> entryPoints) {
       Preconditions.checkNotNull(entryPoints);
-      this.closureEntryPoints = entryPoints;
+      this.entryPoints = entryPoints;
       return this;
+    }
+
+    /**
+     * Helper method to convert the manage closure dependecy options to the new
+     * DependencyMode enum value
+     */
+    static CompilerOptions.DependencyMode depModeFromClosureDepOptions(
+        boolean onlyClosureDependencies, boolean manageClosureDependencies) {
+      if (onlyClosureDependencies) {
+        return CompilerOptions.DependencyMode.STRICT;
+      } else if (manageClosureDependencies) {
+        return CompilerOptions.DependencyMode.LOOSE;
+      } else {
+        return CompilerOptions.DependencyMode.NONE;
+      }
+    }
+
+    /**
+     * Helper method to convert a list of closure entry points a list of the new
+     * ModuleIdentifier values
+     */
+    static List<DependencyOptions.ModuleIdentifier> entryPointsFromClosureEntryPoints(
+        List<String> closureEntryPoints) {
+      List<DependencyOptions.ModuleIdentifier> entryPoints = new ArrayList<>();
+      for (String closureEntryPoint : closureEntryPoints) {
+        entryPoints.add(DependencyOptions.ModuleIdentifier.forClosure(closureEntryPoint));
+      }
+      return entryPoints;
     }
 
     private List<String> outputManifests = ImmutableList.of();
@@ -2487,33 +2479,6 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
-   * A little helper class to make it easier to collect warning types
-   * from --jscomp_error, --jscomp_warning, and --jscomp_off.
-   */
-  protected static class WarningGuardSpec {
-    private static class Entry {
-      private final CheckLevel level;
-      private final String groupName;
-
-      private Entry(CheckLevel level, String groupName) {
-        this.level = level;
-        this.groupName = groupName;
-      }
-    }
-
-    // The entries, in the order that they were added.
-    private final List<Entry> entries = new ArrayList<>();
-
-    protected void add(CheckLevel level, String groupName) {
-      entries.add(new Entry(level, groupName));
-    }
-
-    protected void clear() {
-      entries.clear();
-    }
-  }
-
-  /**
    * Representation of a source file from an encoded json stream input
    */
   private class JsonFileSpec {
@@ -2543,6 +2508,109 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
     public void setSourceMap(String map) {
       this.source_map = map;
+    }
+  }
+
+  /**
+   * Flag types for js source files.
+   */
+  protected enum JsSourceType {
+    EXTERN("extern"),
+    JS("js"),
+    JS_ZIP("jszip");
+
+    @VisibleForTesting
+    final String flagName;
+
+    private JsSourceType(String flagName) {
+      this.flagName = flagName;
+    }
+  }
+
+  /**
+   * A pair from flag to its value.
+   */
+  protected static class FlagEntry<T> {
+    @VisibleForTesting
+    final T flag;
+    @VisibleForTesting
+    final String value;
+
+    protected FlagEntry(T flag, String value) {
+      this.flag = flag;
+      this.value = value;
+    }
+  }
+
+  /**
+   * Represents a specification for a js module.
+   */
+  static class JsModuleSpec {
+    private final String name;
+    // Number of input files, including js and zip files.
+    private final int numInputs;
+    private final String[] deps;
+    // Number of input js files. All zip files should be expended.
+    private int numJsFiles;
+
+    private JsModuleSpec(String name, int numInputs, String[] deps) {
+      this.name = name;
+      this.numInputs = numInputs;
+      this.deps = deps;
+      this.numJsFiles = numInputs;
+    }
+
+    /**
+     *
+     * @param specString The spec format is:
+     *        <code>name:num-js-files[:[dep,...][:]]</code>. Module names must
+     *        not contain the ':' character.
+     * @param isFirstModule Whether the spec is for the first module.
+     * @return A parsed js module spec.
+     * @throws FlagUsageException
+     */
+    static JsModuleSpec create(String specString, boolean isFirstModule)
+        throws FlagUsageException {
+      // Format is "<name>:<num-js-files>[:[<dep>,...][:]]".
+      String[] parts = specString.split(":");
+      if (parts.length < 2 || parts.length > 4) {
+        throw new FlagUsageException("Expected 2-4 colon-delimited parts in "
+            + "js module spec: " + specString);
+      }
+
+      // Parse module name.
+      String name = parts[0];
+
+      // Parse module dependencies.
+      String[] deps = parts.length > 2 && parts[2].length() > 0
+          ? parts[2].split(",")
+          : new String[0];
+
+      // Parse module inputs.
+      int numInputs = -1;
+      try {
+        numInputs = Integer.parseInt(parts[1]);
+      } catch (NumberFormatException ignored) {
+        numInputs = -1;
+      }
+
+      // We will allow modules of zero input.
+      if (numInputs < 0) {
+        // A size of 'auto' is only allowed on the base module if
+        // and it must also be the first module
+        if (parts.length == 2 && "auto".equals(parts[1])) {
+          if (!isFirstModule) {
+            throw new FlagUsageException("Invalid JS file count '" + parts[1]
+                + "' for module: " + name + ". Only the first module may specify "
+                + "a size of 'auto' and it must have no dependencies.");
+          }
+        } else {
+          throw new FlagUsageException("Invalid JS file count '" + parts[1]
+              + "' for module: " + name);
+        }
+      }
+
+      return new JsModuleSpec(name, numInputs, deps);
     }
   }
 }

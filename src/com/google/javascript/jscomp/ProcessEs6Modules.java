@@ -224,10 +224,8 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       Node child = export.getFirstChild();
       String name = null;
 
-      if (child.isFunction()) {
-        name = NodeUtil.getFunctionName(child);
-      } else if (child.isClass()) {
-        name = NodeUtil.getClassName(child);
+      if (child.isFunction() || child.isClass()) {
+        name = NodeUtil.getName(child);
       }
 
       if (name != null) {
@@ -404,7 +402,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
   }
 
   private static void checkStrictModeDirective(NodeTraversal t, Node n) {
-    Preconditions.checkState(n.isScript());
+    Preconditions.checkState(n.isScript(), n);
     Set<String> directives = n.getDirectives();
     if (directives != null && directives.contains("use strict")) {
       t.report(n, USELESS_USE_STRICT_DIRECTIVE);

@@ -33,6 +33,9 @@ public final class NamespaceLit extends Namespace {
     }
     if (this.namespaceType == null) {
       ObjectType ot = obj.getObjTypeIfSingletonObj();
+      if (ot == null) {
+        ot = ObjectType.TOP_OBJECT;
+      }
       this.namespaceType = computeJSType(commonTypes, ot.getNominalType(), ot.getFunType());
     }
     return this.namespaceType;
@@ -47,5 +50,9 @@ public final class NamespaceLit extends Namespace {
   @Override
   protected JSType computeJSType(JSTypes commonTypes) {
     return computeJSType(commonTypes, null, null);
+  }
+
+  public String toString() {
+    return this.name;
   }
 }

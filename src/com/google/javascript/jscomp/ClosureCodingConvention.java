@@ -295,7 +295,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
     // Identify forward declaration of form goog.forwardDeclare('foo.bar')
     if (callName.matchesQualifiedName("goog.forwardDeclare") &&
         n.getChildCount() == 2) {
-      Node typeDeclaration = n.getChildAtIndex(1);
+      Node typeDeclaration = n.getSecondChild();
       if (typeDeclaration.isString()) {
         return ImmutableList.of(typeDeclaration.getString());
       }
@@ -345,7 +345,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
   private final Set<String> propertyTestFunctions = ImmutableSet.of(
       "goog.isDef", "goog.isNull", "goog.isDefAndNotNull",
       "goog.isString", "goog.isNumber", "goog.isBoolean",
-      "goog.isFunction", "goog.isArray", "goog.isObject");
+      "goog.isFunction", "goog.isArray", "goog.isArrayLike", "goog.isObject");
 
   @Override
   public boolean isPropertyTestFunction(Node call) {
@@ -475,7 +475,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
     public com.google.javascript.rhino.jstype.JSType
         getAssertedOldType(Node call, JSTypeRegistry registry) {
       if (call.getChildCount() > 2) {
-        Node constructor = call.getFirstChild().getNext().getNext();
+        Node constructor = call.getSecondChild().getNext();
         if (constructor != null) {
           com.google.javascript.rhino.jstype.JSType ownerType =
               constructor.getJSType();
@@ -493,7 +493,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
     @Override
     public JSType getAssertedNewType(Node call, DeclaredTypeRegistry scope) {
       if (call.getChildCount() > 2) {
-        Node constructor = call.getFirstChild().getNext().getNext();
+        Node constructor = call.getSecondChild().getNext();
         if (constructor != null && constructor.isQualifiedName()) {
           QualifiedName qname = QualifiedName.fromNode(constructor);
           JSType functionType = scope.getDeclaredTypeOf(qname.getLeftmostName());

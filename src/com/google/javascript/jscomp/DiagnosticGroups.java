@@ -97,7 +97,7 @@ public class DiagnosticGroups {
       + "conformanceViolations, const, constantProperty, deprecated, "
       + "deprecatedAnnotations, duplicateMessage, es3, "
       + "es5Strict, externsValidation, fileoverviewTags, globalThis, "
-      + "inferredConstCheck, internetExplorerChecks, invalidCasts, "
+      + "internetExplorerChecks, invalidCasts, "
       + "misplacedTypeAnnotation, missingGetCssName, missingProperties, "
       + "missingProvide, missingRequire, missingReturn, msgDescriptions, "
       + "newCheckTypes, nonStandardJsDocs, reportUnknownTypes, "
@@ -148,8 +148,11 @@ public class DiagnosticGroups {
       DiagnosticGroups.registerGroup("unnecessaryCasts",
           TypeValidator.UNNECESSARY_CAST);
 
+  // TODO(tbreisacher): Remove the CANNOT_INFER_CONST_TYPE check after the next
+  // release, and switch this to registerDeprecatedGroup.
+  @Deprecated
   public static final DiagnosticGroup INFERRED_CONST_CHECKS =
-      DiagnosticGroups.registerGroup("inferredConstCheck",
+      DiagnosticGroups.registerGroup("inferredConstCheck",  // undocumented
           TypedScopeCreator.CANNOT_INFER_CONST_TYPE);
 
   public static final DiagnosticGroup FILEOVERVIEW_JSDOC =
@@ -301,7 +304,7 @@ public class DiagnosticGroups {
 //           NewTypeInference.MISTYPED_ASSIGN_RHS,
 //           NewTypeInference.NON_NUMERIC_ARRAY_INDEX,
 //           NewTypeInference.NOT_A_CONSTRUCTOR,
-          NewTypeInference.NOT_CALLABLE,
+//           NewTypeInference.NOT_CALLABLE,
 //           NewTypeInference.NOT_UNIQUE_INSTANTIATION,
 //           NewTypeInference.POSSIBLY_INEXISTENT_PROPERTY,
 //           NewTypeInference.PROPERTY_ACCESS_ON_NONOBJECT,
@@ -467,10 +470,15 @@ public class DiagnosticGroups {
           CheckArguments.BAD_ARGUMENTS_USAGE,
           CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
           CheckEnums.DUPLICATE_ENUM_VALUE,
+          CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
+          CheckEnums.SHORTHAND_ASSIGNMENT_IN_ENUM,
+          CheckForInOverArray.FOR_IN_OVER_ARRAY,
           // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
           // checkTypes DiagnosticGroup
           CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
           CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
+          CheckJSDocStyle.MISSING_PARAMETER_JSDOC,
+          CheckJSDocStyle.MISSING_JSDOC,
           CheckJSDocStyle.EXTERNS_FILES_SHOULD_BE_ANNOTATED,
           CheckJSDocStyle.INCORRECT_PARAM_NAME,
           CheckJSDocStyle.MIXED_PARAM_JSDOC_STYLES,
@@ -488,6 +496,7 @@ public class DiagnosticGroups {
           CheckRequiresAndProvidesSorted.MULTIPLE_MODULES_IN_FILE,
           CheckRequiresAndProvidesSorted.MODULE_AND_PROVIDES,
           CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
+          Es6RewriteArrowFunction.THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT,
           ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC,
           RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
           RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,

@@ -514,7 +514,7 @@ public final class JSTypeCreatorFromJSDoc {
     ImmutableList.Builder<JSType> typeList = ImmutableList.builder();
     if (n.hasChildren()) {
       // Compute instantiation of polymorphic class/interface.
-      Preconditions.checkState(n.getFirstChild().isBlock());
+      Preconditions.checkState(n.getFirstChild().isBlock(), n);
       for (Node child : n.getFirstChild().children()) {
         typeList.add(
             getTypeFromCommentHelper(child, registry, outerTypeParameters));
@@ -617,7 +617,8 @@ public final class JSTypeCreatorFromJSDoc {
 
   private JSType getThisOrNewType(Node n,
       DeclaredTypeRegistry registry, ImmutableList<String> typeParameters) {
-    return getTypeFromComment(n, registry, typeParameters).removeType(JSType.NULL);
+    JSType t = getTypeFromComment(n, registry, typeParameters);
+    return t.isSingletonObjWithNull() ? t.removeType(JSType.NULL) : t;
   }
 
   private ImmutableSet<NominalType> getImplementedInterfaces(
@@ -837,7 +838,7 @@ public final class JSTypeCreatorFromJSDoc {
       DeclaredTypeRegistry registry, FunctionTypeBuilder builder,
       boolean ignoreJsdoc /* for when the jsdoc is malformed */) {
     boolean ignoreFunNode  = !funNode.isFunction();
-    Node params = ignoreFunNode ? null : funNode.getFirstChild().getNext();
+    Node params = ignoreFunNode ? null : funNode.getSecondChild();
     ParamIterator iterator = new ParamIterator(params, jsdoc);
     while (iterator.hasNext()) {
       String pname = iterator.nextString();
@@ -974,8 +975,12 @@ public final class JSTypeCreatorFromJSDoc {
       warnings.add(JSError.make(
           funNode, CONFLICTING_IMPLEMENTED_TYPE, functionName));
     }
+    ImmutableSet<NominalType> extendedInterfaces =
+        getExtendedInterfaces(jsdoc, registry, typeParameters);
     boolean noCycles = constructorType.addInterfaces(
-        getExtendedInterfaces(jsdoc, registry, typeParameters));
+        extendedInterfaces.isEmpty()
+        ? ImmutableSet.of(registry.getCommonTypes().getObjectType())
+        : extendedInterfaces);
     if (!noCycles) {
       warnings.add(JSError.make(
           funNode, INHERITANCE_CYCLE, constructorType.toString()));

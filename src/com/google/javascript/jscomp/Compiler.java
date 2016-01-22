@@ -22,18 +22,12 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.debugging.sourcemap.proto.Mapping.OriginalMapping;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
-import com.google.javascript.jscomp.JSModuleGraph.MissingModuleException;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.TypeValidator.TypeMismatch;
-import com.google.javascript.jscomp.deps.ClosureSortedDependencies;
-import com.google.javascript.jscomp.deps.Es6SortedDependencies;
-import com.google.javascript.jscomp.deps.SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
 import com.google.javascript.jscomp.parsing.Config;
@@ -553,7 +547,7 @@ public class Compiler extends AbstractCompiler {
    * base path is interpreted as a filename rather than a directory. E.g.:
    *   getRelativeTo("../foo/bar.js", "baz/bam/qux.js") --> "baz/foo/bar.js"
    */
-  private String getRelativeTo(String relative, String base) {
+  private static String getRelativeTo(String relative, String base) {
     return FileSystems.getDefault().getPath(base)
         .resolveSibling(relative)
         .normalize()
@@ -1018,16 +1012,26 @@ public class Compiler extends AbstractCompiler {
     }
   }
 
-  @Override
-  public CompilerInput newExternInput(String name) {
+  // Where to put a new synthetic externs file.
+  private static enum SyntheticExternsPosition {
+    START,
+    END
+  }
+
+  CompilerInput newExternInput(String name, SyntheticExternsPosition pos) {
     SourceAst ast = new SyntheticAst(name);
     if (inputsById.containsKey(ast.getInputId())) {
       throw new IllegalArgumentException("Conflicting externs name: " + name);
     }
     CompilerInput input = new CompilerInput(ast, true);
     putCompilerInput(input.getInputId(), input);
-    externsRoot.addChildToFront(ast.getAstRoot(this));
-    externs.add(0, input);
+    if (pos == SyntheticExternsPosition.START) {
+      externsRoot.addChildToFront(ast.getAstRoot(this));
+      externs.add(0, input);
+    } else {
+      externsRoot.addChildToBack(ast.getAstRoot(this));
+      externs.add(input);
+    }
     return input;
   }
 
@@ -1487,12 +1491,6 @@ public class Compiler extends AbstractCompiler {
    * on the way.
    */
   void processAMDAndCommonJSModules() {
-    Map<String, JSModule> modulesByProvide = new LinkedHashMap<>();
-    Map<CompilerInput, JSModule> modulesByInput = new LinkedHashMap<>();
-    // TODO(nicksantos): Refactor module dependency resolution to work nicely
-    // with multiple ways to express dependencies. Directly support JSModules
-    // that are equivalent to a single file and which express their deps
-    // directly in the source.
     ES6ModuleLoader loader = new ES6ModuleLoader(options.moduleRoots, inputs);
     for (CompilerInput input : inputs) {
       input.setCompiler(this);
@@ -1506,74 +1504,8 @@ public class Compiler extends AbstractCompiler {
       if (options.processCommonJSModules) {
         ProcessCommonJSModules cjs = new ProcessCommonJSModules(this, loader, true);
         cjs.process(null, root);
-
-        JSModule m = new JSModule(cjs.inputToModuleName(input));
-        m.addAndOverrideModule(input);
-        for (String provide : input.getProvides()) {
-          modulesByProvide.put(provide, m);
-        }
-        modulesByInput.put(input, m);
       }
     }
-
-    if (options.processCommonJSModules) {
-      List<JSModule> modules = new ArrayList<>(modulesByProvide.values());
-      if (!modules.isEmpty()) {
-        this.modules = modules;
-        this.moduleGraph = new JSModuleGraph(this.modules);
-      }
-      for (JSModule module : modules) {
-        for (CompilerInput input : module.getInputs()) {
-          for (String require : input.getRequires()) {
-            JSModule dependency = modulesByProvide.get(require);
-            if (dependency == null) {
-              report(JSError.make(MISSING_ENTRY_ERROR, require));
-            } else {
-              module.addDependency(dependency);
-            }
-          }
-        }
-      }
-      try {
-        addCommonJSModulesToGraph(modules, modulesByInput);
-      } catch (Exception e) {
-        Throwables.propagate(e);
-      }
-    }
-  }
-
-  void addCommonJSModulesToGraph(
-      List<JSModule> inputModules,
-      Map<CompilerInput, JSModule> modulesByInput)
-      throws CircularDependencyException, MissingProvideException, MissingModuleException {
-    List<CompilerInput> inputs = new ArrayList<>();
-    for (JSModule module : inputModules) {
-      inputs.addAll(module.getInputs());
-    }
-
-    modules = new ArrayList<>();
-
-    DependencyOptions depOptions = options.dependencyOptions;
-    for (CompilerInput input :
-         this.moduleGraph.manageDependencies(depOptions, inputs)) {
-      modules.add(modulesByInput.get(input));
-    }
-
-    SortedDependencies<JSModule> sorter =
-        depOptions.isEs6ModuleOrder()
-            ? new Es6SortedDependencies<>(modules) : new ClosureSortedDependencies<>(modules);
-    modules = sorter.getDependenciesOf(modules, true);
-
-    // The compiler expects a module tree, so add a dependency of all modules on
-    // the first one.
-    JSModule firstModule = Iterables.getFirst(modules, null);
-    for (int i = 1; i < modules.size(); i++) {
-      if (!modules.get(i).getDependencies().contains(firstModule)) {
-        modules.get(i).addDependency(firstModule);
-      }
-    }
-
-    this.moduleGraph = new JSModuleGraph(modules);
   }
 
   public Node parse(SourceFile file) {
@@ -1994,7 +1926,14 @@ public class Compiler extends AbstractCompiler {
   /** Name of the synthetic input that holds synthesized externs. */
   static final String SYNTHETIC_EXTERNS = "{SyntheticVarsDeclar}";
 
+  /**
+   * Name of the synthetic input that holds synthesized externs which
+   * must be at the end of the externs AST.
+   */
+  static final String SYNTHETIC_EXTERNS_AT_END = "{SyntheticVarsAtEnd}";
+
   private CompilerInput synthesizedExternsInput = null;
+  private CompilerInput synthesizedExternsInputAtEnd = null;
 
   private ImmutableMap<String, Node> defaultDefineValues = ImmutableMap.of();
 
@@ -2022,7 +1961,7 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   boolean hasScopeChanged(Node n) {
-    if (!analyzeChangedScopesOnly || phaseOptimizer == null) {
+    if (phaseOptimizer == null) {
       return true;
     }
     return phaseOptimizer.hasScopeChanged(n);
@@ -2069,6 +2008,7 @@ public class Compiler extends AbstractCompiler {
     return options.ideMode;
   }
 
+  @Override
   Config getParserConfig(ConfigContext context) {
     if (parserConfig == null) {
       switch (options.getLanguageIn()) {
@@ -2411,9 +2351,18 @@ public class Compiler extends AbstractCompiler {
   @Override
   CompilerInput getSynthesizedExternsInput() {
     if (synthesizedExternsInput == null) {
-      synthesizedExternsInput = newExternInput(SYNTHETIC_EXTERNS);
+      synthesizedExternsInput = newExternInput(SYNTHETIC_EXTERNS, SyntheticExternsPosition.START);
     }
     return synthesizedExternsInput;
+  }
+
+  @Override
+  CompilerInput getSynthesizedExternsInputAtEnd() {
+    if (synthesizedExternsInputAtEnd == null) {
+      synthesizedExternsInputAtEnd = newExternInput(
+          SYNTHETIC_EXTERNS_AT_END, SyntheticExternsPosition.END);
+    }
+    return synthesizedExternsInputAtEnd;
   }
 
   @Override

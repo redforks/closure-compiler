@@ -408,6 +408,31 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
             "  })($jscomp$loop$2));",
             "  x++;",
             "}"));
+
+    // Preserve type annotation
+    test("for (;;) { /** @type {number} */ let x = 3; var f = function() { return x; } }",
+        LINE_JOINER.join(
+            "var $jscomp$loop$0 = {x: undefined};",
+            "for (;;$jscomp$loop$0 = {x: $jscomp$loop$0.x}) {",
+            "  /** @type {number} */ $jscomp$loop$0.x = 3;",
+            "  var f = function($jscomp$loop$0) {",
+            "    return function() { return $jscomp$loop$0.x}",
+            "  }($jscomp$loop$0);",
+            "}"));
+
+    // Preserve inline type annotation and constancy
+    test("for (;;) { const /** number */ x = 3; var f = function() { return x; } }",
+        LINE_JOINER.join(
+            "var $jscomp$loop$0 = {x: undefined};",
+            "for (;;$jscomp$loop$0 = {x: $jscomp$loop$0.x}) {",
+            "  /** @const @type {number} */ $jscomp$loop$0.x = 3;",
+            "  var f = function($jscomp$loop$0) {",
+            "    return function() { return $jscomp$loop$0.x}",
+            "  }($jscomp$loop$0);",
+            "}"));
+
+    // No-op, vars don't need transpilation
+    testSame("for (;;) { var /** number */ x = 3; var f = function() { return x; } }");
   }
 
   public void testLoopClosureCommaInBody() {
@@ -778,6 +803,10 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
     testWarning("/** @type {number} */ const x = 'str';", TypeValidator.TYPE_MISMATCH_WARNING);
     testWarning("const /** number */ x = 'str';", TypeValidator.TYPE_MISMATCH_WARNING);
     testWarning("const /** @type {number} */ x = 'str';", TypeValidator.TYPE_MISMATCH_WARNING);
+    testWarning("const /** @type {string} */ x = 3, /** @type {number} */ y = 3;",
+        TypeValidator.TYPE_MISMATCH_WARNING);
+    testWarning("const /** @type {string} */ x = 'str', /** @type {string} */ y = 3;",
+        TypeValidator.TYPE_MISMATCH_WARNING);
   }
 
   public void testDoWhileForOfCapturedLetAnnotated() {

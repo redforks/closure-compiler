@@ -119,7 +119,7 @@ public final class NodeUtilTest extends TestCase {
     assertPureBooleanUnknown("`${indefinite}Length`");
 
     assertPureBooleanTrue("class Klass{}");
-
+    assertPureBooleanTrue("new Date()");
   }
 
   private void assertPureBooleanTrue(String val) {
@@ -196,6 +196,7 @@ public final class NodeUtilTest extends TestCase {
 
     assertImpureBooleanTrue("{a:foo()}");
     assertImpureBooleanTrue("[foo()]");
+    assertImpureBooleanTrue("new Date()");
   }
 
   private void assertImpureBooleanTrue(String val) {
@@ -343,7 +344,7 @@ public final class NodeUtilTest extends TestCase {
 
   private void testGetFunctionName(Node function, String name) {
     assertEquals(Token.FUNCTION, function.getType());
-    assertEquals(name, NodeUtil.getFunctionName(function));
+    assertEquals(name, NodeUtil.getName(function));
   }
 
   public void testContainsFunctionDeclaration() {
@@ -389,6 +390,7 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(true, "a + c - d()");
 
     assertSideEffect(true, "function foo() {}");
+    assertSideEffect(true, "class Foo {}");
     assertSideEffect(true, "while(true);");
     assertSideEffect(true, "if(true){a()}");
 
@@ -396,6 +398,10 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(false, "(function() { })");
     assertSideEffect(false, "(function() { i++ })");
     assertSideEffect(false, "[function a(){}]");
+    assertSideEffect(false, "(class { })");
+    assertSideEffect(false, "(class { method() { i++ } })");
+    assertSideEffect(false, "(class Foo extends Bar { })");
+    assertSideEffect(true, "(class extends foo() { })");
 
     assertSideEffect(false, "a");
     assertSideEffect(false, "[b, c [d, [e]]]");
@@ -756,7 +762,7 @@ public final class NodeUtilTest extends TestCase {
     Node ifNode = root.getFirstChild();
 
     Node ifCondition = ifNode.getFirstChild();
-    Node ifCase = ifNode.getFirstChild().getNext();
+    Node ifCase = ifNode.getSecondChild();
     Node elseCase = ifNode.getLastChild();
 
     assertFalse(NodeUtil.isControlStructureCodeBlock(ifNode, ifCondition));
@@ -831,7 +837,7 @@ public final class NodeUtilTest extends TestCase {
     Node actual = parse("try {foo()} catch(e) {} finally {}");
 
     Node tryNode = actual.getFirstChild();
-    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlocks = tryNode.getSecondChild();
     Node catchBlock = catchBlocks.getFirstChild();
 
     NodeUtil.removeChild(catchBlocks, catchBlock);
@@ -847,7 +853,7 @@ public final class NodeUtilTest extends TestCase {
     Node actual = parse("try {foo()} catch(e) {} finally {}");
 
     Node tryNode = actual.getFirstChild();
-    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlocks = tryNode.getSecondChild();
 
     NodeUtil.removeChild(tryNode, catchBlocks);
     String expected = "try {foo()} finally {}";
@@ -861,7 +867,7 @@ public final class NodeUtilTest extends TestCase {
     Node actual = parse("try {foo()} catch(e) {} finally {}");
 
     Node tryNode = actual.getFirstChild();
-    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlocks = tryNode.getSecondChild();
     Node catchBlock = catchBlocks.getFirstChild();
 
     NodeUtil.removeChild(catchBlocks, catchBlock);
@@ -891,7 +897,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("var foo, goo, hoo");
 
     varNode = actual.getFirstChild();
-    nameNode = varNode.getFirstChild().getNext();
+    nameNode = varNode.getSecondChild();
 
     NodeUtil.removeChild(varNode, nameNode);
     expected = "var foo, hoo";
@@ -904,7 +910,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("var foo, hoo");
 
     varNode = actual.getFirstChild();
-    nameNode = varNode.getFirstChild().getNext();
+    nameNode = varNode.getSecondChild();
 
     NodeUtil.removeChild(varNode, nameNode);
     expected = "var foo";
@@ -974,7 +980,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("for(var a=0;a<0;a++)foo()");
 
     forNode = actual.getFirstChild();
-    child = forNode.getFirstChild().getNext();
+    child = forNode.getSecondChild();
 
     NodeUtil.removeChild(forNode, child);
     expected = "for(var a=0;;a++)foo()";
@@ -986,7 +992,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("for(var a=0;a<0;a++)foo()");
 
     forNode = actual.getFirstChild();
-    child = forNode.getFirstChild().getNext().getNext();
+    child = forNode.getSecondChild().getNext();
 
     NodeUtil.removeChild(forNode, child);
     expected = "for(var a=0;a<0;)foo()";
@@ -1094,13 +1100,12 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(testLocalValue("[x]"));
     assertTrue(testLocalValue("{'a':x}"));
 
-    // Pre-increment results in primitive number
+    // increment/decrement results in primitive number, the previous value is
+    // always coersed to a number (even in the post.
     assertTrue(testLocalValue("++x"));
     assertTrue(testLocalValue("--x"));
-
-    // Post-increment, the previous value matters.
-    assertFalse(testLocalValue("x++"));
-    assertFalse(testLocalValue("x--"));
+    assertTrue(testLocalValue("x++"));
+    assertTrue(testLocalValue("x--"));
 
     // The left side of an only assign matters if it is an alias or mutable.
     assertTrue(testLocalValue("x=1"));
@@ -1454,6 +1459,15 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.isNumericResult(getNode("a ? 2 : 3")));
     assertTrue(NodeUtil.isNumericResult(getNode("a,1")));
     assertTrue(NodeUtil.isNumericResult(getNode("a=1")));
+
+    assertFalse(NodeUtil.isNumericResult(getNode("a += 1")));
+
+    assertTrue(NodeUtil.isNumericResult(getNode("a -= 1")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a *= 1")));
+    assertTrue(NodeUtil.isNumericResult(getNode("--a")));
+    assertTrue(NodeUtil.isNumericResult(getNode("++a")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a++")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a--")));
   }
 
   public void testIsBooleanResult() {
@@ -1565,6 +1579,9 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.mayBeString(getNode("(1+{})")));
     assertTrue(NodeUtil.mayBeString(getNode("([]+1)")));
     assertTrue(NodeUtil.mayBeString(getNode("(1+[])")));
+
+    assertTrue(NodeUtil.mayBeString(getNode("a += 'x'")));
+    assertTrue(NodeUtil.mayBeString(getNode("a += 1")));
   }
 
   public void test1() {
@@ -1628,6 +1645,8 @@ public final class NodeUtilTest extends TestCase {
     assertFalse(NodeUtil.isStringResult(getNode("(1+{})")));
     assertFalse(NodeUtil.isStringResult(getNode("([]+1)")));
     assertFalse(NodeUtil.isStringResult(getNode("(1+[])")));
+
+    assertTrue(NodeUtil.isStringResult(getNode("a += 'x'")));
   }
 
   public void testIsObjectResult() {
@@ -1822,7 +1841,8 @@ public final class NodeUtilTest extends TestCase {
   public void testIsLValue() {
     assertLValueNamedX(parse("var x;").getFirstChild().getFirstChild());
     assertLValueNamedX(parse("var w, x;").getFirstChild().getLastChild());
-    assertLValueNamedX(parse("var [...x] = y;").getFirstChild().getFirstChild().getFirstChild());
+    assertLValueNamedX(
+        parse("var [...x] = y;").getFirstChild().getFirstChild().getFirstChild().getFirstChild());
     assertLValueNamedX(parse("var x = y;").getFirstChild().getFirstChild());
     assertLValueNamedX(parse("x++;").getFirstChild().getFirstChild().getFirstChild());
     assertLValueNamedX(
@@ -2028,7 +2048,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring5() {
     Node root = parse("function fn([a, b] = [c, d]){}");
-    Node destructPat = root.getFirstChild().getFirstChild().getNext()
+    Node destructPat = root.getFirstChild().getSecondChild()
         .getFirstChild().getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 

@@ -104,6 +104,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     // this case should be fixed
     assertPrint("new A.B('w').a()", "(new A.B(\"w\")).a()");
 
+    // calling new on the result of a call
+    assertPrintSame("new (a())");
+    assertPrint("new (a())()", "new (a())");
+    assertPrintSame("new (a.b())");
+    assertPrint("new (a.b())()", "new (a.b())");
+
     // Operators: make sure we don't convert binary + and unary + into ++
     assertPrint("x + +y", "x+ +y");
     assertPrint("x - (-y)", "x- -y");
@@ -950,6 +956,26 @@ public final class CodePrinterTest extends CodePrinterTestBase {
         + "function Foo() {\n}\n");
   }
 
+  public void testNonNullTypes() {
+    assertTypeAnnotations(
+        Joiner.on("\n").join(
+            "/** @constructor */",
+            "function Foo() {}",
+            "/** @return {!Foo} */",
+            "Foo.prototype.f = function() { return new Foo; };"),
+        Joiner.on("\n").join(
+            "/**",
+            " * @constructor",
+            " */",
+            "function Foo() {\n}",
+            "/**",
+            " * @return {!Foo}",
+            " */",
+            "Foo.prototype.f = function() {",
+            "  return new Foo;",
+            "};\n"));
+  }
+
   public void testTypeAnnotationsTypeDef() {
     // TODO(johnlenz): It would be nice if there were some way to preserve
     // typedefs but currently they are resolved into the basic types in the
@@ -1156,6 +1182,15 @@ public final class CodePrinterTest extends CodePrinterTestBase {
         "/** @type {(Object|{})} */\ngoog.Enum2 = goog.x ? {} : goog.Enum;\n");
   }
 
+  public void testDeprecatedAnnotationIncludesNewline() {
+    String js = LINE_JOINER.join(
+        "/**@deprecated See {@link replacementClass} for more details.",
+        "@type {number} */var x;",
+        "");
+
+    assertPrettyPrint(js, js);
+  }
+
   private void assertPrettyPrint(String js, String expected) {
     assertPrettyPrint(js, expected, new CompilerOptionBuilder() {
       @Override void setOptions(CompilerOptions options) { /* no-op */ }
@@ -1169,6 +1204,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
           @Override
           void setOptions(CompilerOptions options) {
             options.setPrettyPrint(true);
+            options.setPreserveTypeAnnotations(true);
             options.setLineBreak(false);
             options.setLineLengthThreshold(CodePrinter.DEFAULT_LINE_LENGTH_THRESHOLD);
             optionBuilder.setOptions(options);

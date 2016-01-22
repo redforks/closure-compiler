@@ -1497,7 +1497,6 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
     return createFromTypeNodesInternal(n, sourceName, (StaticTypedScope<JSType>) scope);
   }
 
-  /** @see #createFromTypeNodes(Node, String, StaticTypedScope) */
   private JSType createFromTypeNodesInternal(Node n, String sourceName,
       StaticTypedScope<JSType> scope) {
     switch (n.getType()) {
@@ -1616,14 +1615,14 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
           if (candidateThisType.isNullType() ||
               candidateThisType.isVoidType()) {
             thisType = candidateThisType;
-          } else {
+          } else if (current.getType() == Token.THIS) {
+            thisType = candidateThisType.restrictByNotNullOrUndefined();
+          } else if (current.getType() == Token.NEW) {
             thisType = ObjectType.cast(
                 candidateThisType.restrictByNotNullOrUndefined());
             if (thisType == null) {
               reporter.warning(
                   SimpleErrorReporter.getMessage0(
-                      current.getType() == Token.THIS ?
-                      "msg.jsdoc.function.thisnotobject" :
                       "msg.jsdoc.function.newnotobject"),
                   sourceName,
                   contextNode.getLineno(), contextNode.getCharno());

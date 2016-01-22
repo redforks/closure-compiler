@@ -2272,6 +2272,18 @@ History.prototype.replaceState = function(data, title, opt_url) {};
 History.prototype.state;
 
 /**
+ * Allows web applications to explicitly set default scroll restoration behavior
+ * on history navigation. This property can be either auto or manual.
+ *
+ * Non-standard. Only supported in Chrome 46+.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/History
+ * @see https://majido.github.io/scroll-restoration-proposal/history-based-api.html
+ * @type {string}
+ */
+History.prototype.scrollRestoration;
+
+/**
  * @see http://www.whatwg.org/specs/web-apps/current-work/#popstateevent
  * @constructor
  * @extends {Event}
@@ -2402,6 +2414,9 @@ XMLHttpRequest.prototype.response;
  * Implemented as a draft spec in Firefox 4 as the way to get a requested array
  * buffer from an XMLHttpRequest.
  * @see https://developer.mozilla.org/En/Using_XMLHttpRequest#Receiving_binary_data_using_JavaScript_typed_arrays
+ *
+ * This property is not used anymore and should be removed.
+ * @see https://github.com/google/closure-compiler/pull/1389
  */
 XMLHttpRequest.prototype.mozResponseArrayBuffer;
 

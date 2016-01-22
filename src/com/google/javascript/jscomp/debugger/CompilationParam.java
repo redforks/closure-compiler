@@ -57,7 +57,7 @@ enum CompilationParam {
   /**
    * If true, the input language is ES6. If false, it's ES5.
    */
-  LANG_IN_IS_ES6(false) {
+  LANG_IN_IS_ES6(true) {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setLanguageIn(value ?
@@ -69,7 +69,7 @@ enum CompilationParam {
   /**
    * If true, the output language is ES5. If false, we skip transpilation.
    */
-  TRANSPILE {
+  TRANSPILE(true) {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setLanguageOut(value ?
@@ -373,6 +373,14 @@ enum CompilationParam {
     }
   },
 
+  /** Removes unused static class prototypes */
+  REMOVE_UNUSED_CLASS_PROPERTIES {
+    @Override
+    void apply(CompilerOptions options, boolean value) {
+      options.setRemoveUnusedClassProperties(value);
+    }
+  },
+
   /** Tells AnalyzePrototypeProperties it can remove externed props. */
   REMOVE_UNUSED_PROTOTYPE_PROPERTIES_IN_EXTERNS {
     @Override
@@ -673,7 +681,7 @@ enum CompilationParam {
       }
     });
 
-    return values.toArray(new CompilationParam[values.size()]);
+    return values.toArray(new CompilationParam[0]);
   }
 
   /** Applies a CGI parameter to the options. */

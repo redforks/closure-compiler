@@ -243,8 +243,8 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
   static final DiagnosticType ILLEGAL_PROPERTY_CREATION =
       DiagnosticType.warning("JSC_ILLEGAL_PROPERTY_CREATION",
-                             "Cannot add a property to a struct instance " +
-                             "after it is constructed.");
+          "Cannot add a property to a struct instance after it is constructed."
+          + " (If you already declared the property, make sure to give it a type.)");
 
   static final DiagnosticType ILLEGAL_OBJLIT_KEY =
       DiagnosticType.warning(
@@ -789,7 +789,7 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
       case Token.FOR:
         if (NodeUtil.isForIn(n)) {
-          Node obj = n.getChildAtIndex(1);
+          Node obj = n.getSecondChild();
           if (getJSType(obj).isStruct()) {
             report(t, obj, IN_USED_WITH_STRUCT);
           }
@@ -1498,7 +1498,7 @@ public final class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     }
   }
 
-  private SuggestionPair getClosestPropertySuggestion(
+  private static SuggestionPair getClosestPropertySuggestion(
       JSType objectType, String propName) {
     return null;
   }

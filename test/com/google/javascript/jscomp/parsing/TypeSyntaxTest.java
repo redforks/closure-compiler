@@ -117,7 +117,7 @@ public final class TypeSyntaxTest extends TestCase {
         n.getFirstChild().getFirstChild().getFirstChild().getFirstChild().getFirstChild());
     n = parse("var x = {set a(v: number) {\n}};", LanguageMode.ECMASCRIPT6_TYPED);
     assertDeclaredType("number type", numberType(),
-        n.getFirstChild().getFirstChild().getFirstChild().getFirstChild().getFirstChild().getChildAtIndex(1)
+        n.getFirstChild().getFirstChild().getFirstChild().getFirstChild().getFirstChild().getSecondChild()
             .getFirstChild());
   }
 
@@ -128,13 +128,13 @@ public final class TypeSyntaxTest extends TestCase {
 
   public void testFunctionParamDeclaration() {
     Node fn = parse("function foo(x: string) {\n}").getFirstChild();
-    Node param = fn.getFirstChild().getNext().getFirstChild();
+    Node param = fn.getSecondChild().getFirstChild();
     assertDeclaredType("string type", stringType(), param);
   }
 
   public void testFunctionParamDeclaration_defaultValue() {
     Node fn = parse("function foo(x: string = 'hello') {\n}").getFirstChild();
-    Node param = fn.getFirstChild().getNext().getFirstChild();
+    Node param = fn.getSecondChild().getFirstChild();
     assertDeclaredType("string type", stringType(), param);
   }
 
@@ -154,7 +154,7 @@ public final class TypeSyntaxTest extends TestCase {
 
   public void disabled_testFunctionParamDeclaration_arrow() {
     Node fn = parse("(x: string) => 'hello' + x;").getFirstChild().getFirstChild();
-    Node param = fn.getFirstChild().getNext().getFirstChild();
+    Node param = fn.getSecondChild().getFirstChild();
     assertDeclaredType("string type", stringType(), param);
   }
 

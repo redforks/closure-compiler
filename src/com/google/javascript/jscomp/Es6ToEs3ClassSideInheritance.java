@@ -192,7 +192,7 @@ public final class Es6ToEs3ClassSideInheritance implements HotSwapCompilerPass {
     Node declaration = IR.exprResult(getprop);
     declaration.useSourceInfoIfMissingFromForTree(inheritsCall);
     Node parent = inheritsCall.getParent();
-    parent.getParent().addChildAfter(declaration, parent);
+    parent.getParent().addChildBefore(declaration, parent);
     subclassProps.add(staticProperty);
     compiler.reportCodeChange();
   }
@@ -229,7 +229,7 @@ public final class Es6ToEs3ClassSideInheritance implements HotSwapCompilerPass {
     private void visitFunctionClassDef(Node n) {
       JSDocInfo classInfo = NodeUtil.getBestJSDocInfo(n);
       if (classInfo != null && classInfo.isConstructor()) {
-        String name = NodeUtil.getFunctionName(n);
+        String name = NodeUtil.getName(n);
         if (classNames.contains(name)) {
           multiplyDefinedClasses.add(name);
         } else if (name != null) {

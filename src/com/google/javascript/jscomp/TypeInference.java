@@ -127,7 +127,7 @@ class TypeInference
    */
   private void inferArguments(TypedScope functionScope) {
     Node functionNode = functionScope.getRootNode();
-    Node astParameters = functionNode.getFirstChild().getNext();
+    Node astParameters = functionNode.getSecondChild();
     Node iifeArgumentNode = null;
 
     if (NodeUtil.isCallOrNewTarget(functionNode)) {
@@ -1163,7 +1163,7 @@ class TypeInference
     if (call.hasMoreThanOneChild()) {
       maybeResolveTemplateTypeFromNodes(
           fnType.getParameters(),
-          call.getChildAtIndex(1).siblings(),
+          call.getSecondChild().siblings(),
           resolvedTypes,
           seenTypes);
     }

@@ -427,6 +427,15 @@ public final class FunctionType {
     return isSubtypeOfHelper(other, true);
   }
 
+  // When we write ...?, it has a special meaning, it is NOT a variable-arity
+  // function with arguments of ? type. It means that we should not typecheck
+  // the arguments, eg, we can use that to express the type: a constructor of
+  // Foos with whatever arguments.
+  private boolean acceptsAnyArguments() {
+    return this.requiredFormals.isEmpty() && this.optionalFormals.isEmpty()
+        && this.restFormals != null && this.restFormals.isUnknown();
+  }
+
   private boolean isSubtypeOfHelper(FunctionType other, boolean checkThisType) {
     if (other.isTopFunction() ||
         other.isQmarkFunction() || this.isQmarkFunction()) {
@@ -450,36 +459,38 @@ public final class FunctionType {
           .isSubtypeOfHelper(other, checkThisType);
     }
 
-    // The subtype must have an equal or smaller number of required formals
-    if (requiredFormals.size() > other.requiredFormals.size()) {
-      return false;
-    }
-    int otherMaxTotalArity =
-        other.requiredFormals.size() + other.optionalFormals.size();
-    for (int i = 0; i < otherMaxTotalArity; i++) {
-      // contravariance in the arguments
-      JSType thisFormal = getFormalType(i);
-      JSType otherFormal = other.getFormalType(i);
-      if (thisFormal != null
-          && !thisFormal.isUnknown() && !otherFormal.isUnknown()
-          && !otherFormal.isSubtypeOf(thisFormal)) {
+    if (!other.acceptsAnyArguments()) {
+      // The subtype must have an equal or smaller number of required formals
+      if (requiredFormals.size() > other.requiredFormals.size()) {
         return false;
       }
-    }
-
-    if (other.restFormals != null) {
-      int thisMaxTotalArity =
-          this.requiredFormals.size() + this.optionalFormals.size();
-      if (this.restFormals != null) {
-        thisMaxTotalArity++;
-      }
-      for (int i = otherMaxTotalArity; i < thisMaxTotalArity; i++) {
+      int otherMaxTotalArity =
+          other.requiredFormals.size() + other.optionalFormals.size();
+      for (int i = 0; i < otherMaxTotalArity; i++) {
+        // contravariance in the arguments
         JSType thisFormal = getFormalType(i);
         JSType otherFormal = other.getFormalType(i);
         if (thisFormal != null
             && !thisFormal.isUnknown() && !otherFormal.isUnknown()
             && !otherFormal.isSubtypeOf(thisFormal)) {
           return false;
+        }
+      }
+
+      if (other.restFormals != null) {
+        int thisMaxTotalArity =
+            this.requiredFormals.size() + this.optionalFormals.size();
+        if (this.restFormals != null) {
+          thisMaxTotalArity++;
+        }
+        for (int i = otherMaxTotalArity; i < thisMaxTotalArity; i++) {
+          JSType thisFormal = getFormalType(i);
+          JSType otherFormal = other.getFormalType(i);
+          if (thisFormal != null
+              && !thisFormal.isUnknown() && !otherFormal.isUnknown()
+              && !otherFormal.isSubtypeOf(thisFormal)) {
+            return false;
+          }
         }
       }
     }
@@ -496,8 +507,12 @@ public final class FunctionType {
       // A function without @this can be a subtype of a function with @this.
       if (this.receiverType != null && other.receiverType == null
           || this.receiverType != null && other.receiverType != null
-          // contravariance for the receiver type
-          && !other.receiverType.isSubtypeOf(this.receiverType)) {
+          // Contravariance for the receiver type
+          && !other.receiverType.isSubtypeOf(this.receiverType)
+          // NOTE(dimvar): Covariance for the receiver type.
+          // Not correct, but allowed to make migration easier.
+          // After bounded generics, we could probably drop support for this.
+          && !this.receiverType.isSubtypeOf(other.receiverType)) {
         return false;
       }
     }
@@ -682,12 +697,20 @@ public final class FunctionType {
         f1.requiredFormals.size() + f1.optionalFormals.size(),
         f2.requiredFormals.size() + f2.optionalFormals.size());
     for (int i = minRequiredArity; i < maxTotalArity; i++) {
-      builder.addOptFormal(JSType.nullAcceptingJoin(
-          f1.getFormalType(i), f2.getFormalType(i)));
+      JSType optFormalType =
+          JSType.nullAcceptingJoin(f1.getFormalType(i), f2.getFormalType(i));
+      if (optFormalType.isBottom()) {
+        return BOTTOM_FUNCTION;
+      }
+      builder.addOptFormal(optFormalType);
     }
     if (f1.restFormals != null || f2.restFormals != null) {
-      builder.addRestFormals(
-          JSType.nullAcceptingJoin(f1.restFormals, f2.restFormals));
+      JSType restFormalsType =
+          JSType.nullAcceptingJoin(f1.restFormals, f2.restFormals);
+      if (restFormalsType.isBottom()) {
+        return BOTTOM_FUNCTION;
+      }
+      builder.addRestFormals(restFormalsType);
     }
     JSType retType = JSType.meet(f1.returnType, f2.returnType);
     if (retType.isBottom()) {
@@ -714,12 +737,11 @@ public final class FunctionType {
     int minRequiredArity =
         Math.min(this.requiredFormals.size(), f2.requiredFormals.size());
     for (int i = 0; i < minRequiredArity; i++) {
-      if (JSType.meet(this.getFormalType(i), f2.getFormalType(i)).isBottom()) {
+      if (!JSType.haveCommonSubtype(this.getFormalType(i), f2.getFormalType(i))) {
         return false;
       }
     }
-    return this.getReturnType().isBottom() || f2.getReturnType().isBottom()
-        || !JSType.meet(this.getReturnType(), f2.getReturnType()).isBottom();
+    return JSType.haveCommonSubtype(this.getReturnType(), f2.getReturnType());
   }
 
   public boolean isGeneric() {
@@ -739,33 +761,35 @@ public final class FunctionType {
     if (this == LOOSE_TOP_FUNCTION || other.isTopFunction() || other.isLoose()) {
       return true;
     }
-    if (other.requiredFormals.size() > this.requiredFormals.size()) {
-      return false;
-    }
-    int maxNonInfiniteArity = getMaxArityWithoutRestFormals();
-    for (int i = 0; i < maxNonInfiniteArity; i++) {
-      JSType thisFormal = getFormalType(i);
-      JSType otherFormal = other.getFormalType(i);
-      // NOTE(dimvar): The correct handling here would be to implement
-      // unifyWithSupertype for JSType, ObjectType, etc, to handle the
-      // contravariance here.
-      // But it's probably an overkill to do, so instead we just do a subtype
-      // check if unification fails. Same for restFormals and receiverType.
-      // Altenatively, maybe the unifyWith function could handle both subtype
-      // and supertype, and we'd catch type errors as invalid-argument-type
-      // after unification. (Not sure this is correct, I'd have to try it.)
-      if (otherFormal != null
-          && !thisFormal.unifyWithSubtype(otherFormal, typeParameters, typeMultimap)
-          && !thisFormal.isSubtypeOf(otherFormal)) {
+    if (!acceptsAnyArguments()) {
+      if (other.requiredFormals.size() > this.requiredFormals.size()) {
         return false;
       }
-    }
-    if (this.restFormals != null) {
-      JSType otherRestFormals = other.getFormalType(maxNonInfiniteArity);
-      if (otherRestFormals != null
-          && !this.restFormals.unifyWithSubtype(otherRestFormals, typeParameters, typeMultimap)
-          && !this.restFormals.isSubtypeOf(otherRestFormals)) {
-        return false;
+      int maxNonInfiniteArity = getMaxArityWithoutRestFormals();
+      for (int i = 0; i < maxNonInfiniteArity; i++) {
+        JSType thisFormal = getFormalType(i);
+        JSType otherFormal = other.getFormalType(i);
+        // NOTE(dimvar): The correct handling here would be to implement
+        // unifyWithSupertype for JSType, ObjectType, etc, to handle the
+        // contravariance here.
+        // But it's probably an overkill to do, so instead we just do a subtype
+        // check if unification fails. Same for restFormals and receiverType.
+        // Altenatively, maybe the unifyWith function could handle both subtype
+        // and supertype, and we'd catch type errors as invalid-argument-type
+        // after unification. (Not sure this is correct, I'd have to try it.)
+        if (otherFormal != null
+            && !thisFormal.unifyWithSubtype(otherFormal, typeParameters, typeMultimap)
+            && !thisFormal.isSubtypeOf(otherFormal)) {
+          return false;
+        }
+      }
+      if (this.restFormals != null) {
+        JSType otherRestFormals = other.getFormalType(maxNonInfiniteArity);
+        if (otherRestFormals != null
+            && !this.restFormals.unifyWithSubtype(otherRestFormals, typeParameters, typeMultimap)
+            && !this.restFormals.isSubtypeOf(otherRestFormals)) {
+          return false;
+        }
       }
     }
 
@@ -808,10 +832,13 @@ public final class FunctionType {
     if (f1 == null || f2 == null) {
       return null;
     }
-    Preconditions.checkArgument(f1.typeParameters.isEmpty());
-    Preconditions.checkArgument(f2.typeParameters.isEmpty());
-    Preconditions.checkArgument(f1.outerVarPreconditions.isEmpty());
-    Preconditions.checkArgument(f2.outerVarPreconditions.isEmpty());
+    if (!f1.typeParameters.isEmpty()) {
+      f1 = instantiateGenericsWithUnknown(f1);
+    }
+    if (!f2.typeParameters.isEmpty()) {
+      f2 = instantiateGenericsWithUnknown(f2);
+    }
+    Preconditions.checkState(!f1.isLoose() && !f2.isLoose());
     if (f1.equals(f2)) {
       return f1;
     }
@@ -901,21 +928,23 @@ public final class FunctionType {
       return this;
     }
     Map<String, JSType> reducedMap = typeMap;
-    boolean foundShadowedTypeParam = false;
-    for (String typeParam : this.typeParameters) {
-      if (typeMap.containsKey(typeParam)) {
-        foundShadowedTypeParam = true;
-        break;
-      }
-    }
-    if (foundShadowedTypeParam) {
-      ImmutableMap.Builder<String, JSType> builder = ImmutableMap.builder();
-      for (Map.Entry<String, JSType> entry : typeMap.entrySet()) {
-        if (!typeParameters.contains(entry.getKey())) {
-          builder.put(entry);
+    if (!JSType.MAP_TO_UNKNOWN.equals(typeMap)) {
+      boolean foundShadowedTypeParam = false;
+      for (String typeParam : this.typeParameters) {
+        if (typeMap.containsKey(typeParam)) {
+          foundShadowedTypeParam = true;
+          break;
         }
       }
-      reducedMap = builder.build();
+      if (foundShadowedTypeParam) {
+        ImmutableMap.Builder<String, JSType> builder = ImmutableMap.builder();
+        for (Map.Entry<String, JSType> entry : typeMap.entrySet()) {
+          if (!typeParameters.contains(entry.getKey())) {
+            builder.put(entry);
+          }
+        }
+        reducedMap = builder.build();
+      }
     }
     FunctionTypeBuilder builder = new FunctionTypeBuilder();
     for (JSType reqFormal : this.requiredFormals) {
@@ -991,8 +1020,7 @@ public final class FunctionType {
    * methods of generic nominal types.
    */
   FunctionType substituteGenerics(Map<String, JSType> concreteTypes) {
-    Preconditions.checkState(outerVarPreconditions.isEmpty());
-    if (!isGeneric()) {
+    if (!isGeneric() || JSType.MAP_TO_UNKNOWN.equals(concreteTypes)) {
       return substituteNominalGenerics(concreteTypes);
     }
     ImmutableMap.Builder<String, JSType> builder = ImmutableMap.builder();
@@ -1069,7 +1097,7 @@ public final class FunctionType {
     } else if (this == TOP_FUNCTION) {
       return builder.append("TOP_FUNCTION");
     } else if (this == QMARK_FUNCTION) {
-      return builder.append("QMARK_FUNCTION");
+      return builder.append("Function");
     }
     builder.append("function(");
     if (nominalType != null) {

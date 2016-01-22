@@ -519,7 +519,7 @@ public class Node implements Serializable {
     sourcePosition = -1;
   }
 
-  public Node(int nodeType, Node left, Node mid, Node mid2, Node right) {
+  Node(int nodeType, Node left, Node mid, Node mid2, Node right) {
     Preconditions.checkArgument(left.parent == null);
     Preconditions.checkArgument(left.next == null);
     Preconditions.checkArgument(mid.parent == null);
@@ -552,54 +552,6 @@ public class Node implements Serializable {
   public Node(int nodeType, Node child, int lineno, int charno) {
     this(nodeType, child);
     sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node left, Node right, int lineno, int charno) {
-    this(nodeType, left, right);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node left, Node mid, Node right,
-      int lineno, int charno) {
-    this(nodeType, left, mid, right);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node left, Node mid, Node mid2, Node right,
-      int lineno, int charno) {
-    this(nodeType, left, mid, mid2, right);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node[] children, int lineno, int charno) {
-    this(nodeType, children);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node[] children) {
-    this.type = nodeType;
-    parent = null;
-    if (children.length != 0) {
-      this.first = children[0];
-      this.last = children[children.length - 1];
-
-      for (int i = 1; i < children.length; i++) {
-        if (null != children[i - 1].next) {
-          // fail early on loops. implies same node in array twice
-          throw new IllegalArgumentException("duplicate child");
-        }
-        children[i - 1].next = children[i];
-        Preconditions.checkArgument(children[i - 1].parent == null);
-        children[i - 1].parent = this;
-      }
-      Preconditions.checkArgument(children[children.length - 1].parent == null);
-      children[children.length - 1].parent = this;
-
-      if (null != this.last.next) {
-        // fail early on loops. implies same node in array twice
-        throw new IllegalArgumentException("duplicate child");
-      }
-    }
   }
 
   public static Node newNumber(double number) {
@@ -640,6 +592,10 @@ public class Node implements Serializable {
 
   public Node getFirstChild() {
     return first;
+  }
+
+  public Node getSecondChild() {
+    return first.next;
   }
 
   public Node getLastChild() {
@@ -1603,7 +1559,7 @@ public class Node implements Serializable {
 
           return "Node tree inequality:" +
               "\nTree:\n" + toStringTree() +
-              "\n\nJSDoc differs on subtree: " + diff.nodeActual +
+              "\n\nJSDoc differs on subtree: " + diff.nodeExpected +
               "\nExpected JSDoc: " + jsDocExpected +
               "\nActual JSDoc  : " + jsDocActual;
         }
@@ -2500,7 +2456,7 @@ public class Node implements Serializable {
   /**
    * returns true if all the flags are set in value.
    */
-  private boolean areBitFlagsSet(int value, int flags) {
+  private static boolean areBitFlagsSet(int value, int flags) {
     return (value & flags) == flags;
   }
 

@@ -444,7 +444,7 @@ public class CompilerOptions {
   /** Print string usage as part of the compilation log. */
   boolean outputJsStringUsage;
 
-  /** Converts quoted property accesses to dot syntax (a['b'] -> a.b) */
+  /** Converts quoted property accesses to dot syntax (a['b'] &rarr; a.b) */
   public boolean convertToDottedProperties;
 
   /** Reduces the size of common function expressions. */
@@ -614,11 +614,11 @@ public class CompilerOptions {
   public void setReplaceMessagesWithChromeI18n(
       boolean replaceMessagesWithChromeI18n,
       String tcProjectId) {
-    if (replaceMessagesWithChromeI18n &&
-        messageBundle != null &&
-        !(messageBundle instanceof EmptyMessageBundle)) {
-      throw new RuntimeException("When replacing messages with " +
-          "chrome.i18n.getMessage, a message bundle should not be specified.");
+    if (replaceMessagesWithChromeI18n
+        && messageBundle != null
+        && !(messageBundle instanceof EmptyMessageBundle)) {
+    throw new RuntimeException("When replacing messages with"
+          + " chrome.i18n.getMessage, a message bundle should not be specified.");
     }
 
     this.replaceMessagesWithChromeI18n = replaceMessagesWithChromeI18n;
@@ -917,10 +917,8 @@ public class CompilerOptions {
 
   /**
    * Charset to use when generating code.  If null, then output ASCII.
-   * This is a string because CompilerOptions used to be serializable.
-   * TODO(tbreisacher): Switch to java.nio.Charset.
    */
-  String outputCharset;
+  Charset outputCharset;
 
   /**
    * Transitional option.
@@ -1583,7 +1581,14 @@ public class CompilerOptions {
   public void setManageClosureDependencies(List<String> entryPoints) {
     Preconditions.checkNotNull(entryPoints);
     setManageClosureDependencies(true);
-    dependencyOptions.setEntryPoints(entryPoints);
+
+    List<DependencyOptions.ModuleIdentifier> normalizedEntryPoints = new ArrayList<>();
+
+    for (String entryPoint : entryPoints) {
+      normalizedEntryPoints.add(DependencyOptions.ModuleIdentifier.forClosure(entryPoint));
+    }
+
+    dependencyOptions.setEntryPoints(normalizedEntryPoints);
   }
 
   /**
@@ -1614,17 +1619,17 @@ public class CompilerOptions {
   }
 
   /**
-   * Sets the output charset by name.
+   * Sets the output charset.
    */
-  public void setOutputCharset(String charsetName) {
+  public void setOutputCharset(Charset charsetName) {
     this.outputCharset = charsetName;
   }
 
   /**
-   * Gets the output charset as a rich object.
+   * Gets the output charset.
    */
   Charset getOutputCharset() {
-    return outputCharset == null ? null : Charset.forName(outputCharset);
+    return outputCharset;
   }
 
   /**
@@ -1820,8 +1825,8 @@ public class CompilerOptions {
 
   /**
    * Enables or disables the preservation of all whitespace and formatting within a JSDoc
-   * comment. By default, whitespace is collapsed for all comments except @license and
-   * @preserve blocks,
+   * comment. By default, whitespace is collapsed for all comments except {@literal @license} and
+   * {@literal @preserve} blocks,
    *
    * <p>Setting this option has no effect if {@link #isParseJsDocDocumentation()}
    * returns false.
@@ -2668,5 +2673,28 @@ public class CompilerOptions {
      * stdin and stdout are both json streams.
      */
     BOTH
+  }
+
+  static enum DependencyMode {
+    /**
+     * All files will be included in the compilation
+     */
+    NONE,
+
+    /**
+     * Files must be discoverable from specified entry points. Files
+     * which do not goog.provide a namespace and and are not either
+     * an ES6 or CommonJS module will be automatically treated as entry points.
+     * Module files will be included only if referenced from an entry point.
+     */
+    LOOSE,
+
+    /**
+     * Files must be discoverable from specified entry points. Files which
+     * do not goog.provide a namespace and are neither
+     * an ES6 or CommonJS module will be dropped. Module files will be included
+     * only if referenced from an entry point.
+     */
+    STRICT
   }
 }

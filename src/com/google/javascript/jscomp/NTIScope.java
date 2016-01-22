@@ -111,7 +111,7 @@ final class NTIScope implements DeclaredTypeRegistry {
   /** Used only for error messages; null for top scope */
   String getReadableName() {
     // TODO(dimvar): don't return null for anonymous functions
-    return isTopLevel() ? null : NodeUtil.getFunctionName(root);
+    return isTopLevel() ? null : NodeUtil.getName(root);
   }
 
   String getName() {
@@ -128,7 +128,7 @@ final class NTIScope implements DeclaredTypeRegistry {
   }
 
   public DeclaredFunctionType getDeclaredFunctionType() {
-    return declaredType;
+    return this.declaredType;
   }
 
   boolean isFunction() {
@@ -181,7 +181,7 @@ final class NTIScope implements DeclaredTypeRegistry {
     if (d == null || d.getFunctionScope() == null || d.getTypeOfSimpleDecl() == null) {
       return false;
     }
-    return d.getTypeOfSimpleDecl().getObjTypeIfSingletonObj() != null;
+    return d.getTypeOfSimpleDecl().isSingletonObj();
   }
 
   // In other languages, type names and variable names are in distinct
@@ -209,6 +209,8 @@ final class NTIScope implements DeclaredTypeRegistry {
     return false;
   }
 
+  // For variables it is the same as isDefinedLocally; for properties it looks
+  // for a definition in any scope.
   boolean isDefined(Node qnameNode) {
     Preconditions.checkArgument(qnameNode.isQualifiedName());
     if (qnameNode.isName()) {
@@ -299,6 +301,10 @@ final class NTIScope implements DeclaredTypeRegistry {
 
   boolean isOuterVar(String name) {
     return outerVars.contains(name);
+  }
+
+  boolean isUndeclaredOuterVar(String name) {
+    return outerVars.contains(name) && getDeclaredTypeOf(name) == null;
   }
 
   boolean hasThis() {

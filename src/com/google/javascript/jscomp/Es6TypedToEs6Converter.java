@@ -236,7 +236,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       n.removeProp(Node.IMPLEMENTS);
     }
 
-    Node superType = n.getChildAtIndex(1);
+    Node superType = n.getSecondChild();
     Node newSuperType = maybeGetQualifiedNameNode(superType);
     if (newSuperType != superType) {
       n.replaceChild(superType, newSuperType);
@@ -409,7 +409,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       if (!processedOverloads.contains(overloadStack)) {
         Node original = overloadStack.peek().get(name);
         processedOverloads.add(original);
-        Node paramList = original.getChildAtIndex(1);
+        Node paramList = original.getSecondChild();
         paramList.removeChildren();
         Node originalParent = original.getParent();
         Node originalJsDocNode = originalParent.isMemberFunctionDef() || originalParent.isAssign()
@@ -548,7 +548,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       replaceWithNodes(n, n.children());
     } else if (n.hasMoreThanOneChild()) {
       Node insertPoint = n;
-      for (Node c = n.getFirstChild().getNext(); c != null; c = c.getNext()) {
+      for (Node c = n.getSecondChild(); c != null; c = c.getNext()) {
         Node toAdd;
         if (!c.isExprResult()) {
           toAdd = n.cloneNode();
@@ -788,7 +788,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       String restName = null;
       TypeDeclarationNode restType = null;
 
-      for (Node param : function.getFirstChild().getNext().children()) {
+      for (Node param : function.getSecondChild().children()) {
         if (param.isName()) {
           if (param.isOptionalEs6Typed()) {
             optional.put(param.getString(), param.getDeclaredTypeExpression());
@@ -796,7 +796,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
             required.put(param.getString(), param.getDeclaredTypeExpression());
           }
         } else if (param.isRest()) {
-          restName = param.getString();
+          restName = param.getFirstChild().getString();
           restType = param.getDeclaredTypeExpression();
         }
       }

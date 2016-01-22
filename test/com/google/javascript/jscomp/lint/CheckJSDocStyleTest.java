@@ -17,6 +17,8 @@ package com.google.javascript.jscomp.lint;
 
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.EXTERNS_FILES_SHOULD_BE_ANNOTATED;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.INCORRECT_PARAM_NAME;
+import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MISSING_JSDOC;
+import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MISSING_PARAMETER_JSDOC;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MIXED_PARAM_JSDOC_STYLES;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MUST_BE_PRIVATE;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL;
@@ -45,6 +47,70 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
     return new CheckJSDocStyle(compiler);
+  }
+
+  public void testMissingJsDoc() {
+    testWarning("function f() {}", MISSING_JSDOC);
+    testWarning("var f = function() {}", MISSING_JSDOC);
+    testWarning("let f = function() {}", MISSING_JSDOC);
+    testWarning("const f = function() {}", MISSING_JSDOC);
+    testWarning("foo.bar = function() {}", MISSING_JSDOC);
+    testWarning("Foo.prototype.bar = function() {}", MISSING_JSDOC);
+
+    testSame("/** @return {string} */ function f() {}");
+    testSame("/** @return {string} */ var f = function() {}");
+    testSame("/** @return {string} */ let f = function() {}");
+    testSame("/** @return {string} */ const f = function() {}");
+    testSame("/** @return {string} */ foo.bar = function() {}");
+    testSame("/** @return {string} */ Foo.prototype.bar = function() {}");
+  }
+
+  public void testMissingJsDoc_noWarningIfInlineJsDocIsPresent() {
+    testSame("function /** string */ f() {}");
+    testSame("function f(/** string */ x) {}");
+    testSame("var f = function(/** string */ x) {}");
+    testSame("let f = function(/** string */ x) {}");
+    testSame("const f = function(/** string */ x) {}");
+    testSame("foo.bar = function(/** string */ x) {}");
+    testSame("Foo.prototype.bar = function(/** string */ x) {}");
+  }
+
+  public void testMissingJsDoc_noWarningIfNotTopLevel() {
+    testSame(inIIFE("function f() {}"));
+    testSame(inIIFE("var f = function() {}"));
+    testSame(inIIFE("let f = function() {}"));
+    testSame(inIIFE("const f = function() {}"));
+    testSame(inIIFE("foo.bar = function() {}"));
+
+    testSame("myArray.forEach(function(elem) { alert(elem); });");
+
+    testSame(LINE_JOINER.join(
+        "Polymer({",
+        "  is: 'example-elem',",
+        "  someMethod: function() {},",
+        "});"));
+
+    testSame(LINE_JOINER.join(
+        "Polymer({",
+        "  is: 'example-elem',",
+        "  someMethod() {},",
+        "});"));
+  }
+
+  public void testMissingJsDoc_noWarningOnTestFunctions() {
+    testSame("function testSomeFunctionality() {}");
+    testSame("var testSomeFunctionality = function() {};");
+    testSame("let testSomeFunctionality = function() {};");
+    testSame("const testSomeFunctionality = function() {};");
+
+    testSame("function setUp() {}");
+    testSame("function tearDown() {}");
+    testSame("var setUp = function() {};");
+    testSame("var tearDown = function() {};");
+  }
+
+  private String inIIFE(String js) {
+    return "(function() {\n" + js + "\n})()";
   }
 
   public void testMissingParam_noWarning() {
@@ -78,6 +144,18 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
         " * @param {...string} args",
         " */",
         "function f(...args) {}"));
+
+    testSame(LINE_JOINER.join(
+        "(function() {",
+        "  myArray.forEach(function(elem) { alert(elem); });",
+        "})();"));
+
+    testSame(LINE_JOINER.join(
+        "(function() {",
+        "  myArray.forEach(elem => alert(elem));",
+        "})();"));
+
+    testSame("/** @type {function(number)} */ function f(x) {}");
 
     testSame("function f(/** string */ inlineArg) {}");
     testSame("/** @export */ function f(/** string */ inlineArg) {}");
@@ -115,6 +193,10 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
             " */",
             "function f(x, y = 1) {}"),
         WRONG_NUMBER_OF_PARAMS);
+
+    testWarning("function f(/** string */ x, y) {}", MISSING_PARAMETER_JSDOC);
+    testWarning("function f(x, /** string */ y) {}", MISSING_PARAMETER_JSDOC);
+    testWarning("function /** string */ f(x) {}", MISSING_PARAMETER_JSDOC);
   }
 
   public void testMissingParamWithDestructuringPattern() {

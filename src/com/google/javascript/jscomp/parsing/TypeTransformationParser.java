@@ -28,7 +28,7 @@ import java.util.HashSet;
 
 /**
  * A parser for the type transformation expressions (TTL-Exp) as in
- * @template T := TTL-Exp =:
+ * {@code @template T := TTL-Exp =:}
  *
  */
 public final class TypeTransformationParser {
@@ -158,7 +158,7 @@ public final class TypeTransformationParser {
   private int getFunctionParamCount(Node n) {
     Preconditions.checkArgument(n.isFunction(),
         "Expected a function node, found %s", n);
-    return n.getChildAtIndex(1).getChildCount();
+    return n.getSecondChild().getChildCount();
   }
 
   private Node getFunctionBody(Node n) {
@@ -544,7 +544,7 @@ public final class TypeTransformationParser {
       valid = validBooleanExpression(expr.getFirstChild());
     } else {
       valid = validBooleanExpression(expr.getFirstChild())
-          && validBooleanExpression(expr.getChildAtIndex(1));
+          && validBooleanExpression(expr.getSecondChild());
     }
     if (!valid) {
       warnInvalidInside("boolean", expr);

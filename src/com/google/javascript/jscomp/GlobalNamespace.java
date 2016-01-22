@@ -530,7 +530,7 @@ class GlobalNamespace
     String getNameForClassMembers(Node n) {
       Node parent = n.getParent();
       Preconditions.checkState(parent.isClassMembers());
-      String className = NodeUtil.getClassName(parent.getParent());
+      String className = NodeUtil.getName(parent.getParent());
       return className == null ? null : className + '.' + n.getString();
     }
 
@@ -561,7 +561,7 @@ class GlobalNamespace
           return getValueType(n.getLastChild());
         case Token.HOOK:
           // The same line of reasoning used for the OR case applies here.
-          Node second = n.getFirstChild().getNext();
+          Node second = n.getSecondChild();
           Name.Type t = getValueType(second);
           if (t != Name.Type.OTHER) {
             return t;

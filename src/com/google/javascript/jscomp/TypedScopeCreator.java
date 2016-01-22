@@ -762,7 +762,7 @@ final class TypedScopeCreator implements ScopeCreator {
      */
     void assertDefinitionNode(Node n, int type) {
       Preconditions.checkState(sourceName != null);
-      Preconditions.checkState(n.getType() == type);
+      Preconditions.checkState(n.getType() == type, n);
     }
 
     /**
@@ -912,7 +912,7 @@ final class TypedScopeCreator implements ScopeCreator {
             rValue != null && rValue.isFunction();
         Node fnRoot = isFnLiteral ? rValue : null;
         Node parametersNode = isFnLiteral ?
-            rValue.getFirstChild().getNext() : null;
+            rValue.getSecondChild() : null;
 
         if (info != null && info.hasType()) {
           JSType type = info.getType().evaluate(scope, typeRegistry);
@@ -1074,8 +1074,6 @@ final class TypedScopeCreator implements ScopeCreator {
      * @param rValue The node of the enum.
      * @param name The enum's name
      * @param info The {@link JSDocInfo} attached to the enum definition.
-     * @param lValueNode The node where this function is being
-     *     assigned.
      */
     private EnumType createEnumTypeFromNodes(Node rValue, String name, JSDocInfo info) {
       Preconditions.checkNotNull(info);
@@ -2081,7 +2079,7 @@ final class TypedScopeCreator implements ScopeCreator {
      * Declares all of a function's arguments.
      */
     private void declareArguments(Node functionNode) {
-      Node astParameters = functionNode.getFirstChild().getNext();
+      Node astParameters = functionNode.getSecondChild();
       Node iifeArgumentNode = null;
 
       if (NodeUtil.isCallOrNewTarget(functionNode)) {

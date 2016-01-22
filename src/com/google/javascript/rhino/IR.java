@@ -559,7 +559,7 @@ public class IR {
   }
 
   public static Node rest(String name) {
-    return Node.newString(Token.REST, name);
+    return new Node(Token.REST, name(name));
   }
 
   public static Node spread(Node expr) {
@@ -736,6 +736,7 @@ public class IR {
       case Token.SUB:
       case Token.SUPER:
       case Token.TEMPLATELIT:
+      case Token.TAGGED_TEMPLATELIT:
       case Token.THIS:
       case Token.TYPEOF:
       case Token.TRUE:

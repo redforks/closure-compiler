@@ -68,6 +68,11 @@ public abstract class JSType implements TypeI {
   protected static final int TOP_SCALAR_MASK =
       NUMBER_MASK | STRING_MASK | BOOLEAN_MASK | NULL_MASK | UNDEFINED_MASK;
 
+  // NOTE(dimvar): This may cause problems when doing many compiles in the
+  // same Java process. But passing the JSTypes object around just to avoid
+  // making the field non-static is a huge readability pain.
+  private static JSTypes commonTypes = null;
+
   static final Map<String, JSType> MAP_TO_UNKNOWN =
       new Map<String, JSType>() {
     public void clear() {
@@ -332,6 +337,10 @@ public abstract class JSType implements TypeI {
     return true;
   }
 
+  public static void setCommonTypes(JSTypes commonTypes) {
+    JSType.commonTypes = commonTypes;
+  }
+
   boolean hasScalar() {
     return (getMask() & TOP_SCALAR_MASK) != 0 || EnumType.hasScalar(getEnums());
   }
@@ -373,19 +382,6 @@ public abstract class JSType implements TypeI {
       }
     }
     return false;
-  }
-
-  public boolean isLooseStruct() {
-    boolean foundLooseStruct = false;
-    boolean foundNonLooseStruct = false;
-    for (ObjectType objType : getObjs()) {
-      if (objType.isLooseStruct()) {
-        foundLooseStruct = true;
-      } else if (objType.isStruct()) {
-        foundNonLooseStruct = true;
-      }
-    }
-    return foundLooseStruct && !foundNonLooseStruct;
   }
 
   public boolean isLoose() {
@@ -438,7 +434,7 @@ public abstract class JSType implements TypeI {
         Iterables.getOnlyElement(getEnums()).getEnumeratedType() : null;
   }
 
-  public JSType autobox(JSTypes commonTypes) {
+  public JSType autobox() {
     if (isTop() || isUnknown()) {
       return this;
     }
@@ -474,7 +470,7 @@ public abstract class JSType implements TypeI {
         mask & ~(NUMBER_MASK | STRING_MASK | BOOLEAN_MASK),
         builder.build(), getTypeVar(), ImmutableSet.<EnumType>of());
     for (EnumType e : getEnums()) {
-      result = join(result, e.getEnumeratedType().autobox(commonTypes));
+      result = join(result, e.getEnumeratedType().autobox());
     }
     return result;
   }
@@ -563,6 +559,16 @@ public abstract class JSType implements TypeI {
       if (type == null) {
         break;
       }
+      // The only way to instantiate with a loose type is if there are no
+      // concrete types available. We may miss some warnings this way but we
+      // also avoid false positives.
+      if (type.isLoose()) {
+        type = null;
+        break;
+      } else if (other.isLoose()) {
+        typesToRemove.add(other);
+        continue;
+      }
       JSType unified = unifyUnknowns(type, other);
       if (unified != null) {
         // Can't remove elms while iterating over the collection, so do it later
@@ -597,9 +603,9 @@ public abstract class JSType implements TypeI {
   static JSType unifyUnknowns(JSType t1, JSType t2) {
     Preconditions.checkNotNull(t1);
     Preconditions.checkNotNull(t2);
-    if (t1.isUnknown()) {
+    if (t1.isUnknown() || t1.isLoose()) {
       return t2;
-    } else if (t2.isUnknown()) {
+    } else if (t2.isUnknown() || t2.isLoose()) {
       return t1;
     } else if (t1.isTop() && t2.isTop()) {
       return TOP;
@@ -726,6 +732,21 @@ public abstract class JSType implements TypeI {
   }
 
   public JSType specialize(JSType other) {
+    JSType t = specializeHelper(other);
+    if (t.isBottom() && (isLoose() || other.isLoose())) {
+      t = autobox().specializeHelper(other.autobox());
+      // If the autoboxed specialization is not null, this means that one of
+      // the two types contains scalars that when autoboxed are compatible with
+      // the loose object in the other type. In this case, don't return bottom,
+      // just leave the type unspecialized.
+      if (!t.isBottom()) {
+        return this;
+      }
+    }
+    return t;
+  }
+
+  private JSType specializeHelper(JSType other) {
     if (other.isTop() || other.isUnknown() || this == other) {
       return this;
     }
@@ -741,8 +762,12 @@ public abstract class JSType implements TypeI {
     // NOTE(dimvar): I couldn't find a case where this.hasFalsyMask(). If the
     // preconditions check breaks, add code analogous to the hasTruthyMask case.
     Preconditions.checkState(!hasFalsyMask());
-    if (this.isTop() || this.isUnknown()) {
+    if (this.isTop()) {
       return other;
+    }
+    if (this.isUnknown()) {
+      NominalType otherNt = other.getNominalTypeIfSingletonObj();
+      return otherNt != null && otherNt.isBuiltinObject() ? other.withLoose() : other;
     }
     int newMask = getMask() & other.getMask();
     String newTypevar;
@@ -763,6 +788,29 @@ public abstract class JSType implements TypeI {
   }
 
   public static JSType meet(JSType lhs, JSType rhs) {
+    JSType t = meetHelper(lhs, rhs);
+    if (t.isBottom() && (lhs.isLoose() || rhs.isLoose())) {
+      t = meetHelper(lhs.autobox(), rhs.autobox());
+      // If the autoboxed meet is not null, this means that one of
+      // the two types contains scalars that when autoboxed are compatible with
+      // the loose object in the other type. In this case, don't return bottom,
+      // use some heuristic to return a result.
+      if (!t.isBottom()) {
+        if (!lhs.isLoose()) {
+          return lhs;
+        } else {
+          // If this fails, find repro case, add a test, and return ? here.
+          Preconditions.checkState(!rhs.isLoose(), "Two loose types %s and %s"
+              + " that meet to bottom, meet to non-bottom after autoboxing.",
+              lhs.toString(), rhs.toString());
+          return rhs;
+        }
+      }
+    }
+    return t;
+  }
+
+  public static JSType meetHelper(JSType lhs, JSType rhs) {
     if (lhs.isTop()) {
       return rhs;
     } else if (rhs.isTop()) {
@@ -911,7 +959,12 @@ public abstract class JSType implements TypeI {
 
   @Override
   public boolean isSubtypeOf(TypeI other) {
-    return isSubtypeOfHelper(true, (JSType) other);
+    JSType type2 = (JSType) other;
+    if (isLoose() || type2.isLoose()) {
+      return autobox().isSubtypeOfHelper(true, type2.autobox());
+    } else {
+      return isSubtypeOfHelper(true, type2);
+    }
   }
 
   private boolean isSubtypeOfHelper(boolean keepLoosenessOfThis, JSType other) {
@@ -957,7 +1010,8 @@ public abstract class JSType implements TypeI {
     }
     int newMask = getMask() & ~otherMask;
     if ((otherMask & NON_SCALAR_MASK) == 0) {
-      return makeType(newMask, getObjs(), getTypeVar(), getEnums());
+      return newMask == getMask()
+          ? this : makeType(newMask, getObjs(), getTypeVar(), getEnums());
     }
     // TODO(dimvar): If objs and enums stay unchanged, reuse, don't recreate.
     Preconditions.checkState(other.getObjs().size() == 1,
@@ -992,7 +1046,11 @@ public abstract class JSType implements TypeI {
     return getMask() == NON_SCALAR_MASK && getObjs().size() == 1;
   }
 
-  public ObjectType getObjTypeIfSingletonObj() {
+  boolean isSingletonObjWithNull() {
+    return getMask() == (NON_SCALAR_MASK | NULL_MASK) && getObjs().size() == 1;
+  }
+
+  ObjectType getObjTypeIfSingletonObj() {
     return isSingletonObj() ? Iterables.getOnlyElement(getObjs()) : null;
   }
 
@@ -1014,6 +1072,12 @@ public abstract class JSType implements TypeI {
   public NominalType getNominalTypeIfSingletonObj() {
     return isSingletonObj()
         ? Iterables.getOnlyElement(getObjs()).getNominalType() : null;
+  }
+
+  // True for functions and instances of Object (including object literals).
+  public boolean isNonClassyObject() {
+    NominalType nt = getNominalTypeIfSingletonObj();
+    return nt != null && !nt.isClassy();
   }
 
   public boolean isInterfaceDefinition() {

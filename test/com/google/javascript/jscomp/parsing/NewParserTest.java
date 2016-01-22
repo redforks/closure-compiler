@@ -253,7 +253,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     assertThat(getprop.getLineno()).isEqualTo(2);
     assertThat(getprop.getCharno()).isEqualTo(1);
 
-    Node name = getprop.getFirstChild().getNext();
+    Node name = getprop.getSecondChild();
     assertThat(name.getType()).isEqualTo(Token.STRING);
     assertThat(name.getLineno()).isEqualTo(2);
     assertThat(name.getCharno()).isEqualTo(5);
@@ -266,7 +266,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     assertThat(getprop.getLineno()).isEqualTo(2);
     assertThat(getprop.getCharno()).isEqualTo(1);
 
-    Node name = getprop.getFirstChild().getNext();
+    Node name = getprop.getSecondChild();
     assertThat(name.getType()).isEqualTo(Token.STRING);
     assertThat(name.getLineno()).isEqualTo(3);
     assertThat(name.getCharno()).isEqualTo(0);
@@ -298,7 +298,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
 
   public void testLinenoCharnoForComparison() throws Exception {
     Node lt =
-      parse("for (; i < j;){}").getFirstChild().getFirstChild().getNext();
+      parse("for (; i < j;){}").getFirstChild().getSecondChild();
 
     assertThat(lt.getType()).isEqualTo(Token.LT);
     assertThat(lt.getLineno()).isEqualTo(1);
@@ -553,7 +553,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     Node functionNode = parse(
         "var a = /** @param {number} index */5;"
         + "/** @return {boolean} */function f(index){}")
-        .getFirstChild().getNext();
+        .getSecondChild();
 
     assertThat(functionNode.getType()).isEqualTo(Token.FUNCTION);
     JSDocInfo info = functionNode.getJSDocInfo();
@@ -741,7 +741,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     Node fn = parse("function f(/** string */ x) {}").getFirstChild();
     assertThat(fn.isFunction()).isTrue();
 
-    JSDocInfo info = fn.getFirstChild().getNext().getFirstChild().getJSDocInfo();
+    JSDocInfo info = fn.getSecondChild().getFirstChild().getJSDocInfo();
     assertThat(info).isNotNull();
     assertTypeEquals(STRING_TYPE, info.getType());
   }
@@ -751,7 +751,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
         "function f(/** ? */ x) {}").getFirstChild();
     assertThat(fn.isFunction()).isTrue();
 
-    JSDocInfo info = fn.getFirstChild().getNext().getFirstChild().getJSDocInfo();
+    JSDocInfo info = fn.getSecondChild().getFirstChild().getJSDocInfo();
     assertThat(info).isNotNull();
     assertTypeEquals(UNKNOWN_TYPE, info.getType());
   }
@@ -779,7 +779,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     Node fn = parse("function f(/** {attr: number} */ x) {}").getFirstChild();
     assertThat(fn.isFunction()).isTrue();
 
-    JSDocInfo info = fn.getFirstChild().getNext().getFirstChild().getJSDocInfo();
+    JSDocInfo info = fn.getSecondChild().getFirstChild().getJSDocInfo();
     assertThat(info).isNotNull();
     assertTypeEquals(
         createRecordTypeBuilder().addProperty("attr", NUMBER_TYPE, null).build(), info.getType());
@@ -789,7 +789,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     Node fn = parse("function f(/** string= */ x) {}").getFirstChild();
     assertThat(fn.isFunction()).isTrue();
 
-    JSDocInfo info = fn.getFirstChild().getNext().getFirstChild().getJSDocInfo();
+    JSDocInfo info = fn.getSecondChild().getFirstChild().getJSDocInfo();
     assertThat(info.getType().isOptionalArg()).isTrue();
   }
 
@@ -797,7 +797,7 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     Node fn = parse("function f(/** ...string */ x) {}").getFirstChild();
     assertThat(fn.isFunction()).isTrue();
 
-    JSDocInfo info = fn.getFirstChild().getNext().getFirstChild().getJSDocInfo();
+    JSDocInfo info = fn.getSecondChild().getFirstChild().getJSDocInfo();
     assertThat(info.getType().isVarArgs()).isTrue();
   }
 
@@ -1304,6 +1304,8 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     parse("const [first, ...rest] = foo();");
 
     parseError("var [first, ...more, last] = foo();", "']' expected");
+
+    // TODO(tbreisacher): This should parse without error. This is valid in ES6.
     parseError("var [first, ...[re, st]] = foo();", "lvalues in rest elements must be identifiers");
 
     mode = LanguageMode.ECMASCRIPT5;
@@ -2356,7 +2358,17 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     parse("(x, ...xs) => xs");
     parse("(x, y, ...xs) => xs");
     parseError("(...xs, x) => xs", "')' expected");
+  }
 
+  public void testRestParameters_ES7() {
+    // Invalid in ES6 but will probably be valid in ES7.
+    // See https://github.com/google/closure-compiler/issues/1383
+    parseError("(...[x]) => xs", "'identifier' expected");
+    parseError("(...[x, y]) => xs", "'identifier' expected");
+    parseError("(a, b, c, ...[x, y, z]) => x", "'identifier' expected");
+  }
+
+  public void testRestParameters_ES5() {
     mode = LanguageMode.ECMASCRIPT5;
     parseWarning("function f(...b) {}",
         "this language feature is only supported in es6 mode: rest parameters");

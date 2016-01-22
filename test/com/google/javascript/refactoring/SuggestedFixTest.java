@@ -117,7 +117,7 @@ public class SuggestedFixTest {
 
     // Delete the 2nd variable.
     fix = new SuggestedFix.Builder()
-        .delete(root.getFirstChild().getFirstChild().getNext())
+        .delete(root.getFirstChild().getSecondChild())
         .build();
     replacement = new CodeReplacement(13, "bar, ".length(), "");
     assertReplacement(fix, replacement);
@@ -667,6 +667,28 @@ public class SuggestedFixTest {
     String input =
         before
         + googRequire
+        + "\n"
+        + "/** @private */\n"
+        + "function foo_() {};\n";
+    Compiler compiler = getCompiler(input);
+    Node root = compileToScriptRoot(compiler);
+    Match match = new Match(root.getFirstChild(), new NodeMetadata(compiler));
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .removeGoogRequire(match, "abc.def")
+        .build();
+    CodeReplacement replacement = new CodeReplacement(before.length(), googRequire.length(), "");
+    assertReplacement(fix, replacement);
+  }
+
+  @Test
+  public void testRemoveGoogRequireAmongSeveralGoogRequires() {
+    String before = "/** @fileoverview blah */\n\n"
+        + "goog.provide('js.Foo');\n\ngoog.require('abc.abc');\n";
+    String googRequire = "goog.require('abc.def');\n";
+    String input =
+        before
+        + googRequire
+        + "goog.require('def');\n"
         + "\n"
         + "/** @private */\n"
         + "function foo_() {};\n";

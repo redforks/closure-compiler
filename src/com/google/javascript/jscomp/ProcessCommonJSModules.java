@@ -17,10 +17,13 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Multiset;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPreOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 
 import java.net.URI;
@@ -179,12 +182,13 @@ public final class ProcessCommonJSModules implements CompilerPass {
     private int scriptNodeCount = 0;
     private List<Node> moduleExportRefs = new ArrayList<>();
     private List<Node> exportRefs = new ArrayList<>();
+    Multiset<String> propertyExportRefCount = HashMultiset.create();
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       if (n.isCall() && n.getChildCount() == 2 &&
           n.getFirstChild().matchesQualifiedName("require") &&
-          n.getChildAtIndex(1).isString()) {
+          n.getSecondChild().isString()) {
         visitRequireCall(t, n, parent);
       }
 
@@ -243,6 +247,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
         // variable or function parameter
         if (v == null) {
           moduleExportRefs.add(n);
+          maybeAddReferenceCount(n);
         }
       }
 
@@ -250,8 +255,41 @@ public final class ProcessCommonJSModules implements CompilerPass {
         Var v = t.getScope().getVar(n.getString());
         if (v == null || v.isGlobal()) {
           exportRefs.add(n);
+          maybeAddReferenceCount(n);
         }
       }
+    }
+
+    private Node getBaseQualifiedNameNode(Node n) {
+      Node refParent = n;
+      while (refParent.getParent() != null && refParent.getParent().isQualifiedName()) {
+        refParent = refParent.getParent();
+      }
+
+      if (refParent == null || !refParent.getParent().isAssign()) {
+        return null;
+      }
+
+      return refParent;
+    }
+
+    private void maybeAddReferenceCount(Node n) {
+      Node refParent = getBaseQualifiedNameNode(n);
+
+      if (refParent == null) {
+        return;
+      }
+
+      String qName = refParent.getQualifiedName();
+      if (qName.startsWith("module.exports.")) {
+        qName = qName.substring("module.exports.".length());
+      } else if (qName.startsWith("exports.")) {
+        qName = qName.substring("exports.".length());
+      } else {
+        return;
+      }
+
+      propertyExportRefCount.add(qName);
     }
 
     /**
@@ -259,7 +297,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
      * to be a direct reference to name of require module.
      */
     private void visitRequireCall(NodeTraversal t, Node require, Node parent) {
-      String requireName = require.getChildAtIndex(1).getString();
+      String requireName = require.getSecondChild().getString();
       URI loadAddress = loader.locateCommonJsModule(requireName, t.getInput());
       if (loadAddress == null) {
         compiler.report(t.makeError(require, ES6ModuleLoader.LOAD_ERROR, requireName));
@@ -320,7 +358,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
       Node p = n.getParent();
       if (p != null) {
         // pull out then-branch
-        replaceIfStatementWithBranch(n, n.getChildAtIndex(1));
+        replaceIfStatementWithBranch(n, n.getSecondChild());
       }
     }
 
@@ -377,58 +415,89 @@ public final class ProcessCommonJSModules implements CompilerPass {
         // One top-level assign: transform to
         // moduleName = rhs
         Node ref = moduleExportRefs.get(0);
-        Node newName = IR.name(moduleName);
+        Node newName = IR.name(moduleName).srcref(ref);
         newName.putProp(Node.ORIGINALNAME_PROP, ref.getQualifiedName());
+        Node rhsValue = ref.getNext();
 
-        Node rhsValue = ref.getNext().detachFromParent();
-        Node newExprResult = IR.exprResult(IR.assign(newName, rhsValue)
-          .useSourceInfoIfMissingFromForTree(ref.getParent()));
-
-        // If the rValue is an object literal, check each property to see if
-        // it's an alias, and if it is, copy the annotation over.
-        // This is a common idiom to export a set of constructors.
         if (rhsValue.isObjectLit()) {
-          Scope globalScope = SyntacticScopeCreator.makeUntyped(compiler)
-              .createScope(script, null);
-          for (Node key = rhsValue.getFirstChild();
-               key != null; key = key.getNext()) {
-            if (key.getJSDocInfo() == null &&
-                (key.getFirstChild() == null || key.getFirstChild().isName())) {
-              String aliasedVarName = key.getFirstChild() == null ?
-                  key.getString() : key.getFirstChild().getString();
-              Var aliasedVar = globalScope.getVar(aliasedVarName);
-              JSDocInfo info =
-                  aliasedVar == null ? null : aliasedVar.getJSDocInfo();
-              if (info != null &&
-                  info.getVisibility() != JSDocInfo.Visibility.PRIVATE) {
-                key.setJSDocInfo(info);
-              }
+          addConstToObjLitKeys(rhsValue);
+        }
+
+        Node assign = ref.getParent();
+        assign.replaceChild(ref, newName);
+        JSDocInfoBuilder builder = new JSDocInfoBuilder(true);
+        builder.recordConstancy();
+        JSDocInfo info = builder.build();
+        assign.setJSDocInfo(info);
+        return;
+      }
+
+      Iterable<Node> exports;
+      boolean hasLValues = hasExportLValues();
+      if (hasLValues) {
+        exports = moduleExportRefs;
+      } else {
+        exports = Iterables.concat(moduleExportRefs, exportRefs);
+      }
+
+      // Transform to:
+      //
+      // moduleName.prop0 = 0; // etc.
+      boolean declaredModuleExports = false;
+      for (Node ref : exports) {
+        // If there is a module exports assignment at this point, we need to
+        // add a variable declaration for the module name, because otherwise
+        // the default declaration for the goog.provide is a constant and the
+        // assignment would violate that constant.
+        // Note that the hasOneTopLevelModuleExportAssign() case handles the
+        // more common case of assigning to module.exports on the top level,
+        // but CommonJS code also sometimes assigns to module.exports inside
+        // of more complex expressions.
+        if (ref.getParent().isAssign()
+            && !ref.getParent().getParent().isExprResult()
+            && !declaredModuleExports) {
+          // Adds "var moduleName" to front of the current file.
+          script.addChildToFront(
+              IR.var(IR.name(moduleName))
+                  .useSourceInfoIfMissingFromForTree(ref));
+          declaredModuleExports = true;
+        }
+
+        String qName = null;
+        if (ref.isQualifiedName()) {
+          Node baseName = getBaseQualifiedNameNode(ref);
+          if (baseName != null) {
+            qName = baseName.getQualifiedName();
+            if (qName.startsWith("module.exports.")) {
+              qName = qName.substring("module.exports.".length());
+            } else {
+              qName = qName.substring("exports.".length());
             }
           }
         }
 
-        Node assign = ref.getParent();
-        Node exprResult = assign.getParent();
-        script.replaceChild(exprResult, newExprResult);
-        return;
-      }
+        Node rhsValue = ref.getNext();
+        Node newName = IR.name(moduleName).srcref(ref);
+        newName.putProp(Node.ORIGINALNAME_PROP, qName);
 
-      if (!hasExportLValues()) {
-        // Transform to:
-        //
-        // moduleName.prop0 = 0; // etc.
-        for (Node ref : Iterables.concat(moduleExportRefs, exportRefs)) {
-          Node newRef = IR.name(moduleName).useSourceInfoIfMissingFrom(ref);
-          newRef.putProp(Node.ORIGINALNAME_PROP, ref.getQualifiedName());
-          ref.getParent().replaceChild(ref, newRef);
+        Node parent = ref.getParent();
+        parent.replaceChild(ref, newName);
+
+        // If the property was assigned to exactly once, add an @const annotation
+        if (parent.isAssign() && qName != null &&  propertyExportRefCount.count(qName) == 1) {
+          if (rhsValue != null && rhsValue.isObjectLit()) {
+            addConstToObjLitKeys(rhsValue);
+          }
+
+          JSDocInfoBuilder builder = new JSDocInfoBuilder(true);
+          builder.recordConstancy();
+          JSDocInfo info = builder.build();
+          parent.setJSDocInfo(info);
         }
-        return;
       }
 
-      // Transform module.exports to moduleName
-      for (Node ref : moduleExportRefs) {
-        Node newRef = IR.name(moduleName).useSourceInfoIfMissingFrom(ref);
-        ref.getParent().replaceChild(ref, newRef);
+      if(!hasLValues) {
+        return;
       }
 
       // Transform exports to exports$$moduleName and set to point
@@ -442,6 +511,22 @@ public final class ProcessCommonJSModules implements CompilerPass {
         for (Node ref : exportRefs) {
           ref.putProp(Node.ORIGINALNAME_PROP, ref.getString());
           ref.setString(aliasName);
+        }
+      }
+    }
+
+    /**
+     * Add an @const annotation to each key of an object literal
+     */
+    private void addConstToObjLitKeys(Node n) {
+      Preconditions.checkState(n.isObjectLit());
+      for (Node key = n.getFirstChild();
+           key != null; key = key.getNext()) {
+        if (key.getJSDocInfo() == null) {
+          JSDocInfoBuilder builder = new JSDocInfoBuilder(true);
+          builder.recordConstancy();
+          JSDocInfo info = builder.build();
+          key.setJSDocInfo(info);
         }
       }
     }

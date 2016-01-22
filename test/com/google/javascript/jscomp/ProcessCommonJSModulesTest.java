@@ -19,19 +19,11 @@ package com.google.javascript.jscomp;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.Node;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Unit tests for {@link ProcessCommonJSModules}
  */
 
 public final class ProcessCommonJSModulesTest extends CompilerTestCase {
-
-  public ProcessCommonJSModulesTest() {
-    compareJsDoc = false;
-  }
 
   @Override
   protected CompilerPass getProcessor(final Compiler compiler) {
@@ -99,7 +91,29 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         "goog.provide('module$test');"
             + "goog.require('module$other');"
             + "var name$$module$test = module$other;"
-            + "module$test = function () {};");
+            + "/** @const */ module$test = function () {};");
+  }
+
+  public void testExportsInExpression() {
+    setFilename("test");
+    testModules(
+        "var name = require('other');" + "var e; e = module.exports = function() {};",
+        "goog.provide('module$test');var module$test;"
+            + "goog.require('module$other');"
+            + "var name$$module$test = module$other;"
+            + "var e$$module$test; e$$module$test = module$test = function () {};");
+    testModules(
+        "var name = require('other');" + "var e = module.exports = function() {};",
+        "goog.provide('module$test');var module$test;"
+            + "goog.require('module$other');"
+            + "var name$$module$test = module$other;"
+            + "var e$$module$test = module$test = function () {};");
+    testModules(
+        "var name = require('other');" + "(module.exports = function() {})();",
+        "goog.provide('module$test');var module$test;"
+            + "goog.require('module$other');"
+            + "var name$$module$test = module$other;"
+            + "(module$test = function () {})();");
   }
 
   public void testPropertyExports() {
@@ -175,13 +189,13 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         "module.exports = foo;",
         "goog.provide('module$test');" +
         "var foo$$module$test=function(module){module.exports={}};" +
-        "module$test=foo$$module$test");
+        "/** @const */ module$test=foo$$module$test");
     testModules(
         "var foo = function () {var module = {};module.exports = {};};" +
         "module.exports = foo;",
         "goog.provide('module$test');" +
         "var foo$$module$test=function(){var module={};module.exports={}};" +
-        "module$test=foo$$module$test");
+        "/** @const */ module$test=foo$$module$test");
     testModules(
         "var foo = function () {if (true) var module = {};" +
         "module.exports = {};};" +
@@ -189,7 +203,7 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         "goog.provide('module$test');" +
         "var foo$$module$test=function(){if(true)var module={};" +
         "module.exports={}};" +
-        "module$test=foo$$module$test");
+        "/** @const */ module$test=foo$$module$test");
   }
 
   public void testUMDPatternConversion() {
@@ -232,57 +246,35 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         CompilerOptions.LanguageMode.ECMASCRIPT5);
     setFilename("test");
     testModules(
-        "function foo() {}"
-            + "module.exports = {"
-            + "  prop: 'value',"
-            + "  foo"
-            + "}",
-        "goog.provide('module$test');"
-            + "function foo$$module$test() {}"
-            + "module$test = { prop: 'value', foo }");
+        LINE_JOINER.join(
+            "function foo() {}",
+            "module.exports = {",
+            "  prop: 'value',",
+            "  foo",
+            "};"),
+        LINE_JOINER.join(
+            "goog.provide('module$test');",
+            "function foo$$module$test() {}",
+            "/** @const */ module$test = {",
+            "  /** @const */ prop: 'value',",
+            "  /** @const */ foo",
+            "};"));
 
     testModules(
-        "module.exports = {\n"
-            + "  prop: 'value',\n"
-            + "  foo() {\n"
-            + "    console.log('bar');\n"
-            + "  }\n"
-            + "};",
-        "goog.provide('module$test');"
-            + "module$test = { prop: 'value', foo() { console.log('bar'); }}" );
-  }
-
-  public void testSortInputs() throws Exception {
-    SourceFile a = SourceFile.fromCode("a.js", "require('b');require('c')");
-    SourceFile b = SourceFile.fromCode("b.js", "require('d')");
-    SourceFile c = SourceFile.fromCode("c.js", "require('d')");
-    SourceFile d = SourceFile.fromCode("d.js", "1;");
-
-    assertSortedInputs(ImmutableList.of(d, b, c, a), ImmutableList.of(a, b, c, d));
-    assertSortedInputs(ImmutableList.of(d, b, c, a), ImmutableList.of(d, b, c, a));
-    assertSortedInputs(ImmutableList.of(d, c, b, a), ImmutableList.of(d, c, b, a));
-    assertSortedInputs(ImmutableList.of(d, b, c, a), ImmutableList.of(d, a, b, c));
-  }
-
-  private void assertSortedInputs(List<SourceFile> expected, List<SourceFile> shuffled)
-      throws Exception {
-    Compiler compiler = new Compiler(System.err);
-    compiler.initCompilerOptionsIfTesting();
-    compiler.getOptions().setProcessCommonJSModules(true);
-    compiler
-        .getOptions()
-        .dependencyOptions
-        .setEntryPoints(ImmutableList.of(ES6ModuleLoader.toModuleName(URI.create("a"))));
-    compiler.compile(
-        ImmutableList.of(SourceFile.fromCode("externs.js", "")), shuffled, compiler.getOptions());
-
-    List<SourceFile> result = new ArrayList<>();
-    for (JSModule m : compiler.getModuleGraph().getAllModules()) {
-      for (CompilerInput i : m.getInputs()) {
-        result.add(i.getSourceFile());
-      }
-    }
-
-    assertEquals(expected, result);
+        LINE_JOINER.join(
+            "module.exports = {",
+            "  prop: 'value',",
+            "  foo() {",
+            "    console.log('bar');",
+            "  }",
+            "};"),
+        LINE_JOINER.join(
+            "goog.provide('module$test');",
+            "/** @const */ module$test = {",
+            "  /** @const */ prop: 'value',",
+            "  /** @const */ foo() {",
+            "    console.log('bar');",
+            "  }",
+            "};"));
   }
 }

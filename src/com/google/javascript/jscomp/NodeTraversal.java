@@ -374,7 +374,7 @@ public class NodeTraversal {
       curNode = n;
       pushScope(s);
 
-      Node args = n.getFirstChild().getNext();
+      Node args = n.getSecondChild();
       Node body = args.getNext();
       traverseBranch(args, n);
       traverseBranch(body, n);
@@ -623,7 +623,7 @@ public class NodeTraversal {
 
   /** Traverses a function. */
   private void traverseFunction(Node n, Node parent) {
-    Preconditions.checkState(n.getChildCount() == 3);
+    Preconditions.checkState(n.getChildCount() == 3, n);
     Preconditions.checkState(n.isFunction());
 
     final Node fnName = n.getFirstChild();
@@ -798,7 +798,7 @@ public class NodeTraversal {
    * Determines whether the traversal is currently in the global scope. Note that this returns false
    * in a global block scope.
    */
-  boolean inGlobalScope() {
+  public boolean inGlobalScope() {
     return getScopeDepth() == 0;
   }
 

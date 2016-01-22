@@ -309,6 +309,36 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             " * @struct",
             " */",
             "var C = function() {};"));
+
+    test(
+        "class C { /** @template T */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " * @struct",
+            " * @template T",
+            " */",
+            "var C = function() {};"));
+
+    test(
+        "/** @template S */ class C { /** @template T */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " * @struct",
+            " * @template S, T",
+            " */",
+            "var C = function() {};"));
+
+    test(
+        "/** @template S */ class C { /** @template T, U */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " * @struct",
+            " * @template S, T, U",
+            " */",
+            "var C = function() {};"));
   }
 
   public void testMemberWithJsDoc() {
@@ -978,6 +1008,39 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             "    }",
             "  },",
             "});"));
+
+  }
+
+  public void testEs5GettersAndSettersOnClassesWithClassSideInheritance() {
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
+    test(
+        "class C { static get value() {} }  class D extends C { static get value() {} }",
+        LINE_JOINER.join(
+            "/** @constructor @struct */",
+            "var C = function() {};",
+            "/** @nocollapse @type {?} */",
+            "C.value;",
+            "Object.defineProperties(C, {",
+            "  value: {",
+            "    configurable: true,",
+            "    enumerable: true,",
+            "    /** @this {C} */",
+            "    get: function() {}",
+            "  }",
+            "});",
+            "/** @constructor @struct @extends {C} */",
+            "var D = function(var_args) { C.apply(this,arguments); };",
+            "/** @nocollapse @type {?} */",
+            "D.value;",
+            "$jscomp.inherits(D, C);",
+            "Object.defineProperties(D, {",
+            "  value: {",
+            "    configurable: true,",
+            "    enumerable: true,",
+            "    /** @this {D} */",
+            "    get: function() {}",
+            "  }",
+            "});"));
   }
 
   /**
@@ -1506,8 +1569,6 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
     test("f(a, ...b, c, ...d, e);",
         "f.apply(null, [].concat([a], $jscomp.arrayFromIterable(b),"
         + " [c], $jscomp.arrayFromIterable(d), [e]));");
-    test("new F(...args);",
-        "new Function.prototype.bind.apply(F, [].concat($jscomp.arrayFromIterable(args)));");
 
     test("Factory.create().m(...arr);",
         LINE_JOINER.join(
@@ -1570,6 +1631,13 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
         "($jscomp$spread$args0 = Factory.create()).m.apply(",
         "    $jscomp$spread$args0, [].concat($jscomp.arrayFromIterable(arr)));"
     ), null, null);
+  }
+
+  public void testSpreadNew() {
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
+
+    test("new F(...args);",
+        "new (Function.prototype.bind.apply(F, [null].concat($jscomp.arrayFromIterable(args))));");
   }
 
   public void testMethodInObject() {

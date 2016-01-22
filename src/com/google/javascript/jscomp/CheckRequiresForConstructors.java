@@ -166,7 +166,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass, NodeTraversal
         visitNewNode(t, n);
         break;
       case Token.CLASS:
-        visitClassNode(n);
+        visitClassNode(t, n);
         break;
       case Token.IMPORT:
       case Token.EXPORT:
@@ -320,14 +320,33 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass, NodeTraversal
     }
   }
 
-  private void visitClassNode(Node classNode) {
-    String name = NodeUtil.getClassName(classNode);
+  private void visitClassNode(NodeTraversal t, Node classNode) {
+    String name = NodeUtil.getName(classNode);
     if (name != null) {
       constructors.add(name);
     }
-    Node extendClass = classNode.getFirstChild().getNext();
-    if (extendClass.isQualifiedName()) {
-      usages.put(extendClass.getQualifiedName(), extendClass);
+
+    Node extendClass = classNode.getSecondChild();
+
+    // If the superclass is something other than a qualified name, ignore it.
+    if (!extendClass.isQualifiedName()) {
+      return;
+    }
+
+    Node root = NodeUtil.getRootOfQualifiedName(extendClass);
+
+    // It should always be a name. Extending this.something or
+    // super.something is unlikely.
+    // We only consider programmer-defined superclasses that are
+    // global variables, or are defined on global variables.
+    if (root.isName()) {
+      String rootName = root.getString();
+      Var var = t.getScope().getVar(rootName);
+      if (var != null && (var.isLocal() || var.isExtern())) {
+        // "require" not needed for these
+      } else {
+        usages.put(extendClass.getQualifiedName(), extendClass);
+      }
     }
   }
 
