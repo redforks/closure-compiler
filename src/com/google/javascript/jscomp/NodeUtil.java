@@ -789,7 +789,7 @@ public final class NodeUtil {
     if (n.isVar()
         || n.isName() && n.getParent().isVar()
         || (n.isGetProp() && n.getParent().isAssign()
-            && n.getParent().getParent().isExprResult())
+            && n.getGrandparent().isExprResult())
         || (n.isAssign() && n.getParent().isExprResult())) {
       JSDocInfo jsdoc = getBestJSDocInfo(n);
       return jsdoc != null && jsdoc.hasEnumParameterType();
@@ -801,18 +801,19 @@ public final class NodeUtil {
    * Returns true iff this node defines a namespace, such as goog or goog.math.
    */
   static boolean isNamespaceDecl(Node n) {
+    JSDocInfo jsdoc = getBestJSDocInfo(n);
+    if (jsdoc != null && !jsdoc.getTypeNodes().isEmpty()) {
+      return false;
+    }
     // In externs, we allow namespace definitions without @const.
     // This is a worse design than always requiring @const, but it helps with
     // namespaces that are defined in many places, such as gapi.
     // Also, omitting @const in externs is not as confusing as in source code,
     // because assigning an object literal in externs only makes sense when
-    // defining a namespace.
-    if (!n.isFromExterns()) {
-      JSDocInfo jsdoc = getBestJSDocInfo(n);
-      if (jsdoc == null || !jsdoc.isConstant()
-          || !jsdoc.getTypeNodes().isEmpty()) {
-        return false;
-      }
+    // defining a namespace or enum.
+    if (!n.isFromExterns()
+        && (jsdoc == null || !jsdoc.isConstant())) {
+      return false;
     }
     Node qnameNode;
     Node initializer;
@@ -1824,15 +1825,13 @@ public final class NodeUtil {
   /**
    * Gets the closest ancestor to the given node of the provided type.
    */
-  static Node getEnclosingType(Node n, int type) {
-    Node curr = n;
-    while (curr.getType() != type) {
-      curr = curr.getParent();
-      if (curr == null) {
-        return curr;
+  static Node getEnclosingType(Node n, final int type) {
+    return getEnclosingNode(n, new Predicate<Node>() {
+      @Override
+      public boolean apply(Node n) {
+        return n.getType() == type;
       }
-    }
-    return curr;
+    });
   }
 
   /**
@@ -1863,13 +1862,24 @@ public final class NodeUtil {
     return getEnclosingType(n, Token.SCRIPT);
   }
 
+  /**
+   * Finds the block containing the given node.
+   */
+  public static Node getEnclosingBlock(Node n) {
+    return getEnclosingType(n, Token.BLOCK);
+  }
+
   public static boolean isInFunction(Node n) {
     return getEnclosingFunction(n) != null;
   }
 
   public static Node getEnclosingStatement(Node n) {
+    return getEnclosingNode(n, isStatement);
+  }
+
+  public static Node getEnclosingNode(Node n, Predicate<Node> pred) {
     Node curr = n;
-    while (curr != null && !isStatement(curr)) {
+    while (curr != null && !pred.apply(curr)) {
       curr = curr.getParent();
     }
     return curr;
@@ -2198,7 +2208,7 @@ public final class NodeUtil {
     switch (n.getType()) {
       case Token.BLOCK:
         // Don't create block scope for top-level synthetic block or the one contained in a CATCH.
-        if (n.getParent() == null || n.getParent().getParent() == null
+        if (n.getParent() == null || n.getGrandparent() == null
             || n.getParent().isCatch()) {
           return false;
         }
@@ -2217,7 +2227,7 @@ public final class NodeUtil {
         return true;
       case Token.BLOCK:
         // Only valid for top level synthetic block
-        if (n.getParent() == null || n.getParent().getParent() == null) {
+        if (n.getParent() == null || n.getGrandparent() == null) {
           return true;
         }
       default:
@@ -2231,6 +2241,13 @@ public final class NodeUtil {
   public static boolean isStatement(Node n) {
     return isStatementParent(n.getParent());
   }
+
+  private static final Predicate<Node> isStatement = new Predicate<Node>() {
+    @Override
+    public boolean apply(Node n) {
+      return isStatement(n);
+    }
+  };
 
   static boolean isStatementParent(Node parent) {
     // It is not possible to determine definitely if a node is a statement
@@ -2296,7 +2313,7 @@ public final class NodeUtil {
       }
     } else if (node.isCatch()) {
       // The CATCH can can only be removed if there is a finally clause.
-      Node tryNode = node.getParent().getParent();
+      Node tryNode = node.getGrandparent();
       Preconditions.checkState(NodeUtil.hasFinally(tryNode));
       node.detachFromParent();
     } else if (isTryCatchNodeContainer(node)) {
@@ -2412,7 +2429,7 @@ public final class NodeUtil {
   public static boolean isHoistedFunctionDeclaration(Node n) {
     return isFunctionDeclaration(n)
         && (n.getParent().isScript()
-            || n.getParent().getParent().isFunction());
+            || n.getGrandparent().isFunction());
   }
 
   static boolean isBlockScopedFunctionDeclaration(Node n) {
@@ -3164,7 +3181,7 @@ public final class NodeUtil {
    */
   public static boolean isPrototypePropertyDeclaration(Node n) {
     return isExprAssign(n) &&
-        isPrototypeProperty(n.getFirstChild().getFirstChild());
+        isPrototypeProperty(n.getFirstFirstChild());
   }
 
   /**
@@ -3230,6 +3247,7 @@ public final class NodeUtil {
       case Token.INSTANCEOF:
       case Token.TYPEOF:
       case Token.AND:
+      case Token.OR:
         return true;
 
       case Token.NE:

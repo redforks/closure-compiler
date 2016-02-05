@@ -127,6 +127,7 @@ final class NTIScope implements DeclaredTypeRegistry {
     }
   }
 
+  @Override
   public DeclaredFunctionType getDeclaredFunctionType() {
     return this.declaredType;
   }
@@ -308,7 +309,12 @@ final class NTIScope implements DeclaredTypeRegistry {
   }
 
   boolean hasThis() {
-    return isFunction() && getDeclaredFunctionType().getThisType() != null;
+    if (!isFunction()) {
+      return false;
+    }
+    DeclaredFunctionType dft = getDeclaredFunctionType();
+    // dft is null for function scopes early during GlobalTypeInfo
+    return dft != null && dft.getThisType() != null;
   }
 
   RawNominalType getNominalType(QualifiedName qname) {
@@ -548,7 +554,9 @@ final class NTIScope implements DeclaredTypeRegistry {
     JSType type = null;
     boolean isForwardDeclaration = false;
     boolean isTypeVar = false;
-    if (locals.containsKey(name)) {
+    if ("this".equals(name)) {
+      type = getDeclaredTypeOf("this");
+    } else if (locals.containsKey(name)) {
       type = locals.get(name);
     } else if (formals.contains(name)) {
       int formalIndex = formals.indexOf(name);
@@ -569,7 +577,7 @@ final class NTIScope implements DeclaredTypeRegistry {
       // Any further declarations are shadowed
     } else if (declaredType != null && declaredType.isTypeVariableDefinedLocally(name)) {
       isTypeVar = true;
-      type = JSType.fromTypeVar(name);
+      type = JSType.fromTypeVar(declaredType.getTypeVariableDefinedLocally(name));
     } else if (externs.containsKey(name)) {
       type = externs.get(name);
     } else if (unknownTypeNames.contains(name)) {
@@ -587,6 +595,7 @@ final class NTIScope implements DeclaredTypeRegistry {
         isForwardDeclaration);
   }
 
+  @Override
   public Declaration getDeclaration(QualifiedName qname, boolean includeTypes) {
     if (qname.isIdentifier()) {
       return getDeclaration(qname.getLeftmostName(), includeTypes);

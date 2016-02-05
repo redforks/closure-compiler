@@ -53,7 +53,7 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
     test("let x = 3;", "var x = 3;");
     test("const x = 3;", "/** @const */ var x = 3;");
     test("const a = 0; a;", "/** @const */ var a = 0; a;");
-    test("if (a) { let x; }", "if (a) { var x = undefined; }");
+    test("if (a) { let x; }", "if (a) { var x; }");
     test("function f() { const x = 3; }",
         "function f() { /** @const */ var x = 3; }");
   }
@@ -81,12 +81,17 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
 
     test(
         LINE_JOINER.join(
-            "function f() {", "  const x = 3;", "  if (true) {", "    let x;", "  }", "}"),
+            "function f() {",
+            "  const x = 3;",
+            "  if (true) {",
+            "    let x;",
+            "  }",
+            "}"),
         LINE_JOINER.join(
             "function f() {",
             "  /** @const */ var x = 3;",
             "  if (true) {",
-            "    var x$0 = undefined;",
+            "    var x$0;",
             "  }",
             "}"));
 
@@ -112,7 +117,13 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
 
     test(
         LINE_JOINER.join(
-            "var x = 2;", "function f() {", "  x = 1;", "  if (a) {", "    let x = 2;", "  }", "}"),
+            "var x = 2;",
+            "function f() {",
+            "  x = 1;",
+            "  if (a) {",
+            "    let x = 2;",
+            "  }",
+            "}"),
         LINE_JOINER.join(
             "var x = 2;",
             "function f() {",
@@ -123,9 +134,20 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
             "}"));
 
     test(
-        LINE_JOINER.join("function f() {", "  {", "    let inner = 2;", "  }", "  use(inner)", "}"),
         LINE_JOINER.join(
-            "function f() {", "  {", "    var inner$0 = 2;", "  }", "  use(inner)", "}"));
+            "function f() {",
+            "  {",
+            "    let inner = 2;",
+            "  }",
+            "  use(inner)",
+            "}"),
+        LINE_JOINER.join(
+            "function f() {",
+            "  {",
+            "    var inner$0 = 2;",
+            "  }",
+            "  use(inner)",
+            "}"));
   }
 
   public void testNonUniqueLet() {
@@ -151,7 +173,7 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
             "    assert(x$0 === 2);",
             "  }",
             "  if (b) {",
-            "    var x$1 = undefined;",
+            "    var x$1;",
             "    assert(x$1 === undefined);",
             "  }",
             "  assert(x === 1);",
@@ -175,7 +197,7 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
             "    var x = 2;",
             "    assert(x === 2);",
             "    if (b) {",
-            "      var x$0 = undefined;",
+            "      var x$0;",
             "      assert(x$0 === undefined);",
             "    }",
             "  }",
@@ -243,8 +265,41 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
             "  }",
             "}"));
 
-    test("for (let i = 0;;) { let i; }", "for (var i = 0;;) { var i$0 = undefined; }");
-    test("for (let i = 0;;) {} let i;", "for (var i$0 = 0;;) {} var i = undefined;");
+    test(
+        "for (let i = 0;;) { let i; }",
+        "for (var i = 0;;) { var i$0 = undefined; }");
+
+    test(
+        "for (let i = 0;;) {} let i;",
+        "for (var i$0 = 0;;) {} var i;");
+
+    test(
+        LINE_JOINER.join(
+            "for (var x in y) {",
+            "  /** @type {number} */",
+            "  let i;",
+            "}"),
+        LINE_JOINER.join(
+            "for (var x in y) {",
+            "  /** @type {number} */",
+            "  var i = /** @type {?} */ (undefined);",
+            "}"));
+  }
+
+  public void testFunctionInLoop() {
+    test(
+        LINE_JOINER.join(
+            "for (var x of y) {",
+            "  function f() {",
+            "    let z;",
+            "  }",
+            "}"),
+        LINE_JOINER.join(
+            "for (var x of y) {",
+            "  var f = function() {",
+            "    var z;",
+            "  };",
+            "}"));
   }
 
   public void testLoopClosure() {
@@ -433,6 +488,56 @@ public final class Es6RewriteBlockScopedDeclarationTest extends CompilerTestCase
 
     // No-op, vars don't need transpilation
     testSame("for (;;) { var /** number */ x = 3; var f = function() { return x; } }");
+
+    test(
+        LINE_JOINER.join(
+            "var i;",
+            "for (i = 0;;) {",
+            "  let x = 0;",
+            "  var f = function() { x; };",
+            "}"),
+        LINE_JOINER.join(
+            "var i;",
+            "var $jscomp$loop$0={x: undefined};",
+            "i = 0;",
+            "for(;;$jscomp$loop$0 = {x: $jscomp$loop$0.x}) {",
+            "  $jscomp$loop$0.x = 0;",
+            "  var f = (function($jscomp$loop$0) {",
+            "    return function() { $jscomp$loop$0.x; };",
+            "  })($jscomp$loop$0);",
+            "}"));
+
+    test(
+        LINE_JOINER.join(
+            "for (foo();;) {",
+            "  let x = 0;",
+            "  var f = function() { x; };",
+            "}"),
+        LINE_JOINER.join(
+            "var $jscomp$loop$0={x: undefined};",
+            "foo();",
+            "for(;;$jscomp$loop$0 = {x: $jscomp$loop$0.x}) {",
+            "  $jscomp$loop$0.x = 0;",
+            "  var f = (function($jscomp$loop$0) {",
+            "    return function() { $jscomp$loop$0.x; };",
+            "  })($jscomp$loop$0);",
+            "}"));
+
+    test(
+        LINE_JOINER.join(
+            "for (function foo() {};;) {",
+            "  let x = 0;",
+            "  var f = function() { x; };",
+            "}"),
+        LINE_JOINER.join(
+            "var $jscomp$loop$0={x: undefined};",
+            "(function foo() {});",
+            "for(;;$jscomp$loop$0 = {x: $jscomp$loop$0.x}) {",
+            "  $jscomp$loop$0.x = 0;",
+            "  var f = (function($jscomp$loop$0) {",
+            "    return function() { $jscomp$loop$0.x; };",
+            "  })($jscomp$loop$0);",
+            "}"));
   }
 
   public void testLoopClosureCommaInBody() {

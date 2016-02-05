@@ -1984,6 +1984,15 @@ var WheelEventInit;
  */
 function WheelEvent(type, opt_eventInitDict) {}
 
+/** @type {number} */
+WheelEvent.DOM_DELTA_PIXEL;
+
+/** @type {number} */
+WheelEvent.DOM_DELTA_LINE;
+
+/** @type {number} */
+WheelEvent.DOM_DELTA_PAGE;
+
 /** @const {number} */
 WheelEvent.prototype.deltaX;
 
@@ -2561,6 +2570,9 @@ HTMLFormElement.prototype.noValidate;
 function ValidityState() {}
 
 /** @type {boolean} */
+ValidityState.prototype.badInput;
+
+/** @type {boolean} */
 ValidityState.prototype.customError;
 
 /** @type {boolean} */
@@ -2580,6 +2592,9 @@ ValidityState.prototype.typeMismatch;
 
 /** @type {boolean} */
 ValidityState.prototype.tooLong;
+
+/** @type {boolean} */
+ValidityState.prototype.tooShort;
 
 /** @type {boolean} */
 ValidityState.prototype.valid;

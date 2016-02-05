@@ -27,6 +27,7 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.io.Files;
 import com.google.javascript.jscomp.AbstractCommandLineRunner.FlagEntry;
 import com.google.javascript.jscomp.AbstractCommandLineRunner.FlagUsageException;
 import com.google.javascript.jscomp.AbstractCommandLineRunner.JsSourceType;
@@ -84,41 +85,41 @@ public final class CommandLineRunnerTest extends TestCase {
 
   /** Externs for the test */
   private static final List<SourceFile> DEFAULT_EXTERNS = ImmutableList.of(
-    SourceFile.fromCode("externs",
-        "var arguments;"
-        + "/**\n"
-        + " * @constructor\n"
-        + " * @param {...*} var_args\n"
-        + " * @nosideeffects\n"
-        + " * @throws {Error}\n"
-        + " */\n"
-        + "function Function(var_args) {}\n"
-        + "/**\n"
-        + " * @param {...*} var_args\n"
-        + " * @return {*}\n"
-        + " */\n"
-        + "Function.prototype.call = function(var_args) {};"
-        + "/**\n"
-        + " * @constructor\n"
-        + " * @param {...*} var_args\n"
-        + " * @return {!Array}\n"
-        + " */\n"
-        + "function Array(var_args) {}"
-        + "/**\n"
-        + " * @param {*=} opt_begin\n"
-        + " * @param {*=} opt_end\n"
-        + " * @return {!Array}\n"
-        + " * @this {Object}\n"
-        + " */\n"
-        + "Array.prototype.slice = function(opt_begin, opt_end) {};"
-        + "/** @constructor */ function Window() {}\n"
-        + "/** @type {string} */ Window.prototype.name;\n"
-        + "/** @type {Window} */ var window;"
-        + "/** @constructor */ function Element() {}"
-        + "Element.prototype.offsetWidth;"
-        + "/** @nosideeffects */ function noSideEffects() {}\n"
-        + "/** @param {...*} x */ function alert(x) {}\n")
-  );
+    SourceFile.fromCode("externs", Joiner.on('\n').join(
+        "var arguments;",
+        "/**",
+        " * @constructor",
+        " * @param {...*} var_args",
+        " * @nosideeffects",
+        " * @throws {Error}",
+        " */",
+        "function Function(var_args) {}",
+        "/**",
+        " * @param {...*} var_args",
+        " * @return {*}",
+        " */",
+        "Function.prototype.call = function(var_args) {};",
+        "/**",
+        " * @constructor",
+        " * @param {...*} var_args",
+        " * @return {!Array}",
+        " */",
+        "function Array(var_args) {}",
+        "/**",
+        " * @param {*=} opt_begin",
+        " * @param {*=} opt_end",
+        " * @return {!Array}",
+        " * @this {Object}",
+        " */",
+        "Array.prototype.slice = function(opt_begin, opt_end) {};",
+        "/** @constructor */ function Window() {}",
+        "/** @type {string} */ Window.prototype.name;",
+        "/** @type {Window} */ var window;",
+        "/** @constructor */ function Element() {}",
+        "Element.prototype.offsetWidth;",
+        "/** @nosideeffects */ function noSideEffects() {}",
+        "/** @param {...*} x */ function alert(x) {}",
+        "function Symbol() {}")));
 
   private List<SourceFile> externs;
 
@@ -1044,68 +1045,126 @@ public final class CommandLineRunnerTest extends TestCase {
         .contains("Bad value for --source_map_location_mapping");
   }
 
-  public void testInputOneZip() throws IOException {
-    try {
-      LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
-      zip1Contents.put("run.js", "console.log(\"Hello World\");");
-      FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
+  public void testInputOneZip() throws IOException, FlagUsageException {
+    LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
+    zip1Contents.put("run.js", "console.log(\"Hello World\");");
+    FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
 
-      compileFiles("console.log(\"Hello World\");", zipFile1);
-    } catch (FlagUsageException e) {
-      fail("Unexpected exception" + e);
-    }
+    compileFiles("console.log(\"Hello World\");", zipFile1);
   }
 
-  public void testInputMultipleZips() throws IOException {
-    try {
-      LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
-      zip1Contents.put("run.js", "console.log(\"Hello World\");");
-      FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
+  public void testInputMultipleZips() throws IOException, FlagUsageException {
+    LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
+    zip1Contents.put("run.js", "console.log(\"Hello World\");");
+    FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
 
-      LinkedHashMap<String, String> zip2Contents = new LinkedHashMap<>();
-      zip2Contents.put("run.js", "window.alert(\"Hi Browser\");");
-      FlagEntry<JsSourceType> zipFile2 = createZipFile(zip2Contents);
+    LinkedHashMap<String, String> zip2Contents = new LinkedHashMap<>();
+    zip2Contents.put("run.js", "window.alert(\"Hi Browser\");");
+    FlagEntry<JsSourceType> zipFile2 = createZipFile(zip2Contents);
 
-      compileFiles(
-          "console.log(\"Hello World\");window.alert(\"Hi Browser\");", zipFile1, zipFile2);
-    } catch (FlagUsageException e) {
-      fail("Unexpected exception" + e);
-    }
+    compileFiles(
+        "console.log(\"Hello World\");window.alert(\"Hi Browser\");", zipFile1, zipFile2);
   }
 
-  public void testInputMultipleContents() throws IOException {
-    try {
-      LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
-      zip1Contents.put("a.js", "console.log(\"File A\");");
-      zip1Contents.put("b.js", "console.log(\"File B\");");
-      zip1Contents.put("c.js", "console.log(\"File C\");");
-      FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
+  public void testInputMultipleContents() throws IOException, FlagUsageException {
+    LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
+    zip1Contents.put("a.js", "console.log(\"File A\");");
+    zip1Contents.put("b.js", "console.log(\"File B\");");
+    zip1Contents.put("c.js", "console.log(\"File C\");");
+    FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
 
-      compileFiles(
-          "console.log(\"File A\");console.log(\"File B\");console.log(\"File C\");", zipFile1);
-    } catch (FlagUsageException e) {
-      fail("Unexpected exception" + e);
-    }
+    compileFiles(
+        "console.log(\"File A\");console.log(\"File B\");console.log(\"File C\");", zipFile1);
   }
 
-  public void testInputMultipleFiles() throws IOException {
-    try {
-      LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
-      zip1Contents.put("run.js", "console.log(\"Hello World\");");
-      FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
+  public void testInputMultipleFiles() throws IOException, FlagUsageException {
+    LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
+    zip1Contents.put("run.js", "console.log(\"Hello World\");");
+    FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
 
-      FlagEntry<JsSourceType> jsFile1 = createJsFile("testjsfile", "var a;");
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("testjsfile", "var a;");
 
-      LinkedHashMap<String, String> zip2Contents = new LinkedHashMap<>();
-      zip2Contents.put("run.js", "window.alert(\"Hi Browser\");");
-      FlagEntry<JsSourceType> zipFile2 = createZipFile(zip2Contents);
+    LinkedHashMap<String, String> zip2Contents = new LinkedHashMap<>();
+    zip2Contents.put("run.js", "window.alert(\"Hi Browser\");");
+    FlagEntry<JsSourceType> zipFile2 = createZipFile(zip2Contents);
 
-      compileFiles(
-          "console.log(\"Hello World\");var a;window.alert(\"Hi Browser\");",
-          zipFile1, jsFile1, zipFile2);
-    } catch (FlagUsageException e) {
-      fail("Unexpected exception" + e);
-    }
+    compileFiles(
+        "console.log(\"Hello World\");var a;window.alert(\"Hi Browser\");",
+        zipFile1, jsFile1, zipFile2);
+  }
+
+  public void testInputMultipleJsFilesWithOneJsFlag() throws IOException, FlagUsageException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    compileJsFiles("var a;var b;", jsFile1, jsFile2);
+  }
+
+  public void testGlobJs1() throws IOException, FlagUsageException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    // Move test2 to the same directory as test1, also make the filename of test2
+    // lexicographically larger than test1
+    new File(jsFile2.value).renameTo(new File(
+        new File(jsFile1.value).getParentFile() + File.separator + "utest2.js"));
+    String glob = new File(jsFile1.value).getParent() + File.separator + "**.js";
+    compileFiles(
+        "var a;var b;", new FlagEntry<>(JsSourceType.JS, glob));
+  }
+
+  public void testGlobJs2() throws IOException, FlagUsageException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    new File(jsFile2.value).renameTo(new File(
+        new File(jsFile1.value).getParentFile() + File.separator + "utest2.js"));
+    String glob = new File(jsFile1.value).getParent() + File.separator + "*test*.js";
+    compileFiles(
+        "var a;var b;", new FlagEntry<>(JsSourceType.JS, glob));
+  }
+
+  public void testGlobJs3() throws IOException, FlagUsageException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    new File(jsFile2.value).renameTo(new File(
+        new File(jsFile1.value).getParentFile() + File.separator + "test2.js"));
+    // Make sure test2.js is excluded from the inputs when the exclusion
+    // comes after the inclusion
+    String glob1 = new File(jsFile1.value).getParent() + File.separator + "**.js";
+    String glob2 = "!" + new File(jsFile1.value).getParent() + File.separator + "**test2.js";
+    compileFiles(
+        "var a;", new FlagEntry<>(JsSourceType.JS, glob1),
+        new FlagEntry<>(JsSourceType.JS, glob2));
+  }
+
+  public void testGlobJs4() throws IOException, FlagUsageException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    new File(jsFile2.value).renameTo(new File(
+        new File(jsFile1.value).getParentFile() + File.separator + "test2.js"));
+    // Make sure test2.js is excluded from the inputs when the exclusion
+    // comes before the inclusion
+    String glob1 = "!" + new File(jsFile1.value).getParent() + File.separator + "**test2.js";
+    String glob2 = new File(jsFile1.value).getParent() + File.separator + "**.js";
+    compileFiles(
+        "var a;", new FlagEntry<>(JsSourceType.JS, glob1),
+        new FlagEntry<>(JsSourceType.JS, glob2));
+  }
+
+  public void testGlobJs6() throws IOException, FlagUsageException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    File temp1 = Files.createTempDir();
+    File temp2 = Files.createTempDir();
+    File jscompTempDir = new File(jsFile1.value).getParentFile();
+    File newTemp1 = new File(jscompTempDir + File.separator + "temp1");
+    File newTemp2 = new File(jscompTempDir + File.separator + "temp2");
+    temp1.renameTo(newTemp1);
+    temp2.renameTo(newTemp2);
+    new File(jsFile1.value).renameTo(new File(newTemp1 + File.separator + "test1.js"));
+    new File(jsFile2.value).renameTo(new File(newTemp2 + File.separator + "test2.js"));
+    // Test multiple segments with glob patterns, like /foo/bar/**/*.js
+    String glob = jscompTempDir + File.separator + "**" + File.separator + "*.js";
+    compileFiles(
+        "var a;var b;", new FlagEntry<>(JsSourceType.JS, glob));
   }
 
   public void testSourceMapInputs() throws Exception {
@@ -1245,7 +1304,7 @@ public final class CommandLineRunnerTest extends TestCase {
 
   public void testSyntheticExterns() {
     externs = ImmutableList.of(
-        SourceFile.fromCode("externs", "myVar.property;"));
+        SourceFile.fromCode("externs", "function Symbol() {}; myVar.property;"));
     test("var theirVar = {}; var myVar = {}; var yourVar = {};",
          VarCheck.UNDEFINED_EXTERN_VAR_ERROR);
 
@@ -1296,8 +1355,8 @@ public final class CommandLineRunnerTest extends TestCase {
 
   public void testGenerateExports() {
     args.add("--generate_exports=true");
-    test("/** @export */ foo.prototype.x = function() {};",
-        "foo.prototype.x=function(){};" +
+    test("var goog; /** @export */ foo.prototype.x = function() {};",
+        "var goog; foo.prototype.x=function(){};" +
         "goog.exportProperty(foo.prototype,\"x\",foo.prototype.x);");
   }
 
@@ -1768,9 +1827,10 @@ public final class CommandLineRunnerTest extends TestCase {
    * If {@code warning} is non-null, we will also check if the given
    * warning type was emitted.
    */
-  private void test(String[] original, String[] compiled,
-                    DiagnosticType warning) {
+  private void test(String[] original, String[] compiled, DiagnosticType warning) {
+    exitCodes.clear();
     Compiler compiler = compile(original);
+    assertThat(exitCodes).containsExactly(0);
 
     if (warning == null) {
       assertEquals("Expected no warnings or errors\n" +
@@ -1855,7 +1915,8 @@ public final class CommandLineRunnerTest extends TestCase {
 
   private static FlagEntry<JsSourceType> createZipFile(Map<String, String> entryContentsByName)
       throws IOException {
-    File tempZipFile = File.createTempFile("testdata", ".js.zip");
+    File tempZipFile = File.createTempFile("testdata", ".js.zip",
+        java.nio.file.Files.createTempDirectory("jscomp").toFile());
 
     try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(tempZipFile))) {
       for (Entry<String, String> entry : entryContentsByName.entrySet()) {
@@ -1869,15 +1930,17 @@ public final class CommandLineRunnerTest extends TestCase {
 
   private FlagEntry<JsSourceType> createJsFile(String filename, String fileContent)
       throws IOException {
-    File tempJsFile = File.createTempFile(filename, ".js");
-    FileOutputStream fileOutputStream = new FileOutputStream(tempJsFile);
-    fileOutputStream.write(fileContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    File tempJsFile = File.createTempFile(filename, ".js",
+        java.nio.file.Files.createTempDirectory("jscomp").toFile());
+    try (FileOutputStream fileOutputStream = new FileOutputStream(tempJsFile)) {
+      fileOutputStream.write(fileContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
 
     return new FlagEntry<>(JsSourceType.JS, tempJsFile.getAbsolutePath());
   }
 
   /**
-   * Helper for compiling from a zip file and checking output string.
+   * Helper for compiling from zip and js files and checking output string.
    * @param expectedOutput string representation of expected output.
    * @param entries entries of flags for zip and js files containing source to compile.
    */
@@ -1886,7 +1949,24 @@ public final class CommandLineRunnerTest extends TestCase {
     for (FlagEntry<JsSourceType> entry : entries) {
       args.add("--" + entry.flag.flagName + "=" + entry.value);
     }
+    compileFiles(expectedOutput);
+  }
 
+  /**
+   * Helper for compiling js files and checking output string, using a single --js flag.
+   * @param expectedOutput string representation of expected output.
+   * @param entries entries of flags for js files containing source to compile.
+   */
+  private void compileJsFiles(String expectedOutput, FlagEntry<JsSourceType>... entries)
+      throws FlagUsageException {
+    args.add("--js");
+    for (FlagEntry<JsSourceType> entry : entries) {
+      args.add(entry.value);
+    }
+    compileFiles(expectedOutput);
+  }
+
+  private void compileFiles(String expectedOutput) throws FlagUsageException {
     String[] argStrings = args.toArray(new String[] {});
 
     CommandLineRunner runner =

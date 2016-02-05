@@ -85,8 +85,6 @@ final class ObjectType implements TypeWithProperties {
       Preconditions.checkArgument(fn == null || nominalType.isFunction(),
           "Cannot create objectType of nominal type %s with function (%s)",
           nominalType, fn);
-      Preconditions.checkArgument(!nominalType.isFunction() || fn != null,
-          "Cannot create Function instance without a FunctionType");
     }
     this.nominalType = nominalType;
     this.props = isLoose ? loosenProps(props) : props;
@@ -856,7 +854,16 @@ final class ObjectType implements TypeWithProperties {
    * @return The unified type, or null if unification fails
    */
   static ObjectType unifyUnknowns(ObjectType t1, ObjectType t2) {
-    Preconditions.checkState(!t1.isLoose() && !t2.isLoose());
+    // t1 and/or t2 may be loose in cases where there is a union of loose and
+    // non-loose types, eg, !Array<!Function|string>|!Function.
+    // Maybe the equality check below is too strict, we may end up checking for
+    // subtyping, depending on how people use these in code.
+    if (t1.isLoose()) {
+      return t1.equals(t2) ? t1 : null;
+    }
+    if (t2.isLoose()) {
+      return null;
+    }
     NominalType nt1 = t1.nominalType;
     NominalType nt2 = t2.nominalType;
     NominalType nt;

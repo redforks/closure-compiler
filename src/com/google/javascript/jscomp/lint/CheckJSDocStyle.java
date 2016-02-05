@@ -95,7 +95,10 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
 
     if (jsDoc == null && !hasAnyInlineJsDoc(function)) {
       checkMissingJsDoc(t, function);
-    } else {
+    } else if (t.inGlobalScope()
+        || hasAnyInlineJsDoc(function)
+        || !jsDoc.getParameterNames().isEmpty()
+        || jsDoc.hasReturnType()) {
       checkParams(t, function, jsDoc);
     }
 
@@ -111,7 +114,7 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
   private void checkMissingJsDoc(NodeTraversal t, Node function) {
     if (t.inGlobalScope()
         && (NodeUtil.isFunctionDeclaration(function)
-            || NodeUtil.isNameDeclaration(function.getParent().getParent())
+            || NodeUtil.isNameDeclaration(function.getGrandparent())
             || function.getParent().isAssign())) {
       String name = NodeUtil.getName(function);
       // Don't warn for test functions, setUp, tearDown, etc.

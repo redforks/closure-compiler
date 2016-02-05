@@ -55,8 +55,8 @@ class TypedCodeGenerator extends CodeGenerator {
         Node rhs = n.getFirstChild().getLastChild();
         add(getTypeAnnotation(rhs));
       } else if (n.isVar()
-          && n.getFirstChild().getFirstChild() != null) {
-        add(getTypeAnnotation(n.getFirstChild().getFirstChild()));
+          && n.getFirstFirstChild() != null) {
+        add(getTypeAnnotation(n.getFirstFirstChild()));
       }
     }
 

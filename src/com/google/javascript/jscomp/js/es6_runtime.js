@@ -67,7 +67,7 @@
 
 @param {!Iterator<T>} iterator
 @return {!Array<T>} */$jscomp.arrayFromIterator = function(iterator) {
-  var i = undefined;
+  var i;
   /**@const */var arr = [];
   while (!(i = iterator.next()).done) {
     arr.push(i.value);
@@ -173,7 +173,7 @@
     $jscomp.initSymbol();
     $jscomp.initSymbolIterator();
     /**@const */var iter = arrayLike[Symbol.iterator]();
-    var next = undefined;
+    var next;
     while (!(next = iter.next()).done) {
       result.push(opt_mapFn.call(opt_thisArg, next.value));
     }
@@ -193,8 +193,8 @@
   for (var $jscomp$restIndex = 0;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
     $jscomp$restParams[$jscomp$restIndex - 0] = arguments[$jscomp$restIndex];
   }
-  var elements$6 = $jscomp$restParams;
-  return $jscomp.array.from(elements$6);
+  var elements$10 = $jscomp$restParams;
+  return $jscomp.array.from(elements$10);
 };
 /**@template VALUE
 
@@ -338,7 +338,7 @@
 };
 /**@private
 @return {boolean} */$jscomp.Map.checkBrowserConformance_ = function() {
-  /**@const */var Map = $jscomp.global["Map"];
+  /**@const @type {function(new:Map,!Iterator)} */var Map = $jscomp.global["Map"];
   if (!Map || !Map.prototype.entries || !Object.seal) {
     return false;
   }
@@ -409,7 +409,7 @@
 /**
 @param {KEY} key
 @return {boolean} */$jscomp.Map.prototype["delete"] = function(key) {
-  var $jscomp$destructuring$var1 = this.maybeGetEntry_(key);
+  /**@const */var $jscomp$destructuring$var1 = this.maybeGetEntry_(key);
   /**@const */var id = $jscomp$destructuring$var1.id;
   /**@const */var list = $jscomp$destructuring$var1.list;
   /**@const */var index = $jscomp$destructuring$var1.index;
@@ -440,7 +440,7 @@
 /**
 @param {*} key
 @return {(VALUE|undefined)} */$jscomp.Map.prototype.get = function(key) {
-  var $jscomp$destructuring$var2 = this.maybeGetEntry_(key);
+  /**@const */var $jscomp$destructuring$var2 = this.maybeGetEntry_(key);
   /**@const */var entry = $jscomp$destructuring$var2.entry;
   return entry && entry.value;
 };
@@ -544,6 +544,205 @@
   $jscomp.Map$install = function() {
   };
 };
+/***/$jscomp.math = $jscomp.math || {};
+/**
+@param {*} x
+@return {number} */$jscomp.math.clz32 = function(x) {
+  x = Number(x) >>> 0;
+  if (x === 0) {
+    return 32;
+  }
+  var result = 0;
+  if ((x & 4294901760) === 0) {
+    x <<= 16;
+    result += 16;
+  }
+  if ((x & 4278190080) === 0) {
+    x <<= 8;
+    result += 8;
+  }
+  if ((x & 4026531840) === 0) {
+    x <<= 4;
+    result += 4;
+  }
+  if ((x & 3221225472) === 0) {
+    x <<= 2;
+    result += 2;
+  }
+  if ((x & 2147483648) === 0) {
+    result++;
+  }
+  return result;
+};
+/**
+@param {*} a
+@param {*} b
+@return {number} */$jscomp.math.imul = function(a, b) {
+  a = Number(a);
+  b = Number(b);
+  /**@const */var ah = a >>> 16 & 65535;
+  /**@const */var al = a & 65535;
+  /**@const */var bh = b >>> 16 & 65535;
+  /**@const */var bl = b & 65535;
+  /**@const */var lh = ah * bl + al * bh << 16 >>> 0;
+  return al * bl + lh | 0;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.sign = function(x) {
+  x = Number(x);
+  return x === 0 || isNaN(x) ? x : x > 0 ? 1 : -1;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.log10 = function(x) {
+  return Math.log(x) / Math.LN10;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.log2 = function(x) {
+  return Math.log(x) / Math.LN2;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.log1p = function(x) {
+  x = Number(x);
+  if (x < .25 && x > -.25) {
+    var y = x;
+    var d = 1;
+    var z = x;
+    var zPrev = 0;
+    var s = 1;
+    while (zPrev != z) {
+      y *= x;
+      s *= -1;
+      z = (zPrev = z) + s * y / ++d;
+    }
+    return z;
+  }
+  return Math.log(1 + x);
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.expm1 = function(x) {
+  x = Number(x);
+  if (x < .25 && x > -.25) {
+    var y = x;
+    var d = 1;
+    var z = x;
+    var zPrev = 0;
+    while (zPrev != z) {
+      y *= x / ++d;
+      z = (zPrev = z) + y;
+    }
+    return z;
+  }
+  return Math.exp(x) - 1;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.cosh = function(x) {
+  x = Number(x);
+  return (Math.exp(x) + Math.exp(-x)) / 2;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.sinh = function(x) {
+  x = Number(x);
+  if (x === 0) {
+    return x;
+  }
+  return (Math.exp(x) - Math.exp(-x)) / 2;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.tanh = function(x) {
+  x = Number(x);
+  if (x === 0) {
+    return x;
+  }
+  /**@const */var y = Math.exp(2 * -Math.abs(x));
+  /**@const */var z = (1 - y) / (1 + y);
+  return x < 0 ? -z : z;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.acosh = function(x) {
+  x = Number(x);
+  return Math.log(x + Math.sqrt(x * x - 1));
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.asinh = function(x) {
+  x = Number(x);
+  if (x === 0) {
+    return x;
+  }
+  /**@const */var y = Math.log(Math.abs(x) + Math.sqrt(x * x + 1));
+  return x < 0 ? -y : y;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.atanh = function(x) {
+  x = Number(x);
+  return ($jscomp.math.log1p(x) - $jscomp.math.log1p(-x)) / 2;
+};
+/**
+@param {*} x
+@param {*} y
+@param {...*} rest
+@return {number} */$jscomp.math.hypot = function(x, y, rest) {
+  var $jscomp$restParams = [];
+  for (var $jscomp$restIndex = 2;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
+    $jscomp$restParams[$jscomp$restIndex - 2] = arguments[$jscomp$restIndex];
+  }
+  var rest$11 = $jscomp$restParams;
+  x = Number(x);
+  y = Number(y);
+  var max = Math.max(Math.abs(x), Math.abs(y));
+  for (var $jscomp$iter$4 = $jscomp.makeIterator(rest$11), $jscomp$key$z = $jscomp$iter$4.next();!$jscomp$key$z.done;$jscomp$key$z = $jscomp$iter$4.next()) {
+    var z = $jscomp$key$z.value;
+    max = Math.max(max, Math.abs(z));
+  }
+  if (max > 1E100 || max < 1E-100) {
+    x = x / max;
+    y = y / max;
+    var sum = x * x + y * y;
+    for (var $jscomp$iter$5 = $jscomp.makeIterator(rest$11), $jscomp$key$z = $jscomp$iter$5.next();!$jscomp$key$z.done;$jscomp$key$z = $jscomp$iter$5.next()) {
+      var z$12 = $jscomp$key$z.value;
+      z$12 = Number(z$12) / max;
+      sum += z$12 * z$12;
+    }
+    return Math.sqrt(sum) * max;
+  } else {
+    var sum$13 = x * x + y * y;
+    for (var $jscomp$iter$6 = $jscomp.makeIterator(rest$11), $jscomp$key$z = $jscomp$iter$6.next();!$jscomp$key$z.done;$jscomp$key$z = $jscomp$iter$6.next()) {
+      var z$14 = $jscomp$key$z.value;
+      sum$13 += z$14 * z$14;
+    }
+    return Math.sqrt(sum$13);
+  }
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.trunc = function(x) {
+  x = Number(x);
+  if (isNaN(x) || x === Infinity || x === -Infinity || x === 0) {
+    return x;
+  }
+  /**@const */var y = Math.floor(Math.abs(x));
+  return x < 0 ? -y : y;
+};
+/**
+@param {*} x
+@return {number} */$jscomp.math.cbrt = function(x) {
+  if (x === 0) {
+    return x;
+  }
+  x = Number(x);
+  /**@const */var y = Math.pow(Math.abs(x), 1 / 3);
+  return x < 0 ? -y : y;
+};
 /***/$jscomp.number = $jscomp.number || {};
 /**
 @param {*} x
@@ -583,8 +782,8 @@
   for (var $jscomp$restIndex = 1;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
     $jscomp$restParams[$jscomp$restIndex - 1] = arguments[$jscomp$restIndex];
   }
-  var sources$7 = $jscomp$restParams;
-  for (var $jscomp$iter$4 = $jscomp.makeIterator(sources$7), $jscomp$key$source = $jscomp$iter$4.next();!$jscomp$key$source.done;$jscomp$key$source = $jscomp$iter$4.next()) {
+  var sources$15 = $jscomp$restParams;
+  for (var $jscomp$iter$7 = $jscomp.makeIterator(sources$15), $jscomp$key$source = $jscomp$iter$7.next();!$jscomp$key$source.done;$jscomp$key$source = $jscomp$iter$7.next()) {
     /**@const */var source = $jscomp$key$source.value;
     for (/**@const */var key in source) {
       if (Object.prototype.hasOwnProperty.call(source, key)) {
@@ -611,7 +810,7 @@
   opt_iterable = opt_iterable === undefined ? [] : opt_iterable;
   /**@const @private @type {!$jscomp.Map<VALUE,VALUE>} */this.map_ = new $jscomp.Map;
   if (opt_iterable) {
-    for (var $jscomp$iter$5 = $jscomp.makeIterator(opt_iterable), $jscomp$key$item = $jscomp$iter$5.next();!$jscomp$key$item.done;$jscomp$key$item = $jscomp$iter$5.next()) {
+    for (var $jscomp$iter$8 = $jscomp.makeIterator(opt_iterable), $jscomp$key$item = $jscomp$iter$8.next();!$jscomp$key$item.done;$jscomp$key$item = $jscomp$iter$8.next()) {
       /**@const */var item = $jscomp$key$item.value;
       this.add(/**@type {VALUE} */(item));
     }
@@ -691,6 +890,155 @@
   }
   $jscomp.Set$install = function() {
   };
+};
+/***/$jscomp.string = $jscomp.string || {};
+/**@private
+@param {*} str
+@param {string} func */$jscomp.string.noRegExp_ = function(str, func) {
+  if (str instanceof RegExp) {
+    throw new TypeError("First argument to String.prototype." + func + " " + "must not be a regular expression");
+  }
+};
+/**
+@param {...number} codepoints
+@return {string} */$jscomp.string.fromCodePoint = function(codepoints) {
+  var $jscomp$restParams = [];
+  for (var $jscomp$restIndex = 0;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
+    $jscomp$restParams[$jscomp$restIndex - 0] = arguments[$jscomp$restIndex];
+  }
+  var codepoints$16 = $jscomp$restParams;
+  var result = "";
+  for (var $jscomp$iter$9 = $jscomp.makeIterator(codepoints$16), $jscomp$key$code = $jscomp$iter$9.next();!$jscomp$key$code.done;$jscomp$key$code = $jscomp$iter$9.next()) {
+    var code = $jscomp$key$code.value;
+    code = +code;
+    if (code < 0 || code > 1114111 || code !== Math.floor(code)) {
+      throw new RangeError("invalid_code_point " + code);
+    }
+    if (code <= 65535) {
+      result += String.fromCharCode(code);
+    } else {
+      code -= 65536;
+      result += String.fromCharCode(code >>> 10 & 1023 | 55296);
+      result += String.fromCharCode(code & 1023 | 56320);
+    }
+  }
+  return result;
+};
+/**
+@param {number} copies
+@return {string}
+@this {*} */$jscomp.string.repeat = function(copies) {
+  var /** string */string = this.toString();
+  if (copies < 0 || copies > 1342177279) {
+    throw new RangeError("Invalid count value");
+  }
+  copies = copies | 0;
+  var result = "";
+  while (copies) {
+    if (copies & 1) {
+      result += string;
+    }
+    if (copies >>>= 1) {
+      string += string;
+    }
+  }
+  return result;
+};
+/**@const @suppress {checkTypes,const} */$jscomp.string.repeat$install = function() {
+  if (!String.prototype.repeat) {
+    String.prototype.repeat = $jscomp.string.repeat;
+  }
+};
+/**
+@param {number} position
+@return {(number|undefined)}
+@this {*} */$jscomp.string.codePointAt = function(position) {
+  /**@const */var string = this.toString();
+  /**@const */var size = string.length;
+  position = Number(position) || 0;
+  if (!(position >= 0 && position < size)) {
+    return void 0;
+  }
+  position = position | 0;
+  /**@const */var first = string.charCodeAt(position);
+  if (first < 55296 || first > 56319 || position + 1 === size) {
+    return first;
+  }
+  /**@const */var second = string.charCodeAt(position + 1);
+  if (second < 56320 || second > 57343) {
+    return first;
+  }
+  return (first - 55296) * 1024 + second + 9216;
+};
+/**@suppress {checkTypes,const} */$jscomp.string.codePointAt$install = function() {
+  if (!String.prototype.codePointAt) {
+    String.prototype.codePointAt = $jscomp.string.codePointAt;
+  }
+};
+/**
+@param {string} searchString
+@param {number=} opt_position
+@return {boolean}
+@this {*} */$jscomp.string.includes = function(searchString, opt_position) {
+  opt_position = opt_position === undefined ? 0 : opt_position;
+  $jscomp.string.noRegExp_(searchString, "includes");
+  /**@const */var string = this.toString();
+  return string.indexOf(searchString, opt_position) !== -1;
+};
+/**@suppress {checkTypes,const} */$jscomp.string.includes$install = function() {
+  if (!String.prototype.includes) {
+    String.prototype.includes = $jscomp.string.includes;
+  }
+};
+/**
+@param {string} searchString
+@param {number=} opt_position
+@return {boolean}
+@this {*} */$jscomp.string.startsWith = function(searchString, opt_position) {
+  opt_position = opt_position === undefined ? 0 : opt_position;
+  $jscomp.string.noRegExp_(searchString, "startsWith");
+  /**@const */var string = this.toString();
+  searchString = searchString + "";
+  /**@const */var strLen = string.length;
+  /**@const */var searchLen = searchString.length;
+  var i = Math.max(0, Math.min(opt_position | 0, string.length));
+  var j = 0;
+  while (j < searchLen && i < strLen) {
+    if (string[i++] != searchString[j++]) {
+      return false;
+    }
+  }
+  return j >= searchLen;
+};
+/**@suppress {checkTypes,const} */$jscomp.string.startsWith$install = function() {
+  if (!String.prototype.startsWith) {
+    String.prototype.startsWith = $jscomp.string.startsWith;
+  }
+};
+/**
+@param {string} searchString
+@param {number=} opt_position
+@return {boolean}
+@this {*} */$jscomp.string.endsWith = function(searchString, opt_position) {
+  $jscomp.string.noRegExp_(searchString, "endsWith");
+  /**@const */var string = this.toString();
+  searchString = searchString + "";
+  if (opt_position === void 0) {
+    opt_position = string.length;
+  }
+  var i = Math.max(0, Math.min(opt_position | 0, string.length));
+  var j = searchString.length;
+  while (j > 0 && i > 0) {
+    if (string[--i] != searchString[--j]) {
+      return false;
+    }
+  }
+  return j <= 0;
+};
+/**@suppress {checkTypes,const} */$jscomp.string.endsWith$install = function() {
+  if (!String.prototype.endsWith) {
+    String.prototype.endsWith = $jscomp.string.endsWith;
+  }
 };
 
 

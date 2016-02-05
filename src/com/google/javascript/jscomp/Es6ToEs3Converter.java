@@ -268,10 +268,12 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     Node declarationOrAssign;
     if (declType == Token.NAME) {
       declarationOrAssign = IR.exprResult(IR.assign(
-          IR.name(variableName),
+          IR.name(variableName).useSourceInfoFrom(variable),
           IR.getprop(iterResult.cloneTree(), IR.string("value"))));
     } else {
-      declarationOrAssign = new Node(declType, IR.name(variableName));
+      declarationOrAssign = new Node(
+          declType,
+          IR.name(variableName).useSourceInfoFrom(variable.getFirstChild()));
       declarationOrAssign.getFirstChild().addChildToBack(
           IR.getprop(iterResult.cloneTree(), IR.string("value")));
     }
@@ -692,7 +694,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
       var.setJSDocInfo(newInfo.build());
     } else if (constructor.getParent().isName()) {
       // Is a newly created VAR node.
-      Node var = constructor.getParent().getParent();
+      Node var = constructor.getGrandparent();
       var.setJSDocInfo(newInfo.build());
     } else if (parent.isAssign()) {
       // The constructor function is the RHS of an assignment.
@@ -888,14 +890,15 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
    * <p><b>WARNING:</b> {@code member} may be modified/destroyed by this method, do not use it
    * afterwards.
    */
-  static Node getQualifiedMemberAccess(AbstractCompiler compiler, Node member, Node staticAccess,
-      Node instanceAccess) {
+  private static Node getQualifiedMemberAccess(AbstractCompiler compiler, Node member,
+      Node staticAccess, Node instanceAccess) {
     Node context = member.isStaticMember() ? staticAccess : instanceAccess;
     context = context.cloneTree();
     if (member.isComputedProp()) {
       return IR.getelem(context, member.removeFirstChild());
     } else {
-      return NodeUtil.newPropertyAccess(compiler, context, member.getString());
+      Node methodName = member.getFirstChild().getFirstChild();
+      return IR.getprop(context, IR.string(member.getString()).useSourceInfoFrom(methodName));
     }
   }
 

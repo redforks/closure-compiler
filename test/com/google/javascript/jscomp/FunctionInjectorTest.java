@@ -1544,7 +1544,7 @@ public final class FunctionInjectorTest extends TestCase {
       if (n.isCall()) {
         Node callee;
         if (NodeUtil.isGet(n.getFirstChild())) {
-          callee = n.getFirstChild().getFirstChild();
+          callee = n.getFirstFirstChild();
         } else {
           callee = n.getFirstChild();
         }

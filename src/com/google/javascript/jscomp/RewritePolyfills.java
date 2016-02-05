@@ -254,8 +254,8 @@ public class RewritePolyfills implements HotSwapCompilerPass {
 
       // Implemented classes.
       .addClasses(ES6_IMPL, ES3, "$jscomp", "Map", "Set")
-      // (Soon-to-be implemented) Math methods.
-      .addStatics(ES6_IMPL, ES6_IMPL, "", "Math",
+      // Math methods.
+      .addStatics(ES6_IMPL, ES3, "$jscomp.math", "Math",
           "clz32", "imul", "sign", "log2", "log10", "log1p", "expm1", "cosh", "sinh", "tanh",
           "acosh", "asinh", "atanh", "hypot", "trunc", "cbrt")
       // Number methods.
@@ -264,9 +264,9 @@ public class RewritePolyfills implements HotSwapCompilerPass {
           "EPSILON", "MAX_SAFE_INTEGER", "MIN_SAFE_INTEGER")
       // Object methods.
       .addStatics(ES6_IMPL, ES3, "$jscomp.object", "Object", "assign", "is")
-      // (Soon-to-be implemented) String methods.
-      .addStatics(ES6_IMPL, ES6_IMPL, "", "String", "fromCodePoint")
-      .addMethods(ES6_IMPL, ES6_IMPL, "",
+      // String methods.
+      .addStatics(ES6_IMPL, ES3, "$jscomp.string", "String", "fromCodePoint")
+      .addMethods(ES6_IMPL, ES3, "$jscomp.string",
           "repeat", "codePointAt", "includes", "startsWith", "endsWith")
       // Array methods.
       .addStatics(ES6_IMPL, ES3, "$jscomp.array", "Array", "from", "of")
@@ -359,7 +359,7 @@ public class RewritePolyfills implements HotSwapCompilerPass {
                 INSUFFICIENT_OUTPUT_VERSION_ERROR,
                 name,
                 compiler.getOptions().getLanguageOut().toString(),
-                polyfill.polyfillVersion.toString());
+                polyfill.polyfillVersion.toLanguageModeString());
           }
           if (!languageOutIsAtLeast(polyfill.nativeVersion)) {
 

@@ -584,7 +584,7 @@ class FunctionInjector {
     } else if (block.hasOneChild()) {
       // Only inline functions that return something.
       if (block.getFirstChild().isReturn()
-          && block.getFirstChild().getFirstChild() != null) {
+          && block.getFirstFirstChild() != null) {
         return true;
       }
     }

@@ -288,7 +288,7 @@ final class ClosureRewriteModule implements NodeTraversal.Callback, HotSwapCompi
 
   private static boolean isGoogModuleCall(Node n) {
     if (NodeUtil.isExprCall(n)) {
-      Node target = n.getFirstChild().getFirstChild();
+      Node target = n.getFirstFirstChild();
       return (target.matchesQualifiedName("goog.module"));
     }
     return false;
@@ -495,7 +495,7 @@ final class ClosureRewriteModule implements NodeTraversal.Callback, HotSwapCompi
     // rewrite:
     //   var foo = goog.require('ns.foo')
     // to
-    //   goog.require('foo');
+    //   goog.require('ns.foo');
     //   var foo = ns.foo;
 
     // replace the goog.require statement with a reference to the namespace.
@@ -629,7 +629,7 @@ final class ClosureRewriteModule implements NodeTraversal.Callback, HotSwapCompi
       return true;
     }
     if (NodeUtil.isExprCall(n)) {
-      Node target = n.getFirstChild().getFirstChild();
+      Node target = n.getFirstFirstChild();
       return (
           target.matchesQualifiedName("goog.module")
           || target.matchesQualifiedName("goog.provide")

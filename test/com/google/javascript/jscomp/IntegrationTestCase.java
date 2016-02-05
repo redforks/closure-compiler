@@ -50,6 +50,8 @@ abstract class IntegrationTestCase extends TestCase {
           "var Iterable;",
           "/** @interface */",
           "var IArrayLike;",
+          "/** @constructor */",
+          "var Map;",
           "",
           "/** @constructor */ function Window() {}",
           "/** @type {string} */ Window.prototype.name;",
@@ -303,10 +305,6 @@ abstract class IntegrationTestCase extends TestCase {
   protected Compiler compile(CompilerOptions options, String[] original) {
     Compiler compiler = lastCompiler = new Compiler();
     BlackHoleErrorManager.silence(compiler);
-    List<SourceFile> inputs = new ArrayList<>();
-    for (int i = 0; i < original.length; i++) {
-      inputs.add(SourceFile.fromCode("input" + i, original[i]));
-    }
     compiler.compileModules(
         externs, ImmutableList.copyOf(CompilerTestCase.createModuleChain(original)),
         options);

@@ -75,58 +75,72 @@ public abstract class JSType implements TypeI {
 
   static final Map<String, JSType> MAP_TO_UNKNOWN =
       new Map<String, JSType>() {
+    @Override
     public void clear() {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public boolean containsKey(Object k) {
       return true;
     }
 
+    @Override
     public boolean containsValue(Object v) {
       return v == JSType.UNKNOWN;
     }
 
+    @Override
     public Set<Map.Entry<String, JSType>> entrySet() {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public JSType get(Object k) {
       return JSType.UNKNOWN;
     }
 
+    @Override
     public boolean isEmpty() {
       return false;
     }
 
+    @Override
     public Set<String> keySet() {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public JSType put(String k, JSType v) {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public void putAll(Map<? extends String, ? extends JSType> m) {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public JSType remove(Object k) {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public int size() {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public Collection<JSType> values() {
       return ImmutableSet.of(JSType.UNKNOWN);
     }
 
+    @Override
     public int hashCode() {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public boolean equals(Object o) {
       return o == this;
     }
@@ -417,7 +431,8 @@ public abstract class JSType implements TypeI {
 
   public boolean isUnion() {
     if (isBottom() || isTop() || isUnknown()
-        || isScalar() || isTypeVariable() || isEnumElement()) {
+        || isScalar() || isTypeVariable() || isEnumElement()
+        || hasTruthyMask() || hasFalsyMask()) {
       return false;
     }
     return !(getMask() == NON_SCALAR_MASK && getObjs().size() == 1);
@@ -915,7 +930,8 @@ public abstract class JSType implements TypeI {
   }
 
   public static JSType plus(JSType lhs, JSType rhs) {
-    if (lhs.equals(STRING) || rhs.equals(STRING)) {
+    if (!lhs.isUnknown() && !lhs.isBottom() && lhs.isSubtypeOf(STRING)
+        || !rhs.isUnknown() && !rhs.isBottom() && rhs.isSubtypeOf(STRING)) {
       return STRING;
     }
     if (lhs.isUnknown() || lhs.isTop() || rhs.isUnknown() || rhs.isTop()) {
@@ -959,6 +975,9 @@ public abstract class JSType implements TypeI {
 
   @Override
   public boolean isSubtypeOf(TypeI other) {
+    if (this == other) {
+      return true;
+    }
     JSType type2 = (JSType) other;
     if (isLoose() || type2.isLoose()) {
       return autobox().isSubtypeOfHelper(true, type2.autobox());
@@ -1228,7 +1247,7 @@ public abstract class JSType implements TypeI {
                 tags &= ~UNDEFINED_MASK;
                 continue;
               case TYPEVAR_MASK:
-                builder.append(getTypeVar());
+                builder.append(getTypeVar().substring(0, getTypeVar().indexOf('#')));
                 tags &= ~TYPEVAR_MASK;
                 continue;
               case NON_SCALAR_MASK: {
@@ -1367,18 +1386,22 @@ final class UnionType extends JSType {
     this(mask, null, null, null);
   }
 
+  @Override
   protected int getMask() {
     return mask;
   }
 
+  @Override
   protected ImmutableSet<ObjectType> getObjs() {
     return Preconditions.checkNotNull(objs);
   }
 
+  @Override
   protected String getTypeVar() {
     return typeVar;
   }
 
+  @Override
   protected ImmutableSet<EnumType> getEnums() {
     return Preconditions.checkNotNull(enums);
   }
@@ -1471,18 +1494,22 @@ class MaskType extends JSType {
     }
   }
 
+  @Override
   protected int getMask() {
     return mask;
   }
 
+  @Override
   protected ImmutableSet<ObjectType> getObjs() {
     return ImmutableSet.of();
   }
 
+  @Override
   protected String getTypeVar() {
     return null;
   }
 
+  @Override
   protected ImmutableSet<EnumType> getEnums() {
     return ImmutableSet.of();
   }
@@ -1495,18 +1522,22 @@ final class ObjsType extends JSType {
     this.objs = Preconditions.checkNotNull(objs);
   }
 
+  @Override
   protected int getMask() {
     return NON_SCALAR_MASK;
   }
 
+  @Override
   protected ImmutableSet<ObjectType> getObjs() {
     return objs;
   }
 
+  @Override
   protected String getTypeVar() {
     return null;
   }
 
+  @Override
   protected ImmutableSet<EnumType> getEnums() {
     return ImmutableSet.of();
   }
@@ -1519,18 +1550,22 @@ final class NullableObjsType extends JSType {
     this.objs = Preconditions.checkNotNull(objs);
   }
 
+  @Override
   protected int getMask() {
     return NON_SCALAR_MASK | NULL_MASK;
   }
 
+  @Override
   protected ImmutableSet<ObjectType> getObjs() {
     return objs;
   }
 
+  @Override
   protected String getTypeVar() {
     return null;
   }
 
+  @Override
   protected ImmutableSet<EnumType> getEnums() {
     return ImmutableSet.of();
   }

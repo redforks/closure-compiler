@@ -39,6 +39,7 @@ import com.google.javascript.jscomp.newtypes.NominalType;
 import com.google.javascript.jscomp.newtypes.QualifiedName;
 import com.google.javascript.jscomp.newtypes.RawNominalType;
 import com.google.javascript.jscomp.newtypes.Typedef;
+import com.google.javascript.jscomp.newtypes.UniqueNameGenerator;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -197,9 +198,7 @@ class GlobalTypeInfo implements CompilerPass {
       DiagnosticType.warning(
           "JSC_NTI_SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES",
           "Interface {0} has a property {1} with incompatible types in "
-          + "its super interfaces\n"
-          + "Inherited type 1: {2}\n"
-          + "Inherited type 2: {3}\n");
+          + "its super interfaces: {2}");
 
   static final DiagnosticType ONE_TYPE_FOR_MANY_VARS = DiagnosticType.warning(
       "JSC_NTI_ONE_TYPE_FOR_MANY_VARS",
@@ -263,10 +262,13 @@ class GlobalTypeInfo implements CompilerPass {
   private final AbstractCompiler compiler;
   private final CodingConvention convention;
   private final Map<Node, String> anonFunNames = new LinkedHashMap<>();
+  // Uses %, which is not allowed in identifiers, to avoid naming clashes
+  // with existing functions.
   private static final String ANON_FUN_PREFIX = "%anon_fun";
   private static final String WINDOW_INSTANCE = "window";
   private static final String WINDOW_CLASS = "Window";
-  private int freshId = 1;
+  private DefaultNameGenerator funNameGen;
+  private UniqueNameGenerator varNameGen;
   // Only for original definitions, not for aliased constructors
   private Map<Node, RawNominalType> nominaltypesByNode = new LinkedHashMap<>();
   // Keyed on RawNominalTypes and property names
@@ -283,7 +285,9 @@ class GlobalTypeInfo implements CompilerPass {
     this.warnings = new WarningReporter(compiler);
     this.compiler = compiler;
     this.convention = compiler.getCodingConvention();
-    this.typeParser = new JSTypeCreatorFromJSDoc(this.convention);
+    this.varNameGen = new UniqueNameGenerator();
+    this.funNameGen = new DefaultNameGenerator(ImmutableSet.<String>of(), "", null);
+    this.typeParser = new JSTypeCreatorFromJSDoc(this.convention, this.varNameGen);
     this.commonTypes = JSTypes.make();
     JSType.setCommonTypes(this.commonTypes);
   }
@@ -419,16 +423,18 @@ class GlobalTypeInfo implements CompilerPass {
     }
     Map<Node, String> unknownTypes = typeParser.getUnknownTypesMap();
     for (Map.Entry<Node, String> unknownTypeEntry : unknownTypes.entrySet()) {
-      warnings.add(JSError.make(unknownTypeEntry.getKey(),
+      this.warnings.add(JSError.make(unknownTypeEntry.getKey(),
               UNRECOGNIZED_TYPE_NAME, unknownTypeEntry.getValue()));
     }
     // The jsdoc parser doesn't have access to the error functions in the jscomp
     // package, so we collect its warnings here.
     for (JSError warning : typeParser.getWarnings()) {
-      warnings.add(warning);
+      this.warnings.add(warning);
     }
-    typeParser = null;
-    warnings = null;
+    this.typeParser = null;
+    this.warnings = null;
+    this.varNameGen = null;
+    this.funNameGen = null;
 
     // If a scope s1 contains a scope s2, then s2 must be before s1 in scopes.
     // The type inference relies on this fact to process deeper scopes
@@ -518,10 +524,16 @@ class GlobalTypeInfo implements CompilerPass {
       DeclaredFunctionType superMethodType = DeclaredFunctionType.meet(methodTypes);
       DeclaredFunctionType localMethodType = localPropDef.methodType;
       boolean getsTypeFromParent = getsTypeInfoFromParentMethod(localPropDef);
-      // When getsTypeFromParent is true, we will miss the invalid override
-      // earlier, so we check here.
-      if (getsTypeFromParent
+      if (superMethodType == null) {
+        // If the inherited types are not compatible, pick one.
+        superMethodType = methodTypes.iterator().next();
+        warnings.add(JSError.make(localPropDef.defSite,
+                SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES,
+                rawType.getName(), pname, methodTypes.toString()));
+      } else if (getsTypeFromParent
           && localMethodType.getMaxArity() > superMethodType.getMaxArity()) {
+        // When getsTypeFromParent is true, we will miss the invalid override
+        // earlier, so we check here.
         warnings.add(JSError.make(
             localPropDef.defSite, INVALID_PROP_OVERRIDE, pname,
             superMethodType.toFunctionType().toString(),
@@ -549,7 +561,7 @@ class GlobalTypeInfo implements CompilerPass {
               rawType.getDefSite(),
               SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES,
               rawType.getName(), pname,
-              inheritedType.toString(), resultType.toString()));
+              defs.toString()));
           continue add_interface_props;
         }
       }
@@ -603,6 +615,7 @@ class GlobalTypeInfo implements CompilerPass {
     JSType localPropType = localPropDef == null
         ? null : current.getInstancePropDeclaredType(pname);
     if (localPropDef != null && superType.isClass()
+        && localPropType != null
         && localPropType.getFunType() != null
         && superType.hasConstantProp(pname)) {
       // TODO(dimvar): This doesn't work for multiple levels in the hierarchy.
@@ -802,7 +815,7 @@ class GlobalTypeInfo implements CompilerPass {
         return false;
       }
       if (qnameNode.isGetProp()) {
-        markAssignNodeAsAnalyzed(qnameNode.getParent().getParent());
+        markAssignNodeAsAnalyzed(qnameNode.getGrandparent());
       }
       NTIScope s;
       if (qnameNode.isName()) {
@@ -923,15 +936,13 @@ class GlobalTypeInfo implements CompilerPass {
           || nameNode.getParent().isAssign()) {
         // Anonymous functions, qualified names, and stray assignments
         // (eg, f = function(x) { ... }; ) get gensymed names.
-        internalName = ANON_FUN_PREFIX + freshId;
+        internalName = ANON_FUN_PREFIX + funNameGen.generateNextName();
         anonFunNames.put(fn, internalName);
-        freshId++;
       } else if (currentScope.isDefinedLocally(nameNode.getString(), false)) {
         String fnName = nameNode.getString();
         Preconditions.checkState(!fnName.contains("."));
-        internalName = ANON_FUN_PREFIX + freshId;
+        internalName = ANON_FUN_PREFIX + funNameGen.generateNextName();
         anonFunNames.put(fn, internalName);
-        freshId++;
       } else {
         // fnNameNode is undefined simple name
         internalName = nameNode.getString();
@@ -982,7 +993,11 @@ class GlobalTypeInfo implements CompilerPass {
           warnings.add(JSError.make(defSite, ANONYMOUS_NOMINAL_TYPE));
           return;
         }
-        ImmutableList<String> typeParameters = fnDoc.getTemplateTypeNames();
+        ImmutableList.Builder<String> builder = ImmutableList.builder();
+        for (String typeParam : fnDoc.getTemplateTypeNames()) {
+          builder.add(varNameGen.getNextName(typeParam));
+        }
+        ImmutableList<String> typeParameters = builder.build();
         RawNominalType rawNominalType;
         if (fnDoc.isInterface()) {
           rawNominalType = RawNominalType.makeInterface(defSite, qname, typeParameters);
@@ -1655,6 +1670,8 @@ class GlobalTypeInfo implements CompilerPass {
           if (t != null) {
             return t.getFunTypeIfSingletonObj();
           }
+        } else if (decl.getNominal() != null) {
+          return decl.getNominal().getConstructorFunction();
         } else if (decl.getFunctionScope() != null) {
           DeclaredFunctionType funType = decl.getFunctionScope().getDeclaredFunctionType();
           if (funType != null) {
@@ -2044,7 +2061,7 @@ class GlobalTypeInfo implements CompilerPass {
     private RawNominalType maybeGetOwnerType(Node funNode, Node parent) {
       Preconditions.checkArgument(funNode.isFunction());
       if (parent.isAssign() && parent.getFirstChild().isGetElem()) {
-        Node recv = parent.getFirstChild().getFirstChild();
+        Node recv = parent.getFirstFirstChild();
         if (recv.isGetProp() && recv.getLastChild().getString().equals("prototype")) {
           QualifiedName qname = QualifiedName.fromNode(recv.getFirstChild());
           if (qname != null) {
@@ -2130,7 +2147,7 @@ class GlobalTypeInfo implements CompilerPass {
 
   private static boolean isPrototypePropertyDeclaration(Node n) {
     if (NodeUtil.isExprAssign(n)
-        && isPrototypeProperty(n.getFirstChild().getFirstChild())) {
+        && isPrototypeProperty(n.getFirstFirstChild())) {
       return true;
     }
     if (n.isObjectLit()) {

@@ -105,8 +105,8 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
 
   private boolean isFunctionDecl(Node n) {
     return n.isFunction()
-        || (n.isVar() && n.getFirstChild().getFirstChild() != null
-            && n.getFirstChild().getFirstChild().isFunction())
+        || (n.isVar() && n.getFirstFirstChild() != null
+            && n.getFirstFirstChild().isFunction())
         || n.isAssign() && n.getFirstChild().isQualifiedName() && n.getLastChild().isFunction();
   }
 

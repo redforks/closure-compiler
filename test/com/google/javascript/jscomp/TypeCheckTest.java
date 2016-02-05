@@ -19,6 +19,7 @@ package com.google.javascript.jscomp;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.type.ClosureReverseAbstractInterpreter;
 import com.google.javascript.jscomp.type.SemanticReverseAbstractInterpreter;
@@ -4722,6 +4723,50 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
               "Cannot use the IN operator with structs");
   }
 
+  public void testArrayLegacyAccess1() {
+    String externs = DEFAULT_EXTERNS.replace(
+        " * @implements {IArrayLike<T>}",
+        LINE_JOINER.join(
+          " * @implements {IObject<?, T>} ",
+          " * @implements {IArrayLike<T>} "));
+    Preconditions.checkState(DEFAULT_EXTERNS.length() != externs.length());
+    testTypesWithExterns(externs, "var a = []; var b = a['hi'];");
+  }
+
+  public void testIArrayLikeAccess1() {
+    testTypes(
+        LINE_JOINER.join(
+            "/** ",
+            " * @param {!IArrayLike<T>} x",
+            " * @return {T}",
+            " * @template T",
+            "*/",
+            "function f(x) { return x[0]; }",
+            "function g(/** !Array<string> */ x) {",
+            "  var /** null */ y = f(x);",
+            "}"),
+        "initializing variable\n"
+        + "found   : string\n"
+        + "required: null");
+  }
+
+  public void testIArrayLikeAccess2() {
+    testTypes(
+        LINE_JOINER.join(
+            "/** ",
+            " * @param {!IArrayLike<T>} x",
+            " * @return {T}",
+            " * @template T",
+            "*/",
+            "function f(x) { return x[0]; }",
+            "function g(/** !IArrayLike<string> */ x) {",
+            "  var /** null */ y = f(x);",
+            "}"),
+        "initializing variable\n"
+        + "found   : string\n"
+        + "required: null");
+  }
+
   public void testArrayAccess1() {
     testTypes("var a = []; var b = a['hi'];",
         "restricted index type\n" +
@@ -4756,14 +4801,14 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
     testTypes("var bar = null[1];",
         "only arrays or objects can be accessed\n" +
         "found   : null\n" +
-        "required: (Array|Object)");
+        "required: Object");
   }
 
   public void testArrayAccess7() {
     testTypes("var bar = void 0; bar[0];",
         "only arrays or objects can be accessed\n" +
         "found   : undefined\n" +
-        "required: (Array|Object)");
+        "required: Object");
   }
 
   public void testArrayAccess8() {
@@ -4772,7 +4817,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
     testTypes("var bar = void 0; bar[0]; bar[1];",
         "only arrays or objects can be accessed\n" +
         "found   : undefined\n" +
-        "required: (Array|Object)");
+        "required: Object");
   }
 
   public void testArrayAccess9() {
@@ -4823,7 +4868,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testVar1() {
     TypeCheckResult p =
-        parseAndTypeCheckWithScope("/** @type {(string,null)} */var a = null");
+        parseAndTypeCheckWithScope("/** @type {(string|null)} */var a = null");
 
     assertTypeEquals(createUnionType(STRING_TYPE, NULL_TYPE),
         p.scope.getVar("a").getType());
@@ -7681,7 +7726,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
     JSType typeC = nodeC.getJSType();
     assertTrue(typeC.isNumber());
 
-    Node nodeB = nodeC.getFirstChild().getFirstChild();
+    Node nodeB = nodeC.getFirstFirstChild();
     JSType typeB = nodeB.getJSType();
     assertEquals("B", typeB.toString());
   }
@@ -8243,7 +8288,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         "/** @constructor\n * @extends {base} */function derived() {}\n" +
         "/** @type {!derived} */ var baz = " +
         "/** @type {!derived} */(new base());\n");
-    Node castedExprNode = root.getLastChild().getFirstChild().getFirstChild().getFirstChild();
+    Node castedExprNode = root.getLastChild().getFirstFirstChild().getFirstChild();
     assertEquals("derived", castedExprNode.getJSType().toString());
     assertEquals("base", castedExprNode.getJSTypeBeforeCast().toString());
   }
@@ -9106,7 +9151,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
     assertSame(googNodeType, googScopeType);
 
     // goog type on the left of the GETPROP node (under fist ASSIGN)
-    Node getpropFoo1 = varNode.getNext().getFirstChild().getFirstChild();
+    Node getpropFoo1 = varNode.getNext().getFirstFirstChild();
     assertEquals(Token.GETPROP, getpropFoo1.getType());
     assertEquals("goog", getpropFoo1.getFirstChild().getString());
     JSType googGetpropFoo1Type = getpropFoo1.getFirstChild().getJSType();
@@ -9122,7 +9167,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
     // goog type on the left of the GETPROP lower level node
     // (under second ASSIGN)
     Node getpropFoo2 = varNode.getNext().getNext()
-        .getFirstChild().getFirstChild().getFirstChild();
+        .getFirstFirstChild().getFirstChild();
     assertEquals(Token.GETPROP, getpropFoo2.getType());
     assertEquals("goog", getpropFoo2.getFirstChild().getString());
     JSType googGetpropFoo2Type = getpropFoo2.getFirstChild().getJSType();
@@ -9263,7 +9308,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testValueTypeBuiltInPrototypePropertyType() {
     Node node = parseAndTypeCheck("\"x\".charAt(0)");
-    assertTypeEquals(STRING_TYPE, node.getFirstChild().getFirstChild().getJSType());
+    assertTypeEquals(STRING_TYPE, node.getFirstFirstChild().getJSType());
   }
 
   public void testDeclareBuiltInConstructor() {
@@ -9787,7 +9832,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   public void testObjectLiteral() {
     Node n = parseAndTypeCheck("var a = {m1: 7, m2: 'hello'}");
 
-    Node nameNode = n.getFirstChild().getFirstChild();
+    Node nameNode = n.getFirstFirstChild();
     Node objectNode = nameNode.getFirstChild();
 
     // node extraction
@@ -9893,7 +9938,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
     // ECMA-262 15.9.2: When Date is called as a function rather than as a
     // constructor, it returns a string.
     Node n = parseAndTypeCheck("Date()");
-    assertTypeEquals(STRING_TYPE, n.getFirstChild().getFirstChild().getJSType());
+    assertTypeEquals(STRING_TYPE, n.getFirstFirstChild().getJSType());
   }
 
   // According to ECMA-262, Error & Array function calls are equivalent to
@@ -9902,13 +9947,13 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   public void testCallErrorConstructorAsFunction() {
     Node n = parseAndTypeCheck("Error('x')");
     assertTypeEquals(ERROR_TYPE,
-                 n.getFirstChild().getFirstChild().getJSType());
+                 n.getFirstFirstChild().getJSType());
   }
 
   public void testCallArrayConstructorAsFunction() {
     Node n = parseAndTypeCheck("Array()");
     assertTypeEquals(ARRAY_TYPE,
-                 n.getFirstChild().getFirstChild().getJSType());
+                 n.getFirstFirstChild().getJSType());
   }
 
   public void testPropertyTypeOfUnionType() {
@@ -11332,7 +11377,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   public void testUndefinedVar() {
     Node n = parseAndTypeCheck("var undefined;");
     assertTypeEquals(registry.getNativeType(JSTypeNative.VOID_TYPE),
-                 n.getFirstChild().getFirstChild().getJSType());
+                 n.getFirstFirstChild().getJSType());
   }
 
   public void testFlowScopeBug1() {

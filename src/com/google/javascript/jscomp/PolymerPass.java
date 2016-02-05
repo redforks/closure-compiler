@@ -43,7 +43,7 @@ import java.util.Set;
  * Rewrites "Polymer({})" calls into a form that is suitable for type checking and dead code
  * elimination. Also ensures proper format and types.
  *
- * <p>Only works with Polymer version: 0.8
+ * <p>Only works with Polymer version 0.8 and above.
  *
  * @author jlklein@google.com (Jeremy Klein)
  */
@@ -126,7 +126,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
   }
 
   /**
-   * Finds the externs for the PolymerElement base class and all of its properties.
+   * Finds the externs for the PolymerElement base class and all of its properties in the externs.
    */
   private static class FindPolymerExterns extends AbstractPostOrderCallback {
     private Node polymerElementExterns;
@@ -160,11 +160,11 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
      */
     private boolean isPolymerElementPropExpr(Node value) {
       return value != null && value.isExprResult()
-          && value.getFirstChild().getFirstChild() != null
-          && value.getFirstChild().getFirstChild().isGetProp()
-          && value.getFirstChild().getFirstChild().isQualifiedName()
+          && value.getFirstFirstChild() != null
+          && value.getFirstFirstChild().isGetProp()
+          && value.getFirstFirstChild().isQualifiedName()
           && NodeUtil.getRootOfQualifiedName(
-              value.getFirstChild().getFirstChild()).matchesQualifiedName(POLYMER_ELEMENT_NAME);
+              value.getFirstFirstChild()).matchesQualifiedName(POLYMER_ELEMENT_NAME);
     }
 
     public List<Node> getpolymerElementProps() {
@@ -198,7 +198,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
 
         Node behaviorValue = n.getSecondChild();
         if (n.isVar()) {
-          behaviorValue = n.getFirstChild().getFirstChild();
+          behaviorValue = n.getFirstFirstChild();
         }
         suppressBehavior(behaviorValue);
       }
@@ -387,7 +387,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     elNameString += "Element";
 
     Node target;
-    if (NodeUtil.isNameDeclaration(callNode.getParent().getParent())) {
+    if (NodeUtil.isNameDeclaration(callNode.getGrandparent())) {
       target = IR.name(callNode.getParent().getString());
     } else if (callNode.getParent().isAssign()) {
       target = callNode.getParent().getFirstChild().cloneTree();
@@ -418,8 +418,13 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     }
     overwriteMembersIfPresent(allProperties, extractProperties(descriptor));
 
-    ClassDefinition def = new ClassDefinition(target, descriptor, classInfo,
-        new MemberDefinition(ctorInfo, null, constructor), nativeBaseElement, allProperties,
+    ClassDefinition def = new ClassDefinition(
+        target,
+        descriptor,
+        classInfo,
+        new MemberDefinition(ctorInfo, null, constructor),
+        nativeBaseElement,
+        allProperties,
         behaviors);
     return def;
   }
@@ -561,6 +566,10 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     return membersToCopy.build();
   }
 
+  /**
+   * Extracts a list of {@link MemberDefinition}s for the {@code properties} block of the given
+   * descriptor Object literal.
+   */
   private static List<MemberDefinition> extractProperties(Node descriptor) {
     Node properties = NodeUtil.getFirstPropMatchingKey(descriptor, "properties");
     if (properties == null) {
@@ -575,6 +584,13 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     return members.build();
   }
 
+  /**
+   * Rewrites a given call to Polymer({}) to a set of declarations and assignments which can be
+   * understood by the compiler.
+   *
+   * @param exprRoot The root expression of the call to Polymer({}).
+   * @param cls The extracted {@link ClassDefinition} for the Polymer element created by this call.
+   */
   private void rewritePolymerClass(Node exprRoot, final ClassDefinition cls, NodeTraversal t) {
     // Add {@code @lends} to the object literal.
     Node call = exprRoot.getFirstChild();
@@ -716,8 +732,8 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
               @Override
               public void visit(Node n) {
                 if (n.isString() && n.getString().equals("$") && n.getParent().isGetProp()
-                    && n.getParent().getParent().isGetProp()) {
-                  Node dollarChildProp = n.getParent().getParent();
+                    && n.getGrandparent().isGetProp()) {
+                  Node dollarChildProp = n.getGrandparent();
                   dollarChildProp.setType(Token.GETELEM);
                   compiler.reportCodeChange();
                 }
@@ -945,7 +961,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
     for (Node baseProp : polymerElementProps) {
       Node newProp = baseProp.cloneTree();
       Node newPropRootName = NodeUtil.getRootOfQualifiedName(
-           newProp.getFirstChild().getFirstChild());
+           newProp.getFirstFirstChild());
       newPropRootName.setString(polymerElementType);
       block.addChildToBack(newProp);
     }
@@ -1047,7 +1063,7 @@ final class PolymerPass extends AbstractPostOrderCallback implements HotSwapComp
   }
 
   /**
-   * @return Whether the call represents a call to Polymer.
+   * @return Whether the call represents a call to the Polymer function.
    */
   private static boolean isPolymerCall(Node value) {
     return value != null && value.isCall() && value.getFirstChild().matchesQualifiedName("Polymer");
