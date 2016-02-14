@@ -1744,16 +1744,12 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testFunctionArguments17() {
-    testClosureTypesMultipleWarnings(
+    testTypes(
         "/** @param {booool|string} x */" +
         "function f(x) { g(x) }" +
         "/** @param {number} x */" +
         "function g(x) {}",
-        ImmutableList.of(
-            "Bad type annotation. Unknown type booool",
-            "actual parameter 1 of g does not match formal parameter\n" +
-            "found   : (booool|null|string)\n" +
-            "required: number"));
+        "Bad type annotation. Unknown type booool");
   }
 
   public void testFunctionArguments18() {
@@ -13911,11 +13907,11 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         LINE_JOINER.join(
             "/** @record @template T */",
             "function WithPropT() {}",
-            "/** @type {T} */ WithPropT.prototype.prop",
-            "function f(/** !WithPropT<number> */ x){};",
+            "/** @type {T} */ WithPropT.prototype.prop;",
+            "function f(/** !WithPropT<number> */ x){}",
             "/** @constructor */ function Foo() {}",
-            "/** @type {number} */ Foo.prototype.prop",
-            "f(new Foo)"));
+            "/** @type {number} */ Foo.prototype.prop;",
+            "f(new Foo);"));
   }
 
   public void testTemplatizedStructuralMatch2() {
@@ -14001,7 +13997,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         LINE_JOINER.join(
             "/** @record @template T */",
             "function WithProp() {}",
-            "/** @type {T} */ WithProp.prototype.prop",
+            "/** @type {T} */ WithProp.prototype.prop;",
             "/** @constructor */",
             "function Foo() {",
             "  /** @type {number} */ this.prop = 4;",
@@ -14026,7 +14022,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         LINE_JOINER.join(
             "/** @record @template T */",
             "function WithProp() {}",
-            "/** @type {T} */ WithProp.prototype.prop",
+            "/** @type {T} */ WithProp.prototype.prop;",
             "/** @constructor */",
             "function Foo() {",
             "  /** @type {number} */ this.prop = 4;",
@@ -15309,42 +15305,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   /**
    * test structural interface matching for object literals
    */
-  public void testStructuralInterfaceMatching42_1() {
-    testTypesWithExtraExterns(
-        LINE_JOINER.join(
-            "/** @record */",
-            "function I2() {}",
-            "/** @type {number} */",
-            "I2.prototype.length;"),
-        LINE_JOINER.join(
-            "/** @type {{length: number}} */",
-            "var o1 = {length : 123};",
-            "/** @type {I2} */",
-            "var i;",
-            "i = o1;"));
-  }
-
-  /**
-   * test structural interface matching for object literals
-   */
   public void testStructuralInterfaceMatching43() {
-    testTypesWithExtraExterns(
-        LINE_JOINER.join(
-            "/** @record */",
-            "function I2() {}",
-            "/** @type {number} */",
-            "I2.prototype.length;"),
-        LINE_JOINER.join(
-            "var o1 = {length : 123};",
-            "/** @type {I2} */",
-            "var i;",
-            "i = o1;"));
-  }
-
-  /**
-   * test structural interface matching for object literals
-   */
-  public void testStructuralInterfaceMatching43_1() {
     testTypesWithExtraExterns(
         LINE_JOINER.join(
             "/** @record */",
@@ -15387,12 +15348,11 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "function I() {}",
             "/** @constructor */",
             "function C() {}",
-            "var i /** !I */ = new C;"));
+            "var /** !I */ i = new C;"));
   }
 
   public void testStructuralInterfaceMatching46() {
-    testTypesWithExtraExterns(
-        "",
+    testTypes(
         LINE_JOINER.join(
             "/** @interface */",
             "function I2() {}",
@@ -15508,10 +15468,6 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "i3 = r;"));
   }
 
-  /**
-   * here we temporarily disable structural interface
-   * matching for interfaces that is declared with @interface tag
-   */
   public void testStructuralInterfaceMatching1_1() {
     testTypesWithExtraExterns(
         LINE_JOINER.join(
@@ -15622,6 +15578,15 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "required: {str: string, unknown: ?}"));
   }
 
+  public void testRecordWithOptionalUnknownProperty() {
+    testTypes(
+        LINE_JOINER.join(
+            "/**  @constructor */ function Foo() {};",
+            "Foo.prototype.str = 'foo';",
+            "",
+            "var /** {str: string, opt_unknown: (?|undefined)} */ x = new Foo;"));
+  }
+
   public void testRecordWithTopProperty() {
     testTypes(
         LINE_JOINER.join(
@@ -15663,6 +15628,27 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "initializing variable",
             "found   : Foo",
             "required: Rec"));
+  }
+
+  public void testStructuralInterfaceWithOptionalUnknownProperty() {
+    testTypes(
+        LINE_JOINER.join(
+            "/** @record */ function Rec() {}",
+            "/** @type {string} */ Rec.prototype.str;",
+            "/** @type {?|undefined} */ Rec.prototype.opt_unknown;",
+            "",
+            "/** @constructor */ function Foo() {}",
+            "Foo.prototype.str = 'foo';",
+            "",
+            "var /** !Rec */ x = new Foo;"));
+  }
+
+  public void testOptionalUnknownIsAssignableToUnknown() {
+    testTypes(
+        LINE_JOINER.join(
+            "function f(/** (undefined|?) */ opt_unknown) {",
+            "  var /** ? */ unknown = opt_unknown;",
+            "}"));
   }
 
   public void testStructuralInterfaceWithTopProperty() {

@@ -1939,33 +1939,38 @@ public final class NewParserTest extends BaseJSTypeTestCase {
         "Octal integer literals are not supported in Ecmascript 5 strict mode.");
   }
 
-  // TODO(tbreisacher): We need much clearer error messages for this case.
   public void testInvalidOctalLiterals() {
     mode = LanguageMode.ECMASCRIPT3;
     parseError("0o08;",
-        "Semi-colon expected");
+        "Invalid octal digit in octal literal.");
 
     mode = LanguageMode.ECMASCRIPT5;
     parseError("0o08;",
-        "Semi-colon expected");
+        "Invalid octal digit in octal literal.");
 
     mode = LanguageMode.ECMASCRIPT6;
     parseError("0o08;",
-        "Semi-colon expected");
+        "Invalid octal digit in octal literal.");
   }
 
   public void testInvalidOldStyleOctalLiterals() {
     mode = LanguageMode.ECMASCRIPT3;
     parseError("08;",
-        "Invalid number literal.");
+        "Invalid octal digit in octal literal.");
+    parseError("01238;",
+        "Invalid octal digit in octal literal.");
 
     mode = LanguageMode.ECMASCRIPT5;
     parseError("08;",
-        "Invalid number literal.");
+        "Invalid octal digit in octal literal.");
+    parseError("01238;",
+        "Invalid octal digit in octal literal.");
 
     mode = LanguageMode.ECMASCRIPT6;
     parseError("08;",
-        "Invalid number literal.");
+        "Invalid octal digit in octal literal.");
+    parseError("01238;",
+        "Invalid octal digit in octal literal.");
   }
 
   public void testGetter() {
@@ -2197,14 +2202,21 @@ public final class NewParserTest extends BaseJSTypeTestCase {
 
   public void testUnicodeInIdentifiers() {
     parse("var \\u00fb");
+    parse("var \\u00fbtest\\u00fb");
     parse("Js\\u00C7ompiler");
     parse("Js\\u0043ompiler");
+    parse("if(true){foo=\\u03b5}");
+    parse("if(true){foo=\\u03b5}else bar()");
   }
 
   public void testUnicodePointEscapeInIdentifiers() {
     parse("var \\u{0043}");
+    parse("var \\u{0043}test\\u{0043}");
+    parse("var \\u0043test\\u{0043}");
+    parse("var \\u{0043}test\\u0043");
     parse("Js\\u{0043}ompiler");
     parse("Js\\u{765}ompiler");
+    parse("var \\u0043;{43}");
   }
 
   public void testUnicodePointEscapeStringLiterals() {
@@ -2217,7 +2229,13 @@ public final class NewParserTest extends BaseJSTypeTestCase {
 
   public void testInvalidUnicodePointEscapeInIdentifiers() {
     parseError("var \\u{defg", "Invalid escape sequence");
+    parseError("var \\u{03b5", "Invalid escape sequence");
+    parseError("var \\u43{43}", "Invalid escape sequence");
     parseError("var \\u{defgRestOfIdentifier", "Invalid escape sequence");
+    parseError("var \\u03b5}", "primary expression expected");
+    parseError("var \\u{03b5}}}", "primary expression expected");
+    parseError("var \\u{03b5}{}", "Semi-colon expected");
+    parseError("var \\u0043{43}", "Semi-colon expected");
     parseError("var \\u{DEFG}", "Invalid escape sequence");
     parseError("Js\\u{}ompiler", "Invalid escape sequence");
     // Legal unicode but invalid in identifier

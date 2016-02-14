@@ -25,7 +25,6 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
   @Override
   public void setUp() {
     setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    enableAstValidation(true);
     runTypeCheckAfterProcessing = true;
     compareJsDoc = true;
   }
@@ -69,6 +68,7 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
             "    return: function(arg) { throw Error('Not yet implemented'); },",
             "  });",
             "  $jscomp.initSymbolIterator();",
+            "  /** @this {!Generator<?>} */",
             "  iterator[Symbol.iterator] = function() { return this; };",
             "  return iterator;",
             "}"));
@@ -117,6 +117,7 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
             "    return: function(arg) { throw Error('Not yet implemented'); },",
             "  });",
             "  $jscomp.initSymbolIterator();",
+            "  /** @this {!Generator<?>} */",
             "  iterator[Symbol.iterator] = function() { return this; };",
             "  return iterator;",
             "}"));
@@ -199,6 +200,7 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
             "      return: function(arg) { throw Error('Not yet implemented'); },",
             "    });",
             "    $jscomp.initSymbolIterator();",
+            "    /** @this {!Generator<?>} */",
             "    iterator[Symbol.iterator] = function() { return this; };",
             "    return iterator;",
             "  }",
@@ -239,6 +241,7 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
             "      return: function(arg) { throw Error('Not yet implemented'); },",
             "    })",
             "    $jscomp.initSymbolIterator();",
+            "    /** @this {!Generator<?>} */",
             "    iterator[Symbol.iterator] = function() { return this; };",
             "    return iterator;",
             "  }",
@@ -266,6 +269,7 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
             "    return: function(arg) { throw Error('Not yet implemented'); },",
             "  });",
             "  $jscomp.initSymbolIterator();",
+            "  /** @this {!Generator<?>} */",
             "  iterator[Symbol.iterator] = function() { return this; };",
             "  return iterator;",
             "}"));
@@ -511,6 +515,7 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
             "    return: function(arg) { throw Error('Not yet implemented'); },",
             "  });",
             "  $jscomp.initSymbolIterator();",
+            "  /** @this {!Generator<?>} */",
             "  iterator[Symbol.iterator] = function() { return this; };",
             "  return iterator;",
             "}"));
@@ -726,6 +731,7 @@ public final class Es6RewriteGeneratorsTest extends CompilerTestCase {
             "    return: function(arg) { throw Error('Not yet implemented'); },",
             "  });",
             "  $jscomp.initSymbolIterator();",
+            "  /** @this {!Generator<?>} */",
             "  iterator[Symbol.iterator] = function() { return this; };",
             "  return iterator;",
             "}"));

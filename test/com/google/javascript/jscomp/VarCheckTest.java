@@ -42,12 +42,10 @@ public final class VarCheckTest extends Es6CompilerTestCase {
     super.setUp();
     // Setup value set by individual tests to the appropriate defaults.
     super.allowExternsChanges(true);
-    super.enableAstValidation(true);
     strictModuleDepErrorLevel = CheckLevel.OFF;
     externValidationErrorLevel = null;
     sanityCheck = false;
     declarationCheck = false;
-    compareJsDoc = false;
   }
 
   @Override
@@ -174,11 +172,12 @@ public final class VarCheckTest extends Es6CompilerTestCase {
   }
 
   public void testVarReferenceInExterns() {
-    testSame("asdf;", "var asdf;", VarCheck.NAME_REFERENCE_IN_EXTERNS_ERROR);
+    testSame("asdf;", "var /** @suppress {duplicate} */ asdf;",
+        VarCheck.NAME_REFERENCE_IN_EXTERNS_ERROR);
   }
 
   public void testCallInExterns() {
-    testSame("yz();", "function yz() {}",
+    testSame("yz();", "function /** @suppress {duplicate} */ yz() {}",
         VarCheck.NAME_REFERENCE_IN_EXTERNS_ERROR);
   }
 
@@ -191,12 +190,10 @@ public final class VarCheckTest extends Es6CompilerTestCase {
   }
 
   public void testDuplicateNamespaceInExterns() {
-    this.compareJsDoc = true;
     testExternChanges(
         "/** @const */ var ns = {}; /** @const */ var ns = {};",
         "",
         "/** @const */ var ns = {};");
-    this.compareJsDoc = false;
   }
 
   public void testLetDeclarationInExterns() {
@@ -214,7 +211,7 @@ public final class VarCheckTest extends Es6CompilerTestCase {
   }
 
   public void testPropReferenceInExterns1() {
-    testSame("asdf.foo;", "var asdf;",
+    testSame("asdf.foo;", "var /** @suppress {duplicate} */ asdf;",
         VarCheck.UNDEFINED_EXTERN_VAR_ERROR);
   }
 
@@ -224,7 +221,7 @@ public final class VarCheckTest extends Es6CompilerTestCase {
   }
 
   public void testPropReferenceInExterns3() {
-    testSame("asdf.foo;", "var asdf;",
+    testSame("asdf.foo;", "var /** @suppress {duplicate} */ asdf;",
         VarCheck.UNDEFINED_EXTERN_VAR_ERROR);
 
     externValidationErrorLevel = CheckLevel.ERROR;
@@ -233,7 +230,7 @@ public final class VarCheckTest extends Es6CompilerTestCase {
          VarCheck.UNDEFINED_EXTERN_VAR_ERROR, true);
 
     externValidationErrorLevel = CheckLevel.OFF;
-    test("asdf.foo;", "var asdf;", "var asdf;", null, null);
+    test("asdf.foo;", "var asdf;", "var /** @suppress {duplicate} */ asdf;", null, null);
   }
 
   public void testPropReferenceInExterns4() {
@@ -279,6 +276,18 @@ public final class VarCheckTest extends Es6CompilerTestCase {
     testSame("function fn(a){ var b = a; }");
     testSame("function fn(a){ var a = 2; }");
     testError("function fn(){ var b = a; }", VarCheck.UNDEFINED_VAR_ERROR);
+
+    // Default parameters
+    testErrorEs6(
+        "function fn(a = b) { function g(a = 3) { var b; } }", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("function f(x=a) { let a; }", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("function f(x=a) { { let a; } }", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("function f(x=b) { function a(x=1) { var b; } }", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("function f(x=a) { var a; }", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("function f(x=a()) { function a() {} }", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("function f(x=[a]) { var a; }", VarCheck.UNDEFINED_VAR_ERROR);
+    testErrorEs6("function f(x = new foo.bar()) {}", VarCheck.UNDEFINED_VAR_ERROR);
+    testSameEs6("var foo = {}; foo.bar = class {}; function f(x = new foo.bar()) {}");
 
     testSameEs6("function fn(a = 2){ var b = a; }");
     testSameEs6("function fn(a = 2){ var a = 3; }");

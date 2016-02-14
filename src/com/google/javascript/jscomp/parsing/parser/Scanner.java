@@ -611,6 +611,9 @@ public class Scanner {
         reportError("Octal Integer Literal must contain at least one digit");
       }
       skipOctalDigits();
+      if (peek('8') || peek('9')) {
+        reportError("Invalid octal digit in octal literal.");
+      }
       return new LiteralToken(
           TokenType.NUMBER, getTokenString(beginToken), getTokenRange(beginToken));
     case 'x':
@@ -651,15 +654,32 @@ public class Scanner {
     valueBuilder.append(ch);
 
     boolean containsUnicodeEscape = ch == '\\';
+    boolean bracedUnicodeEscape = false;
+    int unicodeEscapeLen = containsUnicodeEscape ? 1 : 0;
 
     ch = peekChar();
     while (isIdentifierPart(ch)
         || ch == '\\'
-        || (ch == '{' && containsUnicodeEscape)
-        || (ch == '}' && containsUnicodeEscape)) {
+        || (ch == '{' && unicodeEscapeLen == 2)
+        || (ch == '}' && bracedUnicodeEscape)) {
       if (ch == '\\') {
         containsUnicodeEscape = true;
       }
+      // Update length of current Unicode escape.
+      if (ch == '\\' || unicodeEscapeLen > 0) {
+        unicodeEscapeLen ++;
+      }
+      // Enter Unicode point escape.
+      if (ch == '{') {
+        bracedUnicodeEscape = true;
+      }
+      // Exit Unicode escape
+      if (ch == '}' || (unicodeEscapeLen >= 6 && !bracedUnicodeEscape)) {
+        bracedUnicodeEscape = false;
+        unicodeEscapeLen = 0;
+      }
+
+      // Add character to token
       valueBuilder.append(nextChar());
       ch = peekChar();
     }

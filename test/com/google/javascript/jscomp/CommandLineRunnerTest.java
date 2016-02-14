@@ -1149,7 +1149,7 @@ public final class CommandLineRunnerTest extends TestCase {
         new FlagEntry<>(JsSourceType.JS, glob2));
   }
 
-  public void testGlobJs6() throws IOException, FlagUsageException {
+  public void testGlobJs5() throws IOException, FlagUsageException {
     FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
     FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
     File temp1 = Files.createTempDir();
@@ -1681,7 +1681,7 @@ public final class CommandLineRunnerTest extends TestCase {
     assertThat(runner.hasErrors()).isTrue();
   }
 
-  public void testJsonStreamInputFlag() throws FlagUsageException {
+  public void testJsonStreamInputFlag() {
     String inputString = "[{\"src\": \"alert('foo');\", \"path\":\"foo.js\"}]";
     args.add("--json_streams=IN");
 
@@ -1702,7 +1702,7 @@ public final class CommandLineRunnerTest extends TestCase {
     assertThat(output).isEqualTo("alert(\"foo\");");
   }
 
-  public void testJsonStreamOutputFlag() throws FlagUsageException {
+  public void testJsonStreamOutputFlag() {
     String inputString = "alert('foo');";
     args.add("--json_streams=OUT");
 
@@ -1728,7 +1728,7 @@ public final class CommandLineRunnerTest extends TestCase {
         + "\\n\\\"names\\\":[\\\"alert\\\"]\\n}\\n\"}]");
   }
 
-  public void testJsonStreamBothFlag() throws FlagUsageException {
+  public void testJsonStreamBothFlag() {
     String inputString = "[{\"src\": \"alert('foo');\", \"path\":\"foo.js\"}]";
     args.add("--json_streams=BOTH");
     args.add("--js_output_file=bar.js");
@@ -1755,7 +1755,7 @@ public final class CommandLineRunnerTest extends TestCase {
         + "\\n\\\"names\\\":[\\\"alert\\\"]\\n}\\n\"}]");
   }
 
-  public void testOutputModuleNaming() throws FlagUsageException {
+  public void testOutputModuleNaming() {
     String inputString = "[{\"src\": \"alert('foo');\", \"path\":\"foo.js\"}]";
     args.add("--json_streams=BOTH");
     args.add("--module=foo--bar.baz:1");
@@ -1944,8 +1944,8 @@ public final class CommandLineRunnerTest extends TestCase {
    * @param expectedOutput string representation of expected output.
    * @param entries entries of flags for zip and js files containing source to compile.
    */
-  private void compileFiles(String expectedOutput, FlagEntry<JsSourceType>... entries)
-      throws FlagUsageException {
+  @SafeVarargs
+  private final void compileFiles(String expectedOutput, FlagEntry<JsSourceType>... entries) {
     for (FlagEntry<JsSourceType> entry : entries) {
       args.add("--" + entry.flag.flagName + "=" + entry.value);
     }
@@ -1957,7 +1957,8 @@ public final class CommandLineRunnerTest extends TestCase {
    * @param expectedOutput string representation of expected output.
    * @param entries entries of flags for js files containing source to compile.
    */
-  private void compileJsFiles(String expectedOutput, FlagEntry<JsSourceType>... entries)
+  @SafeVarargs
+  private final void compileJsFiles(String expectedOutput, FlagEntry<JsSourceType>... entries)
       throws FlagUsageException {
     args.add("--js");
     for (FlagEntry<JsSourceType> entry : entries) {

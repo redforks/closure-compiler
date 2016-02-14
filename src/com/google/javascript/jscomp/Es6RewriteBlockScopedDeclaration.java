@@ -71,10 +71,9 @@ public final class Es6RewriteBlockScopedDeclaration extends AbstractPostOrderCal
         && inLoop(n)) {
       Node undefined = IR.name("undefined");
       if (nameNode.getJSDocInfo() != null || n.getJSDocInfo() != null) {
-        undefined = IR.cast(undefined);
         JSDocInfoBuilder jsDoc = new JSDocInfoBuilder(false);
         jsDoc.recordType(new JSTypeExpression(new Node(Token.QMARK), n.getSourceFileName()));
-        undefined.setJSDocInfo(jsDoc.build());
+        undefined = IR.cast(undefined, jsDoc.build());
       }
       undefined.useSourceInfoFromForTree(nameNode);
       nameNode.addChildToFront(undefined);
@@ -300,20 +299,16 @@ public final class Es6RewriteBlockScopedDeclaration extends AbstractPostOrderCal
         // They are initialized lazily by changing declarations into assignments
         // later.
         LoopObject object = loopObjectMap.get(loopNode);
-        Node objectLit = IR.objectlit();
         Node objectLitNextIteration = IR.objectlit();
         for (Var var : object.vars) {
-          objectLit.addChildToBack(IR.stringKey(var.name, IR.name("undefined")));
           objectLitNextIteration.addChildToBack(
-              IR.stringKey(var.name, IR.getprop(IR.name(object.name),
-              IR.string(var.name))));
+              IR.stringKey(var.name, IR.getprop(IR.name(object.name), IR.string(var.name))));
         }
 
         Node updateLoopObject = IR.assign(IR.name(object.name), objectLitNextIteration);
-        loopNode.getParent().addChildBefore(
-            IR.var(IR.name(object.name), objectLit)
-                .useSourceInfoIfMissingFromForTree(loopNode),
-            loopNode);
+        Node objectLit =
+            IR.var(IR.name(object.name), IR.objectlit()).useSourceInfoFromForTree(loopNode);
+        loopNode.getParent().addChildBefore(objectLit, loopNode);
         if (NodeUtil.isVanillaFor(loopNode)) { // For
           // The initializer is pulled out and placed prior to the loop.
           Node initializer = loopNode.getFirstChild();

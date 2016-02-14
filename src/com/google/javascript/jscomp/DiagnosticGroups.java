@@ -21,6 +21,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.lint.CheckArguments;
+import com.google.javascript.jscomp.lint.CheckDuplicateCase;
+import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckForInOverArray;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
@@ -28,6 +30,7 @@ import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
+import com.google.javascript.jscomp.lint.CheckUselessBlocks;
 import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
 
 import java.util.HashMap;
@@ -468,6 +471,8 @@ public class DiagnosticGroups {
   public static final DiagnosticGroup LINT_CHECKS =
       DiagnosticGroups.registerGroup("lintChecks", // undocumented
           CheckArguments.BAD_ARGUMENTS_USAGE,
+          CheckDuplicateCase.DUPLICATE_CASE,
+          CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
           CheckEnums.DUPLICATE_ENUM_VALUE,
           CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
           CheckEnums.SHORTHAND_ASSIGNMENT_IN_ENUM,
@@ -491,6 +496,7 @@ public class DiagnosticGroups {
           CheckRequiresAndProvidesSorted.MULTIPLE_MODULES_IN_FILE,
           CheckRequiresAndProvidesSorted.MODULE_AND_PROVIDES,
           CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
+          CheckUselessBlocks.USELESS_BLOCK,
           Es6RewriteArrowFunction.THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT,
           RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
           RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,

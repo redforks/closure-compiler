@@ -32,6 +32,8 @@ import com.google.javascript.jscomp.ExtractPrototypeMemberDeclarations.Pattern;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.jscomp.PassFactory.HotSwapPassFactory;
 import com.google.javascript.jscomp.lint.CheckArguments;
+import com.google.javascript.jscomp.lint.CheckDuplicateCase;
+import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckForInOverArray;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
@@ -39,6 +41,7 @@ import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
+import com.google.javascript.jscomp.lint.CheckUselessBlocks;
 import com.google.javascript.jscomp.parsing.ParserRunner;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -1538,11 +1541,14 @@ public final class DefaultPassConfig extends PassConfig {
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       ImmutableList.Builder<Callback> callbacks = ImmutableList.<Callback>builder()
           .add(new CheckArguments(compiler))
+          .add(new CheckDuplicateCase(compiler))
+          .add(new CheckEmptyStatements(compiler))
           .add(new CheckEnums(compiler))
           .add(new CheckInterfaces(compiler))
           .add(new CheckJSDocStyle(compiler))
           .add(new CheckPrototypeProperties(compiler))
-          .add(new CheckUnusedPrivateProperties(compiler));
+          .add(new CheckUnusedPrivateProperties(compiler))
+          .add(new CheckUselessBlocks(compiler));
       return combineChecks(compiler, callbacks.build());
     }
   };

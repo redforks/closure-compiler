@@ -2417,7 +2417,7 @@ public final class NodeUtil {
   /**
    * see {@link #isClassDeclaration}
    */
-  static boolean isClassDeclaration(Node n) {
+  public static boolean isClassDeclaration(Node n) {
     return n.isClass() && isDeclarationParent(n.getParent());
   }
 
@@ -4214,4 +4214,20 @@ public final class NodeUtil {
     // but the result must always be 32 lower bits of l
     return (int) l;
   }
+
+  private static boolean isGoogModuleCall(Node n) {
+    if (isExprCall(n)) {
+      Node target = n.getFirstFirstChild();
+      return (target.matchesQualifiedName("goog.module"));
+    }
+    return false;
+  }
+
+  /**
+   * @return Whether the node is a goog.module file's SCRIPT node.
+   */
+  static boolean isModuleFile(Node n) {
+    return n.isScript() && n.hasChildren() && isGoogModuleCall(n.getFirstChild());
+  }
+
 }
