@@ -17,12 +17,14 @@
 // GENERATED FILE. DO NOT EDIT. REBUILD WITH build_runtime.sh.
 
 'use strict';/**@suppress {undefinedVars}
+
 @param {!Object} maybeGlobal
 @return {!Object} */$jscomp.getGlobal = function(maybeGlobal) {
   return typeof window != "undefined" && window === maybeGlobal ? maybeGlobal : typeof global != "undefined" ? global : maybeGlobal;
 };
 /**@const @type {!Object} */$jscomp.global = $jscomp.getGlobal(this);
-/**@suppress {reportUnknownTypes} */$jscomp.initSymbol = function() {
+/**@suppress {reportUnknownTypes}
+*/$jscomp.initSymbol = function() {
   if (!$jscomp.global.Symbol) {
     $jscomp.global.Symbol = $jscomp.Symbol;
   }
@@ -31,11 +33,13 @@
 };
 /**@private @type {number} */$jscomp.symbolCounter_ = 0;
 /**@suppress {reportUnknownTypes}
+
 @param {string} description
 @return {symbol} */$jscomp.Symbol = function(description) {
   return /**@type {symbol} */("jscomp_symbol_" + description + $jscomp.symbolCounter_++);
 };
-/**@suppress {reportUnknownTypes} */$jscomp.initSymbolIterator = function() {
+/**@suppress {reportUnknownTypes}
+*/$jscomp.initSymbolIterator = function() {
   $jscomp.initSymbol();
   if (!$jscomp.global.Symbol.iterator) {
     $jscomp.global.Symbol.iterator = $jscomp.global.Symbol("iterator");
@@ -43,7 +47,8 @@
   $jscomp.initSymbolIterator = function() {
   };
 };
-/**@suppress {reportUnknownTypes} @template T
+/**@suppress {reportUnknownTypes}
+@template T
 
 @param {(string|!Array<T>|!Iterable<T>|!Iterator<T>)} iterable
 @return {!Iterator<T>} */$jscomp.makeIterator = function(iterable) {
@@ -115,7 +120,8 @@
 @return {{done:boolean}} */$jscomp.array.done_ = function() {
   return {done:true, value:void 0};
 };
-/**@private @suppress {checkTypes} @template INPUT,OUTPUT
+/**@private @suppress {checkTypes}
+@template INPUT,OUTPUT
 
 @param {!IArrayLike<INPUT>} array
 @param {function(number,INPUT):OUTPUT} func
@@ -185,15 +191,14 @@
   }
   return result;
 };
-/**@suppress {checkTypes} @template VALUE
-
-@param {...VALUE} elements
-@return {!Array<VALUE>} */$jscomp.array.of = function(elements) {
+/**
+@param {...*} elements
+@return {!Array<*>} */$jscomp.array.of = function(elements) {
   var $jscomp$restParams = [];
   for (var $jscomp$restIndex = 0;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
     $jscomp$restParams[$jscomp$restIndex - 0] = arguments[$jscomp$restIndex];
   }
-  var elements$10 = $jscomp$restParams;
+  var /**@type {!Array<*>} */elements$10 = $jscomp$restParams;
   return $jscomp.array.from(elements$10);
 };
 /**@template VALUE
@@ -204,7 +209,8 @@
     return [i, v];
   });
 };
-/**@suppress {checkTypes,const} */$jscomp.array.entries$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.array.entries$install = function() {
   if (!Array.prototype.entries) {
     Array.prototype.entries = $jscomp.array.entries;
   }
@@ -216,7 +222,8 @@
     return i;
   });
 };
-/**@suppress {checkTypes,const} */$jscomp.array.keys$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.array.keys$install = function() {
   if (!Array.prototype.keys) {
     Array.prototype.keys = $jscomp.array.keys;
   }
@@ -229,7 +236,8 @@
     return v;
   });
 };
-/**@suppress {checkTypes,const} */$jscomp.array.values$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.array.values$install = function() {
   if (!Array.prototype.values) {
     Array.prototype.values = $jscomp.array.values;
   }
@@ -268,7 +276,8 @@
   }
   return this;
 };
-/**@suppress {checkTypes,const} */$jscomp.array.copyWithin$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.array.copyWithin$install = function() {
   if (!Array.prototype.copyWithin) {
     Array.prototype.copyWithin = $jscomp.array.copyWithin;
   }
@@ -290,7 +299,8 @@
   }
   return this;
 };
-/**@suppress {checkTypes,const} */$jscomp.array.fill$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.array.fill$install = function() {
   if (!Array.prototype.fill) {
     Array.prototype.fill = $jscomp.array.fill;
   }
@@ -303,7 +313,8 @@
 @this {!IArrayLike<VALUE>} */$jscomp.array.find = function(callback, opt_thisArg) {
   return $jscomp.array.findInternal_(this, callback, opt_thisArg).v;
 };
-/**@suppress {checkTypes,const} */$jscomp.array.find$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.array.find$install = function() {
   if (!Array.prototype.find) {
     Array.prototype.find = $jscomp.array.find;
   }
@@ -316,7 +327,8 @@
 @this {!IArrayLike<VALUE>} */$jscomp.array.findIndex = function(callback, opt_thisArg) {
   return $jscomp.array.findInternal_(this, callback, opt_thisArg).i;
 };
-/**@suppress {checkTypes,const} */$jscomp.array.findIndex$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.array.findIndex$install = function() {
   if (!Array.prototype.findIndex) {
     Array.prototype.findIndex = $jscomp.array.findIndex;
   }
@@ -362,7 +374,8 @@
     return false;
   }
 };
-/**@private @suppress {checkTypes} @template KEY,VALUE
+/**@private @suppress {checkTypes}
+@template KEY,VALUE
 
 @return {!$jscomp.Map.Entry_<KEY,VALUE>} */$jscomp.Map.createHead_ = function() {
   /**@const */var head = /***/{};
@@ -696,7 +709,7 @@
   for (var $jscomp$restIndex = 2;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
     $jscomp$restParams[$jscomp$restIndex - 2] = arguments[$jscomp$restIndex];
   }
-  var rest$11 = $jscomp$restParams;
+  var /**@type {!Array<*>} */rest$11 = $jscomp$restParams;
   x = Number(x);
   y = Number(y);
   var max = Math.max(Math.abs(x), Math.abs(y));
@@ -718,6 +731,7 @@
     var sum$13 = x * x + y * y;
     for (var $jscomp$iter$6 = $jscomp.makeIterator(rest$11), $jscomp$key$z = $jscomp$iter$6.next();!$jscomp$key$z.done;$jscomp$key$z = $jscomp$iter$6.next()) {
       var z$14 = $jscomp$key$z.value;
+      z$14 = Number(z$14);
       sum$13 += z$14 * z$14;
     }
     return Math.sqrt(sum$13);
@@ -782,7 +796,7 @@
   for (var $jscomp$restIndex = 1;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
     $jscomp$restParams[$jscomp$restIndex - 1] = arguments[$jscomp$restIndex];
   }
-  var sources$15 = $jscomp$restParams;
+  var /**@type {!Array<?Object>} */sources$15 = $jscomp$restParams;
   for (var $jscomp$iter$7 = $jscomp.makeIterator(sources$15), $jscomp$key$source = $jscomp$iter$7.next();!$jscomp$key$source.done;$jscomp$key$source = $jscomp$iter$7.next()) {
     /**@const */var source = $jscomp$key$source.value;
     if (!source) {
@@ -909,7 +923,7 @@
   for (var $jscomp$restIndex = 0;$jscomp$restIndex < arguments.length;++$jscomp$restIndex) {
     $jscomp$restParams[$jscomp$restIndex - 0] = arguments[$jscomp$restIndex];
   }
-  var codepoints$16 = $jscomp$restParams;
+  var /**@type {!Array<number>} */codepoints$16 = $jscomp$restParams;
   var result = "";
   for (var $jscomp$iter$9 = $jscomp.makeIterator(codepoints$16), $jscomp$key$code = $jscomp$iter$9.next();!$jscomp$key$code.done;$jscomp$key$code = $jscomp$iter$9.next()) {
     var code = $jscomp$key$code.value;
@@ -947,7 +961,8 @@
   }
   return result;
 };
-/**@const @suppress {checkTypes,const} */$jscomp.string.repeat$install = function() {
+/**@const @suppress {checkTypes,const}
+*/$jscomp.string.repeat$install = function() {
   if (!String.prototype.repeat) {
     String.prototype.repeat = $jscomp.string.repeat;
   }
@@ -973,7 +988,8 @@
   }
   return (first - 55296) * 1024 + second + 9216;
 };
-/**@suppress {checkTypes,const} */$jscomp.string.codePointAt$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.string.codePointAt$install = function() {
   if (!String.prototype.codePointAt) {
     String.prototype.codePointAt = $jscomp.string.codePointAt;
   }
@@ -988,7 +1004,8 @@
   /**@const */var string = this.toString();
   return string.indexOf(searchString, opt_position) !== -1;
 };
-/**@suppress {checkTypes,const} */$jscomp.string.includes$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.string.includes$install = function() {
   if (!String.prototype.includes) {
     String.prototype.includes = $jscomp.string.includes;
   }
@@ -1013,7 +1030,8 @@
   }
   return j >= searchLen;
 };
-/**@suppress {checkTypes,const} */$jscomp.string.startsWith$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.string.startsWith$install = function() {
   if (!String.prototype.startsWith) {
     String.prototype.startsWith = $jscomp.string.startsWith;
   }
@@ -1038,7 +1056,8 @@
   }
   return j <= 0;
 };
-/**@suppress {checkTypes,const} */$jscomp.string.endsWith$install = function() {
+/**@suppress {checkTypes,const}
+*/$jscomp.string.endsWith$install = function() {
   if (!String.prototype.endsWith) {
     String.prototype.endsWith = $jscomp.string.endsWith;
   }

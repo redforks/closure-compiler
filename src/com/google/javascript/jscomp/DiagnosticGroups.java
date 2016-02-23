@@ -150,12 +150,9 @@ public class DiagnosticGroups {
       DiagnosticGroups.registerGroup("unnecessaryCasts",
           TypeValidator.UNNECESSARY_CAST);
 
-  // TODO(tbreisacher): Remove the CANNOT_INFER_CONST_TYPE check after the next
-  // release, and switch this to registerDeprecatedGroup.
   @Deprecated
   public static final DiagnosticGroup INFERRED_CONST_CHECKS =
-      DiagnosticGroups.registerGroup("inferredConstCheck",  // undocumented
-          TypedScopeCreator.CANNOT_INFER_CONST_TYPE);
+      DiagnosticGroups.registerDeprecatedGroup("inferredConstCheck");
 
   public static final DiagnosticGroup FILEOVERVIEW_JSDOC =
       DiagnosticGroups.registerDeprecatedGroup("fileoverviewTags");
@@ -248,7 +245,6 @@ public class DiagnosticGroups {
   static {
       // Warnings that are absent in closure library
       DiagnosticGroups.registerGroup("newCheckTypesClosureClean",
-//           JSTypeCreatorFromJSDoc.BAD_JSDOC_ANNOTATION,
           JSTypeCreatorFromJSDoc.CONFLICTING_EXTENDED_TYPE,
           JSTypeCreatorFromJSDoc.CONFLICTING_IMPLEMENTED_TYPE,
           JSTypeCreatorFromJSDoc.DICT_IMPLEMENTS_INTERF,
@@ -256,7 +252,7 @@ public class DiagnosticGroups {
           JSTypeCreatorFromJSDoc.EXTENDS_NOT_ON_CTOR_OR_INTERF,
           JSTypeCreatorFromJSDoc.IMPLEMENTS_WITHOUT_CONSTRUCTOR,
           JSTypeCreatorFromJSDoc.INHERITANCE_CYCLE,
-//          JSTypeCreatorFromJSDoc.UNION_IS_UNINHABITABLE,
+          JSTypeCreatorFromJSDoc.UNION_IS_UNINHABITABLE,
           GlobalTypeInfo.ANONYMOUS_NOMINAL_TYPE,
           GlobalTypeInfo.CANNOT_INIT_TYPEDEF,
           GlobalTypeInfo.CANNOT_OVERRIDE_FINAL_METHOD,
@@ -265,7 +261,6 @@ public class DiagnosticGroups {
           GlobalTypeInfo.CTOR_IN_DIFFERENT_SCOPE,
           GlobalTypeInfo.DUPLICATE_JSDOC,
           GlobalTypeInfo.DUPLICATE_PROP_IN_ENUM,
-          GlobalTypeInfo.ENUM_PROP_NOT_CONSTANT,
           GlobalTypeInfo.EXPECTED_CONSTRUCTOR,
           GlobalTypeInfo.EXPECTED_INTERFACE,
           GlobalTypeInfo.INEXISTENT_PARAM,
@@ -280,7 +275,7 @@ public class DiagnosticGroups {
           GlobalTypeInfo.SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES,
           GlobalTypeInfo.UNDECLARED_NAMESPACE,
           GlobalTypeInfo.UNKNOWN_OVERRIDE,
-//           GlobalTypeInfo.UNRECOGNIZED_TYPE_NAME,
+          GlobalTypeInfo.UNRECOGNIZED_TYPE_NAME,
           NewTypeInference.ASSERT_FALSE,
           NewTypeInference.CANNOT_BIND_CTOR,
           NewTypeInference.CONST_REASSIGNED,
@@ -298,13 +293,13 @@ public class DiagnosticGroups {
 //           NewTypeInference.INEXISTENT_PROPERTY,
 //           NewTypeInference.INVALID_ARGUMENT_TYPE,
 //           NewTypeInference.INVALID_CAST,
+          NewTypeInference.INVALID_INDEX_TYPE,
           NewTypeInference.INVALID_INFERRED_RETURN_TYPE,
-//           NewTypeInference.INVALID_OBJLIT_PROPERTY_TYPE,
+          NewTypeInference.INVALID_OBJLIT_PROPERTY_TYPE,
 //           NewTypeInference.INVALID_OPERAND_TYPE,
-//           NewTypeInference.INVALID_THIS_TYPE_IN_BIND,
+          NewTypeInference.INVALID_THIS_TYPE_IN_BIND,
 //           NewTypeInference.MISSING_RETURN_STATEMENT,
 //           NewTypeInference.MISTYPED_ASSIGN_RHS,
-//           NewTypeInference.NON_NUMERIC_ARRAY_INDEX,
 //           NewTypeInference.NOT_A_CONSTRUCTOR,
 //           NewTypeInference.NOT_CALLABLE,
 //           NewTypeInference.NOT_UNIQUE_INSTANTIATION,
@@ -473,8 +468,9 @@ public class DiagnosticGroups {
           CheckArguments.BAD_ARGUMENTS_USAGE,
           CheckDuplicateCase.DUPLICATE_CASE,
           CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
-          CheckEnums.DUPLICATE_ENUM_VALUE,
           CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
+          CheckEnums.DUPLICATE_ENUM_VALUE,
+          CheckEnums.ENUM_PROP_NOT_CONSTANT,
           CheckEnums.SHORTHAND_ASSIGNMENT_IN_ENUM,
           // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
           // checkTypes DiagnosticGroup
@@ -493,8 +489,6 @@ public class DiagnosticGroups {
           CheckRequiresAndProvidesSorted.REQUIRES_NOT_SORTED,
           CheckRequiresAndProvidesSorted.PROVIDES_NOT_SORTED,
           CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES,
-          CheckRequiresAndProvidesSorted.MULTIPLE_MODULES_IN_FILE,
-          CheckRequiresAndProvidesSorted.MODULE_AND_PROVIDES,
           CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
           CheckUselessBlocks.USELESS_BLOCK,
           Es6RewriteArrowFunction.THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT,

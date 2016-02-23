@@ -61,6 +61,20 @@ Symbol.unscopables;
 
 
 /**
+ * @record
+ * @template VALUE
+ */
+function IIterableResult() {};
+
+/** @type {boolean} */
+IIterableResult.prototype.done;
+
+/** @type {VALUE} */
+IIterableResult.prototype.value;
+
+
+
+/**
  * @interface
  * @template VALUE
  */
@@ -85,7 +99,7 @@ function Iterator() {}
 
 /**
  * @param {VALUE=} value
- * @return {{value:VALUE, done:boolean}}
+ * @return {!IIterableResult<VALUE>}
  */
 Iterator.prototype.next;
 
@@ -110,20 +124,20 @@ function Generator() {}
 
 /**
  * @param {?=} opt_value
- * @return {{value:VALUE, done:boolean}}
+ * @return {!IIterableResult<VALUE>}
  * @override
  */
 Generator.prototype.next = function(opt_value) {};
 
 /**
  * @param {VALUE} value
- * @return {{value:VALUE, done:boolean}}
+ * @return {!IIterableResult<VALUE>}
  */
 Generator.prototype.return = function(value) {};
 
 /**
  * @param {?} exception
- * @return {{value:VALUE, done:boolean}}
+ * @return {!IIterableResult<VALUE>}
  */
 Generator.prototype.throw = function(exception) {};
 
@@ -1394,8 +1408,8 @@ Array.of = function(var_args) {};
 /**
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from
  * @param {string|!IArrayLike<T>|!Iterable<T>} arrayLike
- * @param {?function(this:S, (string|T), number,
- *     (string|!IArrayLike<T>|!Iterable<T>)): R} opt_mapFn
+ * @param {function(this:S, (string|T), number,
+ *     (string|!IArrayLike<T>|!Iterable<T>)): R=} opt_mapFn
  * @param {S=} opt_this
  * @return {!Array<R>}
  * @template T,S,R

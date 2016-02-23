@@ -16,7 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.TypeCheck.ENUM_NOT_CONSTANT;
 import static com.google.javascript.jscomp.TypeCheck.MULTIPLE_VAR_DEF;
 import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_FUNCTION_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_TYPE;
@@ -140,11 +139,6 @@ final class TypedScopeCreator implements ScopeCreator {
           "JSC_LENDS_ON_NON_OBJECT",
           "May only lend properties to object types. {0} has type {1}.");
 
-  static final DiagnosticType CANNOT_INFER_CONST_TYPE =
-      DiagnosticType.disabled(
-          "JSC_CANNOT_INFER_CONST_TYPE",
-          "Unable to infer type of constant.");
-
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
       DELEGATE_PROXY_SUFFIX,
       MALFORMED_TYPEDEF,
@@ -153,8 +147,7 @@ final class TypedScopeCreator implements ScopeCreator {
       IFACE_INITIALIZER,
       CONSTRUCTOR_EXPECTED,
       UNKNOWN_LENDS,
-      LENDS_ON_NON_OBJECT,
-      CANNOT_INFER_CONST_TYPE);
+      LENDS_ON_NON_OBJECT);
 
   private final AbstractCompiler compiler;
   private final ErrorReporter typeParsingErrorReporter;
@@ -213,7 +206,7 @@ final class TypedScopeCreator implements ScopeCreator {
   }
 
   private void report(JSError error) {
-    if (!this.runsAfterNTI) {
+    if (!this.runsAfterNTI || compiler.getOptions().reportOTIErrorsUnderNTI) {
       compiler.report(error);
     }
   }
@@ -1097,15 +1090,9 @@ final class TypedScopeCreator implements ScopeCreator {
           // collect enum elements
           Node key = rValue.getFirstChild();
           while (key != null) {
-            String keyName = NodeUtil.getStringValue(key);
-            if (keyName == null) {
-              // GET and SET don't have a String value;
-              report(JSError.make(key, ENUM_NOT_CONSTANT, keyName));
-            } else if (!codingConvention.isValidEnumKey(keyName)) {
-              report(JSError.make(key, ENUM_NOT_CONSTANT, keyName));
-            } else {
-              enumType.defineElement(keyName, key);
-            }
+            String keyName = key.getString();
+            Preconditions.checkNotNull(keyName, "Invalid enum key: %s", key);
+            enumType.defineElement(keyName, key);
             key = key.getNext();
           }
         }
@@ -1374,16 +1361,7 @@ final class TypedScopeCreator implements ScopeCreator {
               compiler.getCodingConvention(), info, lValue)) {
         if (rValue != null) {
           JSType rValueType = getDeclaredRValueType(lValue, rValue);
-          if (rValueType == null) {
-            // Only warn if the user has explicitly declared a value as
-            // const and they have explicitly not provided a type.
-            boolean isTypelessConstDecl = info != null
-                && info.isConstant()
-                && !info.hasType();
-            if (isTypelessConstDecl) {
-              report(JSError.make(lValue, CANNOT_INFER_CONST_TYPE));
-            }
-          } else {
+          if (rValueType != null) {
             return rValueType;
           }
         }

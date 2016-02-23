@@ -190,10 +190,6 @@ class GlobalTypeInfo implements CompilerPass {
           "A typedef should only be used in type annotations, not as a value."
           + " Adding properties to typedefs is not allowed.");
 
-  static final DiagnosticType ENUM_PROP_NOT_CONSTANT =
-      DiagnosticType.warning("JSC_NTI_ENUM_PROP_NOT_CONSTANT",
-          "enum key {0} must be in ALL_CAPS");
-
   static final DiagnosticType SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES =
       DiagnosticType.warning(
           "JSC_NTI_SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES",
@@ -229,7 +225,6 @@ class GlobalTypeInfo implements CompilerPass {
       CTOR_IN_DIFFERENT_SCOPE,
       DUPLICATE_JSDOC,
       DUPLICATE_PROP_IN_ENUM,
-      ENUM_PROP_NOT_CONSTANT,
       EXPECTED_CONSTRUCTOR,
       EXPECTED_INTERFACE,
       FUNCTION_CONSTRUCTOR_NOT_DEFINED,
@@ -898,9 +893,6 @@ class GlobalTypeInfo implements CompilerPass {
         if (propNames.contains(pname)) {
           warnings.add(JSError.make(qnameNode, DUPLICATE_PROP_IN_ENUM, pname));
         }
-        if (!convention.isValidEnumKey(pname)) {
-          warnings.add(JSError.make(prop, ENUM_PROP_NOT_CONSTANT, pname));
-        }
         propNames.add(pname);
       }
       currentScope.addEnum(qnameNode,
@@ -988,11 +980,11 @@ class GlobalTypeInfo implements CompilerPass {
         Node defSite, Node nameNode, JSDocInfo fnDoc, boolean isRedeclaration) {
       Preconditions.checkState(nameNode == null || nameNode.isQualifiedName());
       if (fnDoc != null && fnDoc.isConstructorOrInterface()) {
-        QualifiedName qname = QualifiedName.fromNode(nameNode);
-        if (qname == null) {
+        if (nameNode == null) {
           warnings.add(JSError.make(defSite, ANONYMOUS_NOMINAL_TYPE));
           return;
         }
+        String qname = nameNode.getQualifiedName();
         ImmutableList.Builder<String> builder = ImmutableList.builder();
         for (String typeParam : fnDoc.getTemplateTypeNames()) {
           builder.add(varNameGen.getNextName(typeParam));
@@ -1022,7 +1014,7 @@ class GlobalTypeInfo implements CompilerPass {
           if (nameNode.isGetProp()) {
             defSite.getParent().getFirstChild().putBooleanProp(Node.ANALYZED_DURING_GTI, true);
           } else if (currentScope.isTopLevel()) {
-            maybeRecordBuiltinType(nameNode.getString(), rawNominalType);
+            maybeRecordBuiltinType(qname, rawNominalType);
           }
           currentScope.addNominalType(nameNode, rawNominalType);
         }
@@ -1061,6 +1053,9 @@ class GlobalTypeInfo implements CompilerPass {
           break;
         case "Array":
           commonTypes.setArrayType(rawNominalType);
+          break;
+        case "IObject":
+          commonTypes.setIObjectType(rawNominalType);
           break;
       }
     }

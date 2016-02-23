@@ -5656,7 +5656,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
   public void testArrayAccesses() {
     typeCheck(
-        "var a = [1,2,3]; a['str'];", NewTypeInference.NON_NUMERIC_ARRAY_INDEX);
+        "var a = [1,2,3]; a['str'];", NewTypeInference.INVALID_INDEX_TYPE);
 
     typeCheck(LINE_JOINER.join(
         "function f(/** !Array<number> */ arr, i) {",
@@ -7675,7 +7675,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
     typeCheck(LINE_JOINER.join(
         "/** @type {!Array<number>} */",
         "var arr = [1, 2, 3];",
-        "arr['0'] = 'str';"));
+        "arr['0'] = 'str';"),
+        NewTypeInference.INVALID_INDEX_TYPE);
 
     // We warn here even though the declared type of the lvalue includes null.
     typeCheck(LINE_JOINER.join(
@@ -7688,7 +7689,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "function f(/** Array<number> */ arr) {",
         "  arr[0] = 'str';",
         "}"),
-        NewTypeInference.NULLABLE_DEREFERENCE);
+        NewTypeInference.NULLABLE_DEREFERENCE,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
 
     typeCheck(LINE_JOINER.join(
         "/** @const */",
@@ -10618,11 +10620,6 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     typeCheck(LINE_JOINER.join(
         "/** @enum {number} */",
-        "var E = { a: 1 };"),
-        GlobalTypeInfo.ENUM_PROP_NOT_CONSTANT);
-
-    typeCheck(LINE_JOINER.join(
-        "/** @enum {number} */",
         "var E = { A: 1, A: 2 };"),
         GlobalTypeInfo.DUPLICATE_PROP_IN_ENUM);
   }
@@ -12172,7 +12169,8 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
     typeCheck(LINE_JOINER.join(
         "function f(/** !Number */ x, /** !Array<string>*/ arr) {",
         "  return arr[x];",
-        "}"));
+        "}"),
+        NewTypeInference.INVALID_INDEX_TYPE);
   }
 
   public void testAutoconvertBoxedStringToString() {
@@ -12882,7 +12880,7 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
 
     typeCheck(
         "function f(x) { return arguments['asdf']; }",
-        NewTypeInference.NON_NUMERIC_ARRAY_INDEX);
+        NewTypeInference.INVALID_INDEX_TYPE);
 
     // Arguments is array-like, but not Array
     typeCheck(
@@ -12900,22 +12898,24 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "  return arguments - 1;",
         "}"));
 
-    typeCheck(LINE_JOINER.join(
-        "/** @param {string} var_args */",
-        "function f(var_args) {",
-        "  return arguments[0];",
-        "}",
-        "f('asdf') - 5;"),
-        NewTypeInference.INVALID_OPERAND_TYPE);
+    // TODO(dimvar): uncomment these when we handle typed varargs more precisely
 
-    typeCheck(LINE_JOINER.join(
-        "/** @param {string} var_args */",
-        "function f(var_args) {",
-        "  var x = arguments;",
-        "  return x[0];",
-        "}",
-        "f('asdf') - 5;"),
-        NewTypeInference.INVALID_OPERAND_TYPE);
+    // typeCheck(LINE_JOINER.join(
+    //     "/** @param {string} var_args */",
+    //     "function f(var_args) {",
+    //     "  return arguments[0];",
+    //     "}",
+    //     "f('asdf') - 5;"),
+    //     NewTypeInference.INVALID_OPERAND_TYPE);
+
+    // typeCheck(LINE_JOINER.join(
+    //     "/** @param {string} var_args */",
+    //     "function f(var_args) {",
+    //     "  var x = arguments;",
+    //     "  return x[0];",
+    //     "}",
+    //     "f('asdf') - 5;"),
+    //     NewTypeInference.INVALID_OPERAND_TYPE);
 
     typeCheck(LINE_JOINER.join(
         "function f(x, i) {",
@@ -15684,6 +15684,257 @@ public final class NewTypeInferenceES5OrLowerTest extends NewTypeInferenceTestBa
         "/** @param {{recur:?GenericRec<number>}} x */",
         "function g(x) {",
         "  f(x);",
+        "}"));
+  }
+
+  public void testIObjectAccesses() {
+    typeCheck(LINE_JOINER.join(
+        "function f(/** !IObject<number,string> */ x) {",
+        "  return x['asdf'];",
+        "}"),
+        NewTypeInference.INVALID_INDEX_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "function f(/** !IObject<number, number> */ x) {",
+        "  x['asdf'] = 123;",
+        "}"),
+        NewTypeInference.INVALID_INDEX_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "function f(/** !IObject<number, string> */ x, /** number */ i) {",
+        "  x[i] - 123;",
+        "}"),
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "function f(/** !Foo|!IObject<number,number> */ x, /** string */ s) {",
+        "  x[s];",
+        "}"));
+
+    typeCheck(LINE_JOINER.join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "function f(/** !Foo|!IObject<number,number> */ x, /** string */ s) {",
+        "  s = x[0];",
+        "}"));
+
+    typeCheck(LINE_JOINER.join(
+        "/** @type {!Array<number>|number} */",
+        "var x = [1,2,3];",
+        "x[0] = 'asdf';"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(LINE_JOINER.join(
+        "/** @type {!Object} */",
+        "var x = [1,2,3];",
+        "x[0] = 'asdf';"));
+
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<number,number>}",
+        " */",
+        "function Foo() {}",
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<string,number>}",
+        " */",
+        "function Bar() {}",
+        "function f(/** !Foo|!Bar */ x) {",
+        "  x[123];",
+        "  x['asdf'];",
+        "}"),
+        NewTypeInference.BOTTOM_INDEX_TYPE,
+        NewTypeInference.BOTTOM_INDEX_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<number,(number|string)>}",
+        " */",
+        "function Foo() {}",
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<number,(number|boolean)>}",
+        " */",
+        "function Bar() {}",
+        "function f(/** !Foo|!Bar */ x) {",
+        "  var /** string */ s = x[123];",
+        "  var /** boolean */ b = x[123];",
+        "  var /** number */ n = x[123];",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS,
+        NewTypeInference.MISTYPED_ASSIGN_RHS,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(LINE_JOINER.join(
+        "function f(/** !IObject<*,string> */ x) {",
+        "  return x[123];",
+        "}"));
+
+    typeCheck(LINE_JOINER.join(
+        "function f(/** !IObject<string,number> */ x, s) {",
+        "  x[s];",
+        "  var /** number */ n = s;",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testIObjectSubtyping() {
+    typeCheck(LINE_JOINER.join(
+        "function f(/** !IObject */ x) {}",
+        "f({});"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @param {!IObject<number, number>} x",
+        " * @param {!IObject<string, number>} y",
+        " */",
+        "function f(x, y) {",
+        "  x = y;",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    // TODO(dimvar): there shouldn't be a warning here because the index
+    // operation is like a function; w/ contravariant subtyping for the args.
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @param {!IObject<number, number>} x",
+        " * @param {!IObject<(number|string), number>} y",
+        " */",
+        "function f(x, y) {",
+        "  x = y;",
+        "}"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @param {!IObject<number, (number|string)>} x",
+        " * @param {!IObject<number, number>} y",
+        " */",
+        "function f(x, y) {",
+        "  x = y;",
+        "}"));
+  }
+
+  public void testIObjectExtraProperties() {
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<string, number>}",
+        " */",
+        "function Foo() {",
+        "  /** @type {boolean} */",
+        "  this.prop = true;",
+        "}",
+        "var /** number */ n = (new Foo).prop;"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    // Bracket access on IObjects always uses the indexed type unsoundly.
+    // Same as in OTI.
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<string, number>}",
+        " */",
+        "function Foo() {",
+        "  /** @type {boolean} */",
+        "  this.prop = true;",
+        "}",
+        "var /** boolean */ b = (new Foo)['prop'];"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testIObjectInheritance() {
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<number,number>}",
+        " */",
+        "function Foo() {}",
+        "function f(/** !Foo */ x, /** string */ s) {",
+        "  x[s];",
+        "}"),
+        NewTypeInference.INVALID_INDEX_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @interface",
+        " * @extends {IObject<number,number>}",
+        " */",
+        "function Bar() {}",
+        "/**",
+        " * @constructor",
+        " * @implements {Bar}",
+        " */",
+        "function Foo() {}",
+        "function f(/** !Foo */ x, /** string */ s) {",
+        "  x[s];",
+        "}"),
+        NewTypeInference.INVALID_INDEX_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "/** @interface */",
+        "function Foo() {}",
+        "/**",
+        " * @constructor",
+        " * @implements {Foo}",
+        " * @implements {IObject<number, number>}",
+        " */",
+        "function Bar() {}",
+        "(new Bar)['asdf'];"),
+        NewTypeInference.INVALID_INDEX_TYPE);
+
+    // OTI has a bug here and gives different warnings depending on the order
+    // of the @implements annotations.
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<string, number>}",
+        " * @implements {IArrayLike<number>}",
+        " */",
+        "function Foo() {",
+        "  this.length = 0;",
+        "}",
+        "(new Foo)['asdf'];",
+        "(new Foo)[123];",
+        "(new Foo)[true];"),
+        NewTypeInference.INVALID_INDEX_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @interface",
+        " * @extends {IObject<number, (number|string)>}",
+        " */",
+        "function Foo() {}",
+        "/**",
+        " * @interface",
+        " * @extends {IObject<number, (number|boolean)>}",
+        " */",
+        "function Bar() {}",
+        "/**",
+        " * @constructor",
+        " * @implements {Foo}",
+        " * @implements {Bar}",
+        " */",
+        "function Baz() {}",
+        "var /** string */ s = (new Baz)[123];",
+        "var /** boolean */ b = (new Baz)[123];",
+        "var /** number */ n = (new Baz)[123];"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS,
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(LINE_JOINER.join(
+        "/**",
+        " * @constructor",
+        " * @implements {IObject<*,number>}",
+        " */",
+        "function Foo() {}",
+        "function f(/** !Foo */ x, /** string */ s) {",
+        "  x[s];",
         "}"));
   }
 }
