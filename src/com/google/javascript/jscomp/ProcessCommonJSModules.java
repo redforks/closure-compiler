@@ -16,8 +16,8 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Multiset;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPreOrderCallback;
@@ -107,9 +107,13 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
     @Override
     public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n, Node parent) {
-      // Shallow traversal, since we don't need to inspect within function declarations.
-      if (parent == null || !parent.isFunction()
-          || n == parent.getFirstChild()) {
+      if (found) {
+        return false;
+      }
+      // Shallow traversal, since we don't need to inspect within functions or expressions.
+      if (parent == null
+          || NodeUtil.isControlStructure(parent)
+          || NodeUtil.isStatementBlock(parent)) {
         if (n.isExprResult()) {
           Node maybeGetProp = n.getFirstFirstChild();
           if (maybeGetProp != null
@@ -416,7 +420,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
         // moduleName = rhs
         Node ref = moduleExportRefs.get(0);
         Node newName = IR.name(moduleName).srcref(ref);
-        newName.putProp(Node.ORIGINALNAME_PROP, ref.getQualifiedName());
+        newName.setOriginalName(ref.getQualifiedName());
         Node rhsValue = ref.getNext();
 
         if (rhsValue.isObjectLit()) {
@@ -478,7 +482,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
         Node rhsValue = ref.getNext();
         Node newName = IR.name(moduleName).srcref(ref);
-        newName.putProp(Node.ORIGINALNAME_PROP, qName);
+        newName.setOriginalName(qName);
 
         Node parent = ref.getParent();
         parent.replaceChild(ref, newName);
@@ -509,7 +513,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
         script.addChildToFront(aliasNode);
 
         for (Node ref : exportRefs) {
-          ref.putProp(Node.ORIGINALNAME_PROP, ref.getString());
+          ref.setOriginalName(ref.getString());
           ref.setString(aliasName);
         }
       }
@@ -591,9 +595,11 @@ public final class ProcessCommonJSModules implements CompilerPass {
         }
       }
 
-      if (n.isName()) {
+      boolean isShorthandObjLitKey = n.isStringKey() && !n.hasChildren();
+      if (n.isName() || isShorthandObjLitKey) {
         String name = n.getString();
         if (suffix.equals(name)) {
+          // TODO(moz): Investigate whether we need to return early in this unlikely situation.
           return;
         }
 
@@ -609,8 +615,14 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
         Var var = t.getScope().getVar(name);
         if (var != null && var.isGlobal()) {
-          n.setString(name + "$$" + suffix);
-          n.putProp(Node.ORIGINALNAME_PROP, name);
+          String newName = name + "$$" + suffix;
+          if (isShorthandObjLitKey) {
+            // Change {a} to {a: a$$module$foo}
+            n.addChildToBack(IR.name(newName).useSourceInfoIfMissingFrom(n));
+          } else {
+            n.setString(newName);
+            n.setOriginalName(name);
+          }
         }
       }
     }
@@ -650,7 +662,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
           Var var = t.getScope().getVar(baseName);
           if (var != null && var.isGlobal()) {
             typeNode.setString(baseName + "$$" + suffix + name.substring(endIndex));
-            typeNode.putProp(Node.ORIGINALNAME_PROP, name);
+            typeNode.setOriginalName(name);
           }
         }
       }

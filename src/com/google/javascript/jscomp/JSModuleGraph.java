@@ -345,7 +345,7 @@ public final class JSModuleGraph {
    * @see DependencyOptions for more info on how this works.
    */
   public List<CompilerInput> manageDependencies(
-      List<DependencyOptions.ModuleIdentifier> entryPoints, List<CompilerInput> inputs)
+      List<ModuleIdentifier> entryPoints, List<CompilerInput> inputs)
       throws CircularDependencyException, MissingModuleException, MissingProvideException {
     DependencyOptions depOptions = new DependencyOptions();
     depOptions.setDependencySorting(true);
@@ -449,11 +449,16 @@ public final class JSModuleGraph {
         entryPointInputs.addAll(sorter.getInputsWithoutProvides());
       }
 
-      for (DependencyOptions.ModuleIdentifier entryPoint : depOptions.getEntryPoints()) {
+      for (ModuleIdentifier entryPoint : depOptions.getEntryPoints()) {
         CompilerInput entryPointInput = null;
         try {
           if (entryPoint.getClosureNamespace().equals(entryPoint.getModuleName())) {
-            entryPointInput = sorter.getInputProviding(entryPoint.getClosureNamespace());
+            entryPointInput = sorter.maybeGetInputProviding(entryPoint.getClosureNamespace());
+            // Check to see if we can find the entry point as an ES6 and CommonJS module
+            // ES6 and CommonJS entry points may not provide any symbols
+            if (entryPointInput == null) {
+              entryPointInput = sorter.getInputProviding(entryPoint.getName());
+            }
           } else {
             JSModule module = modulesByName.get(entryPoint.getModuleName());
             if (module == null) {

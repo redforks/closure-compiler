@@ -17,19 +17,24 @@ package com.google.javascript.jscomp.lint;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.ExportTestFunctions;
 import com.google.javascript.jscomp.NodeTraversal;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.jscomp.NodeTraversal.AbstractPreOrderCallback;
 import com.google.javascript.jscomp.NodeUtil;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.Token;
 
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -38,6 +43,17 @@ import javax.annotation.Nullable;
  * with no corresponding {@code @param} annotation, coding conventions not being respected, etc.
  */
 public final class CheckJSDocStyle extends AbstractPostOrderCallback implements CompilerPass {
+  public static final DiagnosticType INVALID_SUPPRESS =
+      DiagnosticType.warning(
+          "JSC_INVALID_SUPPRESS",
+          "@suppress annotation not allowed here. See"
+              + " https://github.com/google/closure-compiler/wiki/@suppress-annotations");
+
+  public static final DiagnosticType CONSTRUCTOR_DISALLOWED_JSDOC =
+      DiagnosticType.warning("JSC_CONSTRUCTOR_DISALLOWED_JSDOC",
+          "Visibility annotations on constructors are not supported.\n"
+          + "Please mark the visibility on the class instead.");
+
   public static final DiagnosticType MISSING_JSDOC =
       DiagnosticType.warning("JSC_MISSING_JSDOC", "Function must have JSDoc.");
 
@@ -48,8 +64,17 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       DiagnosticType.warning("JSC_MIXED_PARAM_JSDOC_STYLES",
       "Functions may not use both @param annotations and inline JSDoc");
 
+  public static final DiagnosticType MISSING_RETURN_JSDOC =
+      DiagnosticType.warning(
+          "JSC_MISSING_RETURN_JSDOC",
+          "Function with non-trivial return must have @return JSDoc or inline return JSDoc.");
+
   public static final DiagnosticType MUST_BE_PRIVATE =
-      DiagnosticType.warning("JSC_MUST_BE_PRIVATE", "Function {0} must be marked @private");
+      DiagnosticType.warning("JSC_MUST_BE_PRIVATE", "Property {0} must be marked @private");
+
+  public static final DiagnosticType MUST_HAVE_TRAILING_UNDERSCORE =
+      DiagnosticType.warning(
+          "JSC_MUST_HAVE_TRAILING_UNDERSCORE", "Private property {0} should end with ''_''");
 
   public static final DiagnosticType OPTIONAL_PARAM_NOT_MARKED_OPTIONAL =
       DiagnosticType.warning("JSC_OPTIONAL_PARAM_NOT_MARKED_OPTIONAL",
@@ -85,29 +110,114 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    if (n.isFunction()) {
-      visitFunction(t, n);
+    switch (n.getType()) {
+      case Token.FUNCTION:
+        visitFunction(t, n, parent);
+        break;
+      case Token.ASSIGN:
+        // If the right side is a function it will be handled when the function is visited.
+        if (!n.getLastChild().isFunction()) {
+          visitNonFunction(t, n);
+        }
+        checkStyleForPrivateProperties(t, n);
+        break;
+      case Token.VAR:
+      case Token.LET:
+      case Token.CONST:
+        for (Node decl : n.children()) {
+          // If the right side is a function it will be handled when the function is visited.
+          if (decl.getFirstChild() == null || !decl.getFirstChild().isFunction()) {
+            visitNonFunction(t, n);
+          }
+        }
+        break;
+      case Token.STRING_KEY:
+        // If the value is a function it will be handled when the function is visited.
+        if (n.getFirstChild() == null || !n.getFirstChild().isFunction()) {
+          visitNonFunction(t, n);
+        }
+        break;
+      case Token.MEMBER_FUNCTION_DEF:
+      case Token.GETTER_DEF:
+      case Token.SETTER_DEF:
+        // Don't need to call visitFunction because this JSDoc will be visited when the function is
+        // visited.
+        checkStyleForPrivateProperties(t, n);
+        break;
+      default:
+        visitNonFunction(t, n);
     }
   }
 
-  private void visitFunction(NodeTraversal t, Node function) {
+  private void visitNonFunction(NodeTraversal t, Node n) {
+    JSDocInfo jsDoc = n.getJSDocInfo();
+    if (jsDoc == null) {
+      return;
+    }
+
+    if (!n.isScript()) {
+      checkSuppressionsOnNonFunction(t, n, jsDoc);
+    }
+  }
+
+  private void checkStyleForPrivateProperties(NodeTraversal t, Node n) {
+    JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(n);
+    String name;
+    if (n.isMemberFunctionDef() || n.isGetterDef() || n.isSetterDef()) {
+      name = n.getString();
+    } else {
+      Preconditions.checkState(n.isAssign());
+      Node lhs = n.getFirstChild();
+      if (!lhs.isGetProp()) {
+        return;
+      }
+      name = lhs.getLastChild().getString();
+    }
+    if (name.equals("constructor")) {
+      return;
+    }
+
+    if (jsDoc != null && name != null) {
+      if (compiler.getCodingConvention().isPrivate(name)
+          && !jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
+        t.report(n, MUST_BE_PRIVATE, name);
+      } else if (!compiler.getCodingConvention().isPrivate(name)
+          && jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
+        t.report(n, MUST_HAVE_TRAILING_UNDERSCORE, name);
+      }
+    }
+  }
+  private void checkSuppressionsOnNonFunction(NodeTraversal t, Node n, JSDocInfo jsDoc) {
+    // Suppressions that are allowed to be in places other than functions and @fileoverview blocks.
+    Set<String> specialSuppressions =
+        ImmutableSet.of("const", "duplicate", "extraRequire", "missingRequire");
+
+    Set<String> suppressions = Sets.difference(jsDoc.getSuppressions(), specialSuppressions);
+    if (!suppressions.isEmpty()) {
+      t.report(n, INVALID_SUPPRESS);
+    }
+  }
+
+  private void visitFunction(NodeTraversal t, Node function, Node parent) {
     JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(function);
 
     if (jsDoc == null && !hasAnyInlineJsDoc(function)) {
       checkMissingJsDoc(t, function);
-    } else if (t.inGlobalScope()
-        || hasAnyInlineJsDoc(function)
-        || !jsDoc.getParameterNames().isEmpty()
-        || jsDoc.hasReturnType()) {
-      checkParams(t, function, jsDoc);
+    } else {
+      if (t.inGlobalScope()
+          || hasAnyInlineJsDoc(function)
+          || !jsDoc.getParameterNames().isEmpty()
+          || jsDoc.hasReturnType()) {
+        checkParams(t, function, jsDoc);
+      }
+      checkReturn(t, function, jsDoc);
     }
 
-    String name = NodeUtil.getName(function);
-    if (jsDoc != null
-        && name != null
-        && compiler.getCodingConvention().isPrivate(name)
-        && !jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
-      t.report(function, MUST_BE_PRIVATE, name);
+    if (parent.isMemberFunctionDef()
+        && "constructor".equals(parent.getString())
+        && jsDoc != null
+        && !jsDoc.getVisibility().equals(Visibility.INHERITED)) {
+      t.report(function, CONSTRUCTOR_DISALLOWED_JSDOC);
     }
   }
 
@@ -126,7 +236,7 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
    * in the global scope, or a method on a class which is declared in the global scope.
    */
   private boolean isFunctionThatShouldHaveJsDoc(NodeTraversal t, Node function) {
-    if (!t.inGlobalScope()) {
+    if (!t.inGlobalHoistScope()) {
       return false;
     }
     if (NodeUtil.isFunctionDeclaration(function)) {
@@ -255,6 +365,48 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       }
     }
     return false;
+  }
+
+  private void checkReturn(NodeTraversal t, Node function, JSDocInfo jsDoc) {
+    if (jsDoc != null
+        && (jsDoc.hasType()
+            || jsDoc.hasReturnType()
+            || jsDoc.isOverride()
+            || jsDoc.isConstructor())) {
+      return;
+    }
+    if (function.getFirstChild().getJSDocInfo() != null) {
+      return;
+    }
+
+    FindNonTrivialReturn finder = new FindNonTrivialReturn();
+    NodeTraversal.traverseEs6(compiler, function.getLastChild(), finder);
+    if (finder.found) {
+      t.report(function, MISSING_RETURN_JSDOC);
+    }
+  }
+
+  private static class FindNonTrivialReturn extends AbstractPreOrderCallback {
+    private boolean found;
+
+    @Override
+    public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
+      if (found) {
+        return false;
+      }
+
+      // Shallow traversal, since we don't need to inspect within functions or expressions.
+      if (parent == null
+          || NodeUtil.isControlStructure(parent)
+          || NodeUtil.isStatementBlock(parent)) {
+        if (n.isReturn() && n.hasChildren()) {
+          found = true;
+          return false;
+        }
+        return true;
+      }
+      return false;
+    }
   }
 
   private static class ExternsCallback implements NodeTraversal.Callback {

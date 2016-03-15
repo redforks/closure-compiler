@@ -43,7 +43,6 @@ import java.util.Set;
 
 public final class TypeCheckTest extends CompilerTypeTestCase {
 
-  private static final Joiner LINE_JOINER = Joiner.on("\n");
   private static final String SUGGESTION_CLASS =
       "/** @constructor\n */\n"
       + "function Suggest() {}\n"
@@ -362,6 +361,19 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         "inconsistent return type\n" +
         "found   : number\n" +
         "required: string");
+  }
+
+  public void testTemplatizedObjectOnWindow() {
+    testTypesWithExtraExterns(
+        "/** @constructor */ window.Object = Object;",
+        LINE_JOINER.join(
+            "/** @param {!window.Object<number>} a",
+            " *  @return {string}",
+            " */ var f = function(a) { return a[0]; };"),
+        LINE_JOINER.join(
+            "inconsistent return type",
+            "found   : number",
+            "required: string"));
   }
 
   public void testTemplatizedObject2() {
@@ -2966,7 +2978,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testEnum5() {
-    testTypes("/**@enum {String}*/var a={BB:'string'}",
+    testTypes("/**@enum {?String}*/var a={BB:'string'}",
         "assignment to property BB of enum{a}\n" +
         "found   : string\n" +
         "required: (String|null)");
@@ -3104,7 +3116,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testEnum24() {
-    testTypes("/**@enum {Object} */ var E = {A: {}};" +
+    testTypes("/**@enum {?Object} */ var E = {A: {}};" +
         "/** @param {E} x \n* @return {!Object} */ function f(x) {return x}",
         "inconsistent return type\n" +
         "found   : E<(Object|null)>\n" +
@@ -4043,7 +4055,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testDontCrashOnDupPropDefinition() {
-    testTypes(Joiner.on('\n').join(
+    testTypes(LINE_JOINER.join(
         "/** @const */",
         "var ns = {};",
         "/** @interface */",
@@ -6123,7 +6135,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testThisTypeOfFunction5() {
-    testTypes(Joiner.on('\n').join(
+    testTypes(LINE_JOINER.join(
         "/** @type {function(this:number)} */",
         "function f() {",
         "  var /** number */ n = this;",
@@ -8156,7 +8168,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testFunctionBind6() {
-    testTypes(Joiner.on('\n').join(
+    testTypes(LINE_JOINER.join(
         "/** @constructor */",
         "function MyType() {",
         "  /** @type {number} */",
@@ -8164,14 +8176,14 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         "  var f = function() {",
         "    this.x = 'str';",
         "  }.bind(this);",
-        "}"), Joiner.on('\n').join(
+        "}"), LINE_JOINER.join(
         "assignment to property x of MyType",
         "found   : string",
         "required: number"));
   }
 
   public void testFunctionBind7() {
-    testTypes(Joiner.on('\n').join(
+    testTypes(LINE_JOINER.join(
         "/** @constructor */",
         "function MyType() {",
         "  /** @type {number} */",
@@ -8179,14 +8191,14 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         "}",
         "var m = new MyType;",
         "(function f() {this.x = 'str';}).bind(m);"),
-        Joiner.on('\n').join(
+        LINE_JOINER.join(
         "assignment to property x of MyType",
         "found   : string",
         "required: number"));
   }
 
   public void testFunctionBind8() {
-    testTypes(Joiner.on('\n').join(
+    testTypes(LINE_JOINER.join(
         "/** @constructor */",
         "function MyType() {}",
         "",
@@ -8201,7 +8213,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testFunctionBind9() {
-    testTypes(Joiner.on('\n').join(
+    testTypes(LINE_JOINER.join(
         "/** @constructor */",
         "function MyType() {}",
         "",
@@ -11914,6 +11926,90 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         "function Foo() {}\n" +
         "/** @type {!Foo} */\n" +
         "var x = new Foo();\n");
+  }
+
+  public void testTemplateType24() {
+    // Recursive templated type definition.
+    testTypes(LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " * @template T",
+            " * @param {T} x",
+            " */",
+            "function Foo(x) {",
+            "  /** @type {T} */",
+            "  this.p = x;",
+            "}",
+            "/** @return {Foo<Foo<T>>} */",
+            "Foo.prototype.m = function() {",
+            "  return null;",
+            "};",
+            "/** @return {T} */",
+            "Foo.prototype.get = function() {",
+            "  return this.p;",
+            "};",
+            "var /** null */ n = new Foo(new Object).m().get();"),
+        "initializing variable\n"
+            + "found   : (Foo<Object>|null)\n"
+            + "required: null");
+  }
+
+  public void testTemplateType25() {
+    // Non-nullable recursive templated type definition.
+    testTypes(LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " * @template T",
+            " * @param {T} x",
+            " */",
+            "function Foo(x) {",
+            "  /** @type {T} */",
+            "  this.p = x;",
+            "}",
+            "/** @return {!Foo<!Foo<T>>} */",
+            "Foo.prototype.m = function() {",
+            "  return new Foo(new Foo(new Object));",
+            "};",
+            "/** @return {T} */",
+            "Foo.prototype.get = function() {",
+            "  return this.p;",
+            "};",
+            "var /** null */ n = new Foo(new Object).m().get();"),
+        "initializing variable\n"
+            + "found   : Foo<Object>\n"
+            + "required: null");
+  }
+
+  public void testTemplateType26() {
+    // Class hierarchies which use the same template parameter name should not be treated as
+    // infinite recursion.
+    testTypes(
+        LINE_JOINER.join(
+            "/**",
+            " * @param {T} bar",
+            " * @constructor",
+            " * @template T",
+            " */",
+            "function Bar(bar) {",
+            "  /** @type {T} */",
+            "  this.bar = bar;",
+            "}",
+            "/** @return {T} */",
+            "Bar.prototype.getBar = function() {",
+            "  return this.bar;",
+            "};",
+            "/**",
+            " * @param {T} foo",
+            " * @constructor",
+            " * @template T",
+            " * @extends {Bar<!Array<T>>}",
+            " */",
+            "function Foo(foo) {",
+            "  /** @type {T} */",
+            "  this.foo = foo;",
+            "}",
+            "var /** null */ n = new Foo(new Object).getBar();"),
+        "initializing variable\n" + "found   : Array<Object>\n" + "required: null");
   }
 
   public void testSubtypeNotTemplated1() {
@@ -16728,7 +16824,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
           new JSError[errors.length - 1]);
     }
     if (errors.length > 0) {
-      fail("unexpected error(s):\n" + Joiner.on("\n").join(errors));
+      fail("unexpected error(s):\n" + LINE_JOINER.join(errors));
     }
 
     JSError[] warnings = compiler.getWarnings();
@@ -16739,7 +16835,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
           new JSError[warnings.length - 1]);
     }
     if (warnings.length > 0) {
-      fail("unexpected warnings(s):\n" + Joiner.on("\n").join(warnings));
+      fail("unexpected warnings(s):\n" + LINE_JOINER.join(warnings));
     }
   }
 
@@ -16772,7 +16868,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
           new JSError[errors.length - 1]);
     }
     if (errors.length > 0) {
-      fail("unexpected error(s):\n" + Joiner.on("\n").join(errors));
+      fail("unexpected error(s):\n" + LINE_JOINER.join(errors));
     }
 
     JSError[] warnings = compiler.getWarnings();
@@ -16783,7 +16879,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
           new JSError[warnings.length - 1]);
     }
     if (warnings.length > 0) {
-      fail("unexpected warnings(s):\n" + Joiner.on("\n").join(warnings));
+      fail("unexpected warnings(s):\n" + LINE_JOINER.join(warnings));
     }
   }
 

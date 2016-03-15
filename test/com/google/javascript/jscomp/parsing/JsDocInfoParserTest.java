@@ -32,6 +32,7 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SimpleSourceFile;
 import com.google.javascript.rhino.StaticSourceFile;
+import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.TemplateType;
@@ -962,6 +963,19 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     assertTypeEquals(STRING_TYPE, info.getParameterType("baz"));
   }
 
+  public void testParseParam26() throws Exception {
+    JSDocInfo info = parse(
+        "@param {{a: number, b: number}} {a, b}\n*/",
+        "Bad type annotation. expecting a variable name in a @param tag");
+    assertThat(info).isNull();
+  }
+
+  public void testParseParam27() throws Exception {
+    JSDocInfo info = parse(
+        "@param {{a: number, b: number}} '{a, b}'\n*/", "invalid param name \"'\"");
+    assertThat(info).isNull();
+  }
+
   public void testParseThrows1() throws Exception {
     JSDocInfo info = parse("@throws {number} Some number */");
     assertThat(info.getThrownTypes()).hasSize(1);
@@ -1179,6 +1193,21 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
         STRING_TYPE,
         parse("@enum string*/", "Bad type annotation. Type annotations should have curly braces.")
             .getEnumParameterType());
+  }
+
+  public void testParseEnum4() throws Exception {
+    JSDocInfo jsdoc = parse(" @enum {Foo} */");
+    Node enumTypeNode = jsdoc.getEnumParameterType().getRoot();
+    assertThat(enumTypeNode.getType()).isEqualTo(Token.BANG);
+  }
+
+  public void testParseBadEnumNoCrash() throws Exception {
+    assertTypeEquals(
+        NUMBER_TYPE,
+        parse("@enum {@enum {string}}*/",
+            "Bad type annotation. type not recognized due to syntax error",
+            "Bad type annotation. type annotation incompatible with other annotations")
+        .getEnumParameterType());
   }
 
   public void testParseJsDocAfterEnum() throws Exception {

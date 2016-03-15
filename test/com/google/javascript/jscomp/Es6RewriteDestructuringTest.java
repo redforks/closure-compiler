@@ -362,8 +362,7 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
     "function f() { var [x, y] = arguments; }",
     LINE_JOINER.join(
         "function f() {",
-        "  var $jscomp$destructuring$var0 = $jscomp.makeIterator(",
-        "      $jscomp.arrayFromArguments(arguments));",
+        "  var $jscomp$destructuring$var0 = $jscomp.makeIterator(arguments);",
         "  var x = $jscomp$destructuring$var0.next().value;",
         "  var y = $jscomp$destructuring$var0.next().value;",
         "}"));
@@ -488,6 +487,39 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
             "function f({x}) {}",
           "f({ x: 'str'});"),
         TYPE_MISMATCH_WARNING);
+
+    test(
+        LINE_JOINER.join(
+            "/** @param {{x: number}} obj */",
+            "var f = function({x}) {}"),
+        LINE_JOINER.join(
+            "/** @param {{x: number}} obj */",
+            "var f = function(obj) {",
+            "  var $jscomp$destructuring$var0 = obj;",
+            "  var x = $jscomp$destructuring$var0.x;",
+            "}"));
+
+    test(
+        LINE_JOINER.join(
+            "/** @param {{x: number}} obj */",
+            "f = function({x}) {}"),
+        LINE_JOINER.join(
+            "/** @param {{x: number}} obj */",
+            "f = function(obj) {",
+            "  var $jscomp$destructuring$var0 = obj;",
+            "  var x = $jscomp$destructuring$var0.x;",
+            "}"));
+
+    test(
+        LINE_JOINER.join(
+            "/** @param {{x: number}} obj */",
+            "ns.f = function({x}) {}"),
+        LINE_JOINER.join(
+            "/** @param {{x: number}} obj */",
+            "ns.f = function(obj) {",
+            "  var $jscomp$destructuring$var0 = obj;",
+            "  var x = $jscomp$destructuring$var0.x;",
+            "}"));
   }
 
   public void testTypeCheck_inlineAnnotations() {

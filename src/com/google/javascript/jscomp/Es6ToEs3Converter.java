@@ -243,6 +243,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     Node body = node.removeFirstChild();
 
     Node iterName = IR.name(ITER_BASE + compiler.getUniqueNameIdSupplier().get());
+    iterName.makeNonIndexable();
     Node getNext = IR.call(IR.getprop(iterName.cloneTree(), IR.string("next")));
     String variableName;
     int declType;
@@ -256,8 +257,9 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
       variableName = variable.getFirstChild().getQualifiedName();
     }
     Node iterResult = IR.name(ITER_RESULT + variableName);
+    iterResult.makeNonIndexable();
 
-    Node init = IR.var(iterName.cloneTree(), makeIterator(t, compiler, iterable));
+    Node init = IR.var(iterName.cloneTree(), makeIterator(compiler, iterable));
     Node initIterResult = iterResult.cloneTree();
     initIterResult.addChildToFront(getNext.cloneTree());
     init.addChildToBack(initIterResult);
@@ -395,7 +397,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
           currGroup = null;
         }
         compiler.needsEs6Runtime = true;
-        groups.add(arrayFromIterable(t, compiler, currElement.removeFirstChild()));
+        groups.add(arrayFromIterable(compiler, currElement.removeFirstChild()));
       } else {
         if (currGroup == null) {
           currGroup = IR.arraylit();
@@ -935,36 +937,17 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
   }
 
   /**
-   * Returns a call to {@code $jscomp.makeIterator} with {@code iterable} as its argument, unless
-   * {@code iterable} is the special {@code arguments} variable, in which case the returned Node is:
-   * {@code $jscomp.makeIterator($jscomp.arrayFromArguments(iterable))}.
+   * Returns a call to {@code $jscomp.makeIterator} with {@code iterable} as its argument.
    */
-  static Node makeIterator(NodeTraversal t, AbstractCompiler compiler, Node iterable) {
-    if (iterable.isName()) {
-      Var var = t.getScope().getVar(iterable.getString());
-      if (var != null && var.isArguments()) {
-        iterable = IR.call(
-            NodeUtil.newQName(compiler, "$jscomp.arrayFromArguments"),
-            iterable);
-      }
-    }
+  static Node makeIterator(AbstractCompiler compiler, Node iterable) {
     return callEs6RuntimeFunction(compiler, iterable, "makeIterator");
   }
 
   /**
-   * Returns a call to $jscomp.arrayFromIterable with {@code iterable} as its argument, unless
-   * {@code iterable} is the special {@code arguments} variable, in which case
-   * {@code $jscomp.arrayFromArguments} is called instead.
+   * Returns a call to $jscomp.arrayFromIterable with {@code iterable} as its argument.
    */
-  private static Node arrayFromIterable(NodeTraversal t, AbstractCompiler compiler, Node iterable) {
-    String fnName = "arrayFromIterable";
-    if (iterable.isName()) {
-      Var var = t.getScope().getVar(iterable.getString());
-      if (var != null && var.isArguments()) {
-        fnName = "arrayFromArguments";
-      }
-    }
-    return callEs6RuntimeFunction(compiler, iterable, fnName);
+  private static Node arrayFromIterable(AbstractCompiler compiler, Node iterable) {
+    return callEs6RuntimeFunction(compiler, iterable, "arrayFromIterable");
   }
 
   private static Node callEs6RuntimeFunction(

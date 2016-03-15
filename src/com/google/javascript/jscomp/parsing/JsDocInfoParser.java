@@ -31,6 +31,7 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SimpleErrorReporter;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TokenStream;
 import com.google.javascript.rhino.TokenUtil;
 
 import java.util.ArrayList;
@@ -532,8 +533,15 @@ public final class JsDocInfoParser {
 
           type = null;
           if (token != JsDocToken.EOL && token != JsDocToken.EOC) {
-            type = createJSTypeExpression(
-                parseAndRecordTypeNode(token));
+            Node typeNode = parseAndRecordTypeNode(token);
+            if (typeNode != null && typeNode.getType() == Token.STRING) {
+              String typeName = typeNode.getString();
+              if (!typeName.equals("number") && !typeName.equals("string")
+                  && !typeName.equals("boolean")) {
+                typeNode = wrapNode(Token.BANG, typeNode);
+              }
+            }
+            type = createJSTypeExpression(typeNode);
           } else {
             restoreLookAhead(token);
           }
@@ -794,7 +802,7 @@ public final class JsDocInfoParser {
             // for handling properties of params, so if the param name has a DOT
             // in it, report a warning and throw it out.
             // See https://github.com/google/closure-compiler/issues/499
-            if (name.indexOf('.') > -1) {
+            if (!TokenStream.isJSIdentifier(name)) {
               addParserWarning("msg.invalid.variable.name", name, lineno, charno);
               name = null;
             } else if (!jsdocBuilder.recordParameter(name, type)) {
@@ -1205,8 +1213,8 @@ public final class JsDocInfoParser {
    * only letters, digits, and underscores.
    */
   private static boolean validTemplateTypeName(String name) {
-    return !name.isEmpty() && CharMatcher.JAVA_UPPER_CASE.matches(name.charAt(0)) &&
-        CharMatcher.JAVA_LETTER_OR_DIGIT.or(CharMatcher.is('_')).matchesAllOf(name);
+    return !name.isEmpty() && CharMatcher.javaUpperCase().matches(name.charAt(0)) &&
+        CharMatcher.javaLetterOrDigit().or(CharMatcher.is('_')).matchesAllOf(name);
   }
 
   /**

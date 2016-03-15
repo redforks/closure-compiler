@@ -52,6 +52,71 @@ public final class IntegrationTest extends IntegrationTestCase {
         RhinoErrorReporter.PARSE_ERROR);
   }
 
+  // b/27531865
+  public void testLetInSwitch() {
+    CompilerOptions options = createCompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
+    options.setWarningLevel(DiagnosticGroups.CHECK_VARIABLES, CheckLevel.ERROR);
+    String before = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    let x = 1;",
+        "  case 1:",
+        "    x = 2;",
+        "}");
+    String after = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    var x = 1;",
+        "  case 1:",
+        "    x = 2;",
+        "}");
+    test(options, before, after);
+
+    before = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "  default:",
+        "    let x = 1;",
+        "}");
+    after = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "  default:",
+        "    var x = 1;",
+        "}");
+    test(options, before, after);
+  }
+
+  public void testExplicitBlocksInSwitch() {
+    CompilerOptions options = createCompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
+    options.setWarningLevel(DiagnosticGroups.CHECK_VARIABLES, CheckLevel.ERROR);
+    String before = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    { const x = 3; break; }",
+        "  case 1:",
+        "    { const x = 5; break; }",
+        "}");
+    String after = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    { var x = 3; break; }",
+        "  case 1:",
+        "    { var x$0 = 5; break; }",
+        "}");
+    test(options, before, after);
+  }
+
   public void testBug1949424() {
     CompilerOptions options = createCompilerOptions();
     options.setCollapseProperties(true);
@@ -1341,6 +1406,18 @@ public final class IntegrationTest extends IntegrationTestCase {
     test(options, code, "");
   }
 
+  public void testClassWithGettersIsRemoved() {
+    CompilerOptions options = createCompilerOptions();
+    String code =
+        "class Foo { get x() {}; set y(v) {}; static get init() {}; static set prop(v) {} }";
+
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
+    options.setSmartNameRemoval(true);
+    options.setRemoveDeadCode(true);
+    test(options, code, "");
+  }
+
   public void testSmartNamePassBug11163486() {
     CompilerOptions options = createCompilerOptions();
 
@@ -1611,6 +1688,22 @@ public final class IntegrationTest extends IntegrationTestCase {
         "function f () {\n" +
         "    alert('0-');\n" +
         "}");
+  }
+
+  // Github issue #1540: https://github.com/google/closure-compiler/issues/1540
+  public void testFlowSensitiveInlineVariablesUnderAdvanced() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.ADVANCED_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    test(options,
+        LINE_JOINER.join(
+            "function f(x) {",
+            "  var a = x + 1;",
+            "  var b = x + 1;",
+            "  window.c = x > 5 ? a : b;",
+            "}",
+            "f(g);"),
+            "window.a = g + 1;");
   }
 
   public void testCollapseAnonymousFunctions() {
@@ -2470,8 +2563,7 @@ public final class IntegrationTest extends IntegrationTestCase {
         + "  a = a + 'y';\n"
         + "  return a;\n"
         + "}",
-        // This should eventually get inlined completely.
-        "function f(a) { a += 'x'; return a += 'y'; }");
+        "function f(a) { return a += 'xy'; }");
   }
 
   public void testIssue1168() {

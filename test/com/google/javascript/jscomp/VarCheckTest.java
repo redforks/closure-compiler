@@ -83,6 +83,11 @@ public final class VarCheckTest extends Es6CompilerTestCase {
     return 1;
   }
 
+  public void testShorthandObjLit() {
+    testErrorEs6("var x = {y};", VarCheck.UNDEFINED_VAR_ERROR);
+    testSameEs6("var {x} = {x: 5}; let y = x;");
+  }
+
   public void testBreak() {
     testSame("a: while(1) break a;");
   }
@@ -128,8 +133,7 @@ public final class VarCheckTest extends Es6CompilerTestCase {
   }
 
   public void testMultiplyDeclaredVars2() {
-    testSame("var y; try { y=1 } catch (x) {}" +
-         "try { y=1 } catch (x) {}");
+    testSame("var y; try { y=1 } catch (x) {} try { y=1 } catch (x) {}");
   }
 
   public void testMultiplyDeclaredVars3() {
@@ -169,6 +173,8 @@ public final class VarCheckTest extends Es6CompilerTestCase {
     testSameEs6("class x {}");
     testSameEs6("var x = class x {};");
     testSameEs6("var y = class x {};");
+    testSameEs6("var y = class x { foo() { return new x; } };");
+    testErrorEs6("var Foo = class extends Bar {};", VarCheck.UNDEFINED_VAR_ERROR);
   }
 
   public void testVarReferenceInExterns() {
@@ -187,6 +193,19 @@ public final class VarCheckTest extends Es6CompilerTestCase {
 
   public void testVarAssignmentInExterns() {
     testSame("/** @type{{foo:string}} */ var foo; var asdf = foo;", "asdf.foo;", null);
+  }
+
+  public void testAliasesInExterns() {
+    externValidationErrorLevel = CheckLevel.ERROR;
+
+    testSame("var foo; /** @const */ var asdf = foo;", "", null);
+    testSame(
+        "var Foo; var ns = {}; /** @const */ ns.FooAlias = Foo;", "", null);
+    testSame(
+        LINE_JOINER.join(
+            "var ns = {}; /** @constructor */ ns.Foo = function() {};",
+            "var ns2 = {}; /** @const */ ns2.Bar = ns.Foo;"),
+        "", null);
   }
 
   public void testDuplicateNamespaceInExterns() {

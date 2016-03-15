@@ -98,15 +98,28 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
           declareLHS(scope, a);
         }
       }
-
       // Since we create a separate scope for body, stop scanning here
-    } else if (n.isBlock() || n.isFor() || n.isForOf()) {
+
+    } else if (n.isClass()) {
+      if (scope.getParent() != null) {
+        inputId = NodeUtil.getInputId(n);
+      }
+
+      final Node classNameNode = n.getFirstChild();
+      // Bleed the class name into the scope, if it hasn't
+      // been declared in the outer scope.
+      if (!classNameNode.isEmpty()) {
+        if (NodeUtil.isClassExpression(n)) {
+          declareVar(classNameNode);
+        }
+      }
+    } else if (n.isBlock() || n.isFor() || n.isForOf() || n.isSwitch()) {
       if (scope.getParent() != null) {
         inputId = NodeUtil.getInputId(n);
       }
       scanVars(n);
     } else {
-      // It's the global block
+      // n is the global SCRIPT node
       Preconditions.checkState(scope.getParent() == null);
       scanVars(n);
     }
@@ -261,11 +274,18 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
    */
   private boolean isNodeAtCurrentLexicalScope(Node n) {
     Node parent = n.getParent();
-    Preconditions.checkState(parent.isBlock() || parent.isFor()
-        || parent.isForOf() || parent.isScript() || parent.isLabel());
+    Node grandparent = parent.getParent();
+    Preconditions.checkState(parent.isBlock() || parent.isFor() || parent.isForOf()
+        || parent.isScript() || parent.isLabel(), parent);
+
+    if (parent.isSyntheticBlock()
+        && grandparent != null && (grandparent.isCase() || grandparent.isDefaultCase())) {
+      Node switchNode = grandparent.getParent();
+      return scope.getRootNode() == switchNode;
+    }
 
     if (parent == scope.getRootNode() || parent.isScript()
-        || (parent.getParent().isCatch()
+        || (grandparent.isCatch()
             && parent.getGrandparent() == scope.getRootNode())) {
       return true;
     }

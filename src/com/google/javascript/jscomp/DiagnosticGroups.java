@@ -20,7 +20,6 @@ import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.javascript.jscomp.lint.CheckArguments;
 import com.google.javascript.jscomp.lint.CheckDuplicateCase;
 import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
@@ -106,7 +105,7 @@ public class DiagnosticGroups {
       + "suspiciousCode, strictModuleDepCheck, typeInvalidation, "
       + "undefinedNames, undefinedVars, unknownDefines, unnecessaryCasts, "
       + "unusedLocalVariables, unusedPrivateMembers, uselessCode, "
-      + "useOfGoogBase, visibility";
+      + "useOfGoogBase, underscore, visibility";
 
   public static final DiagnosticGroup GLOBAL_THIS =
       DiagnosticGroups.registerGroup("globalThis",
@@ -120,6 +119,11 @@ public class DiagnosticGroups {
           CheckAccessControls.DEPRECATED_PROP_REASON,
           CheckAccessControls.DEPRECATED_CLASS,
           CheckAccessControls.DEPRECATED_CLASS_REASON);
+
+  public static final DiagnosticGroup UNDERSCORE =
+      DiagnosticGroups.registerGroup("underscore",  // undocumented
+          CheckJSDocStyle.MUST_BE_PRIVATE,
+          CheckJSDocStyle.MUST_HAVE_TRAILING_UNDERSCORE);
 
   public static final DiagnosticGroup VISIBILITY =
       DiagnosticGroups.registerGroup("visibility",
@@ -298,7 +302,7 @@ public class DiagnosticGroups {
           NewTypeInference.INVALID_OBJLIT_PROPERTY_TYPE,
 //           NewTypeInference.INVALID_OPERAND_TYPE,
           NewTypeInference.INVALID_THIS_TYPE_IN_BIND,
-//           NewTypeInference.MISSING_RETURN_STATEMENT,
+          NewTypeInference.MISSING_RETURN_STATEMENT,
 //           NewTypeInference.MISTYPED_ASSIGN_RHS,
 //           NewTypeInference.NOT_A_CONSTRUCTOR,
 //           NewTypeInference.NOT_CALLABLE,
@@ -441,11 +445,14 @@ public class DiagnosticGroups {
           CheckJSDoc.MISPLACED_MSG_ANNOTATION);
 
   public static final DiagnosticGroup SUSPICIOUS_CODE =
-      DiagnosticGroups.registerGroup("suspiciousCode",
+      DiagnosticGroups.registerGroup(
+          "suspiciousCode",
+          CheckDuplicateCase.DUPLICATE_CASE,
           CheckSuspiciousCode.SUSPICIOUS_SEMICOLON,
           CheckSuspiciousCode.SUSPICIOUS_COMPARISON_WITH_NAN,
           CheckSuspiciousCode.SUSPICIOUS_IN_OPERATOR,
           CheckSuspiciousCode.SUSPICIOUS_INSTANCEOF_LEFT_OPERAND,
+          CheckSuspiciousCode.SUSPICIOUS_NEGATED_LEFT_OPERAND_OF_IN_OPERATOR,
           TypeCheck.DETERMINISTIC_TEST);
 
   public static final DiagnosticGroup DEPRECATED_ANNOTATIONS =
@@ -464,9 +471,8 @@ public class DiagnosticGroups {
   // recommended that you think of them as "linter" warnings that
   // provide optional suggestions.
   public static final DiagnosticGroup LINT_CHECKS =
-      DiagnosticGroups.registerGroup("lintChecks", // undocumented
-          CheckArguments.BAD_ARGUMENTS_USAGE,
-          CheckDuplicateCase.DUPLICATE_CASE,
+      DiagnosticGroups.registerGroup(
+          "lintChecks", // undocumented
           CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
           CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
           CheckEnums.DUPLICATE_ENUM_VALUE,
@@ -478,10 +484,13 @@ public class DiagnosticGroups {
           CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
           CheckJSDocStyle.MISSING_PARAMETER_JSDOC,
           CheckJSDocStyle.MISSING_JSDOC,
+          CheckJSDocStyle.MISSING_RETURN_JSDOC,
           CheckJSDocStyle.EXTERNS_FILES_SHOULD_BE_ANNOTATED,
           CheckJSDocStyle.INCORRECT_PARAM_NAME,
+          CheckJSDocStyle.INVALID_SUPPRESS,
           CheckJSDocStyle.MIXED_PARAM_JSDOC_STYLES,
           CheckJSDocStyle.MUST_BE_PRIVATE,
+          CheckJSDocStyle.MUST_HAVE_TRAILING_UNDERSCORE,
           CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL,
           CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
           CheckJSDocStyle.WRONG_NUMBER_OF_PARAMS,
@@ -491,7 +500,6 @@ public class DiagnosticGroups {
           CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES,
           CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
           CheckUselessBlocks.USELESS_BLOCK,
-          Es6RewriteArrowFunction.THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT,
           RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
           RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,
           RhinoErrorReporter.TOO_MANY_TEMPLATE_PARAMS,
@@ -532,16 +540,21 @@ public class DiagnosticGroups {
           CheckConformance.CONFORMANCE_VIOLATION,
           CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION);
 
+  public static final DiagnosticGroup LATE_PROVIDE =
+      DiagnosticGroups.registerGroup(
+          "lateProvide", // undocumented
+          ProcessClosurePrimitives.LATE_PROVIDE_ERROR);
+
+  // For internal use only, so there are no constants for these groups.
   static {
-    // For internal use only, so there is no constant for it.
     DiagnosticGroups.registerGroup("invalidProvide",
         ProcessClosurePrimitives.INVALID_PROVIDE_ERROR);
 
-    DiagnosticGroups.registerGroup("lateProvide",
-        ProcessClosurePrimitives.LATE_PROVIDE_ERROR);
-
     DiagnosticGroups.registerGroup("es6Typed",
         RhinoErrorReporter.MISPLACED_TYPE_SYNTAX);
+
+    DiagnosticGroups.registerGroup("duplicateZipContents",
+        SourceFile.DUPLICATE_ZIP_CONTENTS);
   }
 
   /**

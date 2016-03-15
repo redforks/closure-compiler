@@ -50,14 +50,11 @@
 /**@suppress {reportUnknownTypes}
 @template T
 
-@param {(string|!Array<T>|!Iterable<T>|!Iterator<T>)} iterable
+@param {(string|!Array<T>|!Iterable<T>|!Iterator<T>|!Arguments<T>)} iterable
 @return {!Iterator<T>} */$jscomp.makeIterator = function(iterable) {
   $jscomp.initSymbolIterator();
   if (iterable[$jscomp.global.Symbol.iterator]) {
     return iterable[$jscomp.global.Symbol.iterator]();
-  }
-  if (!(iterable instanceof Array) && typeof iterable != "string" && !(iterable instanceof String)) {
-    throw new TypeError(iterable + " is not iterable");
   }
   var index = 0;
   return /**@type {!Iterator} */({next:function() {
@@ -81,22 +78,13 @@
 };
 /**@template T
 
-@param {(string|!Array<T>|!Iterable<T>)} iterable
+@param {(string|!Array<T>|!Iterable<T>|!Arguments<T>)} iterable
 @return {!Array<T>} */$jscomp.arrayFromIterable = function(iterable) {
   if (iterable instanceof Array) {
     return iterable;
   } else {
     return $jscomp.arrayFromIterator($jscomp.makeIterator(iterable));
   }
-};
-/**
-@param {!Arguments} args
-@return {!Array} */$jscomp.arrayFromArguments = function(args) {
-  /**@const */var result = [];
-  for (var i = 0;i < args.length;i++) {
-    result.push(args[i]);
-  }
-  return result;
 };
 /**
 @param {!Function} childCtor
@@ -109,7 +97,9 @@
   for (/**@const */var p in parentCtor) {
     if ($jscomp.global.Object.defineProperties) {
       var descriptor = $jscomp.global.Object.getOwnPropertyDescriptor(parentCtor, p);
-      $jscomp.global.Object.defineProperty(childCtor, p, descriptor);
+      if (descriptor) {
+        $jscomp.global.Object.defineProperty(childCtor, p, descriptor);
+      }
     } else {
       childCtor[p] = parentCtor[p];
     }
@@ -165,7 +155,7 @@
 };
 /**@template INPUT,OUTPUT,THIS
 
-@param {(!IArrayLike<INPUT>|!Iterator<INPUT>|!Iterable<INPUT>|!Array<INPUT>)} arrayLike
+@param {(!IArrayLike<INPUT>|!Iterator<INPUT>|!Iterable<INPUT>)} arrayLike
 @param {function(this:THIS,INPUT):OUTPUT=} opt_mapFn
 @param {THIS=} opt_thisArg
 @return {!Array<OUTPUT>} */$jscomp.array.from = function(arrayLike, opt_mapFn, opt_thisArg) {

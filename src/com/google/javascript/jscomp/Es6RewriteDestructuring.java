@@ -23,6 +23,7 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TokenStream;
 
 /**
  * Rewrites ES6 destructuring patterns and default parameters to valid ES3 code.
@@ -128,12 +129,13 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
         compiler.reportCodeChange();
       } else if (param.isDestructuringPattern()) {
         String tempVarName;
-        JSDocInfo fnJSDoc = function.getJSDocInfo();
+        JSDocInfo fnJSDoc = NodeUtil.getBestJSDocInfo(function);
         if (fnJSDoc != null && fnJSDoc.getParameterNameAt(i) != null) {
           tempVarName = fnJSDoc.getParameterNameAt(i);
         } else {
           tempVarName = DESTRUCTURING_TEMP_VAR + (destructuringVarCounter++);
         }
+        Preconditions.checkState(TokenStream.isJSIdentifier(tempVarName));
 
         Node newParam = IR.name(tempVarName);
         newParam.setJSDocInfo(param.getJSDocInfo());
@@ -294,7 +296,7 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
     String tempVarName = DESTRUCTURING_TEMP_VAR + (destructuringVarCounter++);
     Node tempDecl = IR.var(
         IR.name(tempVarName),
-        makeIterator(t, compiler, rhs.detachFromParent()));
+        makeIterator(compiler, rhs.detachFromParent()));
     tempDecl.useSourceInfoIfMissingFromForTree(arrayPattern);
     nodeToDetach.getParent().addChildBefore(tempDecl, nodeToDetach);
 

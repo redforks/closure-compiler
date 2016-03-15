@@ -101,7 +101,8 @@ public final class CompileTask
   private String sourceMapLocationMapping;
 
   public CompileTask() {
-    this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT3;
+    this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT6;
+    this.languageOut = CompilerOptions.LanguageMode.ECMASCRIPT3;
     this.warningLevel = WarningLevel.DEFAULT;
     this.debugOptions = false;
     this.compilationLevel = CompilationLevel.SIMPLE_OPTIMIZATIONS;
@@ -275,8 +276,8 @@ public final class CompileTask
   /**
    * Set output file encoding
    */
-  public void setOutputEncoding(Charset outputEncoding) {
-    this.outputEncoding = outputEncoding;
+  public void setOutputEncoding(String outputEncoding) {
+    this.outputEncoding = Charset.forName(outputEncoding);
   }
 
   /**
@@ -481,7 +482,7 @@ public final class CompileTask
     }
 
     if (!Strings.isNullOrEmpty(sourceMapLocationMapping)) {
-      String tokens[] = sourceMapLocationMapping.split("\\|", -1);
+      String[] tokens = sourceMapLocationMapping.split("\\|", -1);
       LocationMapping lm = new LocationMapping(tokens[0], tokens[1]);
       options.setSourceMapLocationMappings(Arrays.asList(lm));
     }
@@ -672,7 +673,7 @@ public final class CompileTask
    */
   private List<SourceFile> getBuiltinExterns(CompilerOptions options) {
     try {
-      return CommandLineRunner.getBuiltinExterns(options);
+      return CommandLineRunner.getBuiltinExterns(options.getEnvironment());
     } catch (IOException e) {
       throw new BuildException(e);
     }
