@@ -470,11 +470,15 @@ angular.Directive;
  *   templateUrl: (string|
  *       function(!angular.JQLite=,!angular.Attributes=)|
  *       undefined),
- *   transclude: (boolean|undefined)
+ *   transclude: (boolean|!Object.<string, string>|undefined)
  *   }}
  */
 angular.Component;
 
+/** @record */
+angular.ComponentController = function() {};
+
+angular.ComponentController.prototype.$onInit = function() {};
 
 /**
  * @typedef {(Function|Array.<string|Function>)}
@@ -837,7 +841,7 @@ angular.Module.prototype.requires;
 /** @constructor */
 angular.Scope = function() {};
 
-/** @type {string} */
+/** @type {?string} */
 angular.Scope.prototype.$$phase;
 
 /**
@@ -987,7 +991,7 @@ angular.version.codeName = '';
  *****************************************************************************/
 
 /**
- * @typedef {function()}
+ * @typedef {function(string=)}
  */
 angular.$anchorScroll;
 

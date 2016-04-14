@@ -63,7 +63,7 @@ public class Node implements Serializable {
   private static final long serialVersionUID = 1L;
 
   public static final int
-      JSDOC_INFO_PROP   = 29,     // contains a TokenStream.JSDocInfo object
+      JSDOC_INFO_PROP   = 29,     // contains a JSDocInfo object
 
       VAR_ARGS_NAME     = 30,     // the name node is a variable length
                                   // argument placeholder.
@@ -138,7 +138,13 @@ public class Node implements Serializable {
       IMPLEMENTS = 82,            // "implements" clause in ES6 typed syntax.
       CONSTRUCT_SIGNATURE = 83,   // This node is a TypeScript ConstructSignature
       ACCESS_MODIFIER = 84,       // TypeScript accessibility modifiers (public, protected, private)
-      NON_INDEXABLE = 85;         // Indicates the node should not be indexed by analysis tools.
+      NON_INDEXABLE = 85,         // Indicates the node should not be indexed by analysis tools.
+      PARSE_RESULTS = 86,         // Parse results stored on SCRIPT nodes to allow replaying
+                                  // parse warnings/errors when cloning cached ASTs.
+      GOOG_MODULE = 87,           // Indicates that a SCRIPT node is a goog.module. Remains set
+                                  // after the goog.module is desugared.
+      GOOG_MODULE_REQUIRE = 88,   // Node is a goog.require() as desugared by goog.module()
+      FEATURE_SET = 89;           // Attaches a FeatureSet to SCRIPT nodes.
 
   private static final String propToString(int propType) {
       switch (propType) {
@@ -190,6 +196,10 @@ public class Node implements Serializable {
         case CONSTRUCT_SIGNATURE: return "construct_signature";
         case ACCESS_MODIFIER: return "access_modifier";
         case NON_INDEXABLE:      return "non_indexable";
+        case PARSE_RESULTS:      return "parse_results";
+        case GOOG_MODULE:        return "goog_module";
+        case GOOG_MODULE_REQUIRE: return "goog_module_require";
+        case FEATURE_SET:        return "feature_set";
         default:
           throw new IllegalStateException("unexpected prop id " + propType);
       }
@@ -234,8 +244,8 @@ public class Node implements Serializable {
     }
 
     @Override
-    public TypeDeclarationNode cloneNode() {
-      return copyNodeFields(new TypeDeclarationNode(type, str));
+    public TypeDeclarationNode cloneNode(boolean cloneTypeExprs) {
+      return copyNodeFields(new TypeDeclarationNode(type, str), cloneTypeExprs);
     }
   }
 
@@ -281,8 +291,8 @@ public class Node implements Serializable {
     private double number;
 
     @Override
-    public NumberNode cloneNode() {
-      return copyNodeFields(new NumberNode(number));
+    public NumberNode cloneNode(boolean cloneTypeExprs) {
+      return copyNodeFields(new NumberNode(number), cloneTypeExprs);
     }
   }
 
@@ -356,8 +366,8 @@ public class Node implements Serializable {
     private String str;
 
     @Override
-    public StringNode cloneNode() {
-      return copyNodeFields(new StringNode(type, str));
+    public StringNode cloneNode(boolean cloneTypeExprs) {
+      return copyNodeFields(new StringNode(type, str), cloneTypeExprs);
     }
   }
 
@@ -1931,13 +1941,28 @@ public class Node implements Serializable {
    * @return A detached clone of the Node, specifically excluding its children.
    */
   public Node cloneNode() {
-    return copyNodeFields(new Node(type));
+    return cloneNode(false);
   }
 
-  <T extends Node> T copyNodeFields(T dst) {
+  /**
+   * @return A detached clone of the Node, specifically excluding its children.
+   */
+  protected Node cloneNode(boolean cloneTypeExprs) {
+    return copyNodeFields(new Node(type), cloneTypeExprs);
+  }
+
+  <T extends Node> T copyNodeFields(T dst, boolean cloneTypeExprs) {
     dst.setSourceEncodedPosition(this.sourcePosition);
     dst.setTypeI(this.typei);
     dst.setPropListHead(this.propListHead);
+
+    // TODO(johnlenz): Remove this once JSTypeExpression are immutable
+    if (cloneTypeExprs) {
+      JSDocInfo info = this.getJSDocInfo();
+      if (info != null) {
+        this.setJSDocInfo(info.clone(true));
+      }
+    }
     return dst;
   }
 
@@ -1945,9 +1970,13 @@ public class Node implements Serializable {
    * @return A detached clone of the Node and all its children.
    */
   public Node cloneTree() {
-    Node result = cloneNode();
+    return cloneTree(false);
+  }
+
+  public Node cloneTree(boolean cloneTypeExprs) {
+    Node result = cloneNode(cloneTypeExprs);
     for (Node n2 = getFirstChild(); n2 != null; n2 = n2.getNext()) {
-      Node n2clone = n2.cloneTree();
+      Node n2clone = n2.cloneTree(cloneTypeExprs);
       n2clone.parent = result;
       if (result.last != null) {
         result.last.next = n2clone;
@@ -2617,6 +2646,10 @@ public class Node implements Serializable {
 
   public boolean isDelProp() {
     return this.getType() == Token.DELPROP;
+  }
+
+  public boolean isDestructuringLhs() {
+    return this.getType() == Token.DESTRUCTURING_LHS;
   }
 
   public boolean isDestructuringPattern() {

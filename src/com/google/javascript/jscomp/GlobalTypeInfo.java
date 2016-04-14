@@ -583,6 +583,8 @@ class GlobalTypeInfo implements CompilerPass {
     rawType.finalize();
   }
 
+  // TODO(dimvar): the finalization method and this one should be cleaned up;
+  // they are very hard to understand.
   private void checkSuperProperty(
       RawNominalType current, NominalType superType, String pname,
       Multimap<String, DeclaredFunctionType> propMethodTypesToProcess,
@@ -620,15 +622,16 @@ class GlobalTypeInfo implements CompilerPass {
           localPropDef.defSite, CANNOT_OVERRIDE_FINAL_METHOD, pname));
       return;
     }
-    if (localPropType == null) {
+    if (localPropType == null && superType.isInterface()) {
       // Add property from interface to class
       propTypesToProcess.put(pname, inheritedPropType);
-    } else if (!getsTypeInfoFromParentMethod(localPropDef)
+    } else if (localPropType != null
+        && !getsTypeInfoFromParentMethod(localPropDef)
         && !isValidOverride(localPropType, inheritedPropType)) {
       warnings.add(JSError.make(
           localPropDef.defSite, INVALID_PROP_OVERRIDE, pname,
           inheritedPropType.toString(), localPropType.toString()));
-    } else if (localPropDef.methodType != null) {
+    } else if (localPropType != null && localPropDef.methodType != null) {
       // If we are looking at a method definition, munging may be needed
       for (PropertyDef inheritedPropDef : inheritedPropDefs) {
         if (inheritedPropDef.methodType != null) {
@@ -1105,6 +1108,7 @@ class GlobalTypeInfo implements CompilerPass {
       }
       Namespace ns = this.currentScope.getNamespace(rhsQname);
       if (ns != null) {
+        lhs.getParent().putBooleanProp(Node.ANALYZED_DURING_GTI, true);
         this.currentScope.addNamespace(lhs, ns);
       }
     }
@@ -1590,14 +1594,17 @@ class GlobalTypeInfo implements CompilerPass {
       Preconditions.checkArgument(getProp.isGetProp());
       JSType t = currentScope.getDeclaredFunctionType().getThisType();
       NominalType thisType = t == null ? null : t.getNominalTypeIfSingletonObj();
+      Node parent = getProp.getParent();
+      Node initializer = parent.isAssign() ? parent.getLastChild() : null;
       if (thisType == null) {
+        if (initializer != null && initializer.isFunction()) {
+          visitFunctionLate(initializer, null);
+        }
         // This will get caught in NewTypeInference
         return;
       }
       RawNominalType rawType = thisType.getRawNominalType();
       String pname = getProp.getLastChild().getString();
-      Node parent = getProp.getParent();
-      Node initializer = parent.isAssign() ? parent.getLastChild() : null;
       JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(getProp);
       PropertyType pt = getPropTypeHelper(jsdoc, initializer, rawType);
       JSType propDeclType = pt.declType;
@@ -2185,7 +2192,7 @@ class GlobalTypeInfo implements CompilerPass {
     }
     if (decl.getTypeOfSimpleDecl() != null) {
       FunctionType funType = decl.getTypeOfSimpleDecl().getFunType();
-      if (funType != null) {
+      if (funType != null && !funType.isGeneric()) {
         return funType.toDeclaredFunctionType();
       }
     }
