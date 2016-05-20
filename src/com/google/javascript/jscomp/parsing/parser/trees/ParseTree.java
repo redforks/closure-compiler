@@ -98,7 +98,6 @@ public class ParseTree {
   public MemberVariableTree asMemberVariable() { return (MemberVariableTree) this; }
   public MissingPrimaryExpressionTree asMissingPrimaryExpression() {
     return (MissingPrimaryExpressionTree) this; }
-  public ModuleImportTree asModuleImport() { return (ModuleImportTree) this; }
   public NewExpressionTree asNewExpression() { return (NewExpressionTree) this; }
   public NullTree asNull() { return (NullTree) this; }
   public ObjectLiteralExpressionTree asObjectLiteralExpression() {
@@ -155,6 +154,9 @@ public class ParseTree {
   public IndexSignatureTree asIndexSignature() { return (IndexSignatureTree) this; }
   public CallSignatureTree asCallSignature() { return (CallSignatureTree) this; }
 
+  public NewTargetExpressionTree asNewTargetExpression() {
+    return (NewTargetExpressionTree) this;
+  }
   public boolean isPattern() {
     ParseTree parseTree = this;
     while (parseTree.type == ParseTreeType.PAREN_EXPRESSION) {

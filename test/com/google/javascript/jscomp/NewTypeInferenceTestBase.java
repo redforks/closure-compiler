@@ -32,7 +32,8 @@ import java.util.List;
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
 public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
-  protected List<PassFactory> passes;
+  private List<PassFactory> passes;
+  protected boolean reportUnknownTypes;
 
   protected static final String CLOSURE_BASE =
       LINE_JOINER.join(
@@ -150,7 +151,12 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
   @Override
   protected void setUp() {
     super.setUp();
-    passes = new ArrayList<>();
+    this.passes = new ArrayList<>();
+  }
+
+  @Override
+  protected void tearDown() {
+    this.reportUnknownTypes = false;
   }
 
   protected final PassFactory makePassFactory(
@@ -164,11 +170,19 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
   }
 
   private final void parseAndTypeCheck(String externs, String js) {
+    // NOTE(dimvar): it's unusual that we run setUp for each test in a test
+    // method rather than once per test method. But the parent class creates a
+    // new compiler object at every setUp call, and we need that.
     setUp();
     final CompilerOptions options = compiler.getOptions();
     options.setClosurePass(true);
     options.setNewTypeInference(true);
-    options.setWarningLevel(DiagnosticGroups.NEW_CHECK_TYPES_ALL_CHECKS, CheckLevel.WARNING);
+    options.setWarningLevel(
+        DiagnosticGroups.NEW_CHECK_TYPES_ALL_CHECKS, CheckLevel.WARNING);
+    if (this.reportUnknownTypes) {
+      options.setWarningLevel(
+          DiagnosticGroups.REPORT_UNKNOWN_TYPES, CheckLevel.WARNING);
+    }
     compiler.init(
         ImmutableList.of(SourceFile.fromCode("[externs]", externs)),
         ImmutableList.of(SourceFile.fromCode("[testcode]", js)),
@@ -219,8 +233,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
               new Es6RewriteBlockScopedDeclaration(compiler)));
       passes.add(makePassFactory("rewriteGenerators",
               new Es6RewriteGenerators(compiler)));
-      passes.add(makePassFactory("Es6RuntimeLibrary",
-              new InjectEs6RuntimeLibrary(compiler)));
+      passes.add(makePassFactory("injectRuntimeLibraries",
+              new InjectRuntimeLibraries(compiler)));
       passes.add(makePassFactory("Es6StaticInheritance",
               new Es6ToEs3ClassSideInheritance(compiler)));
     }
@@ -246,17 +260,19 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     parseAndTypeCheck(externs, js);
     JSError[] warnings = compiler.getWarnings();
     JSError[] errors = compiler.getErrors();
-    String errorMessage =
-        "Expected warning of type:\n"
-        + "================================================================\n"
-        + Arrays.toString(warningKinds)
-        + "================================================================\n"
-        + "but found:\n"
-        + "----------------------------------------------------------------\n"
-        + Arrays.toString(errors) + Arrays.toString(warnings) + "\n"
-        + "----------------------------------------------------------------\n";
+    String errorMessage = LINE_JOINER.join(
+        "Expected warning of type:",
+        "================================================================",
+        Arrays.toString(warningKinds),
+        "================================================================",
+        "but found:",
+        "----------------------------------------------------------------",
+        Arrays.toString(errors) + Arrays.toString(warnings) + "",
+        "----------------------------------------------------------------\n");
     assertEquals(
-        errorMessage + "Warning count", warningKinds.length, warnings.length + errors.length);
+        errorMessage + "Warning count",
+        warningKinds.length,
+        warnings.length + errors.length);
     for (JSError warning : warnings) {
       assertTrue(
           "Wrong warning type\n" + errorMessage,
@@ -267,5 +283,45 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "Wrong warning type\n" + errorMessage,
           Arrays.asList(warningKinds).contains(error.getType()));
     }
+  }
+
+  // Used only in the cases where we provide extra details in the error message.
+  // Don't use in other cases.
+  // It is deliberately less general; no custom externs and only a single
+  // warning per test.
+  protected final void typeCheckMessageContents(
+      String js, DiagnosticType warningKind, String warningMsg) {
+    parseAndTypeCheck(DEFAULT_EXTERNS, js);
+    JSError[] warnings = compiler.getWarnings();
+    JSError[] errors = compiler.getErrors();
+    assertEquals(
+        "Expected no errors, but found:\n" + Arrays.toString(errors),
+        0, errors.length);
+    assertEquals(
+        "Expected one warning, but found:\n" + Arrays.toString(warnings),
+        1, warnings.length);
+    JSError warning = warnings[0];
+    assertEquals(LINE_JOINER.join(
+        "Wrong warning type",
+        "Expected warning of type:",
+        "================================================================",
+        warningKind.toString(),
+        "================================================================",
+        "but found:",
+        "----------------------------------------------------------------",
+        warning.toString(),
+        "----------------------------------------------------------------\n"),
+        warningKind, warning.getType());
+    assertEquals(LINE_JOINER.join(
+        "Wrong warning message",
+        "Expected:",
+        "================================================================",
+        warningMsg,
+        "================================================================",
+        "but found:",
+        "----------------------------------------------------------------",
+        warning.description,
+        "----------------------------------------------------------------\n"),
+        warningMsg, warning.description);
   }
 }

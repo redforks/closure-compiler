@@ -325,9 +325,7 @@ class InlineFunctions implements CompilerPass {
           // TODO(johnlenz): this can be improved by looking at the possible
           // values for locals.  If there are simple values, or constants
           // we could still inline.
-          if (!assumeMinimumCapture
-              && hasLocalNames(fnNode)
-              && !NodeUtil.isIIFE(fnNode)) {
+          if (!assumeMinimumCapture && hasLocalNames(fnNode)) {
             fs.setInline(false);
           }
         }
@@ -371,7 +369,7 @@ class InlineFunctions implements CompilerPass {
     }
 
     // Don't inline this special function
-    if (RenameProperties.RENAME_PROPERTY_FUNCTION_NAME.equals(fnName)) {
+    if (compiler.getCodingConvention().isPropertyRenameFunction(fnName)) {
       return false;
     }
 

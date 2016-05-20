@@ -53,6 +53,8 @@ public class Token {
 
   /**
    * Token types.
+   *
+   * TODO(bradfordcsmith): Add instructions for assigning new values.
    */
   public static final int
       RETURN = 4,
@@ -177,7 +179,6 @@ public class Token {
       EXPORT = 170,
       EXPORT_SPECS = 171,
       EXPORT_SPEC = 172,
-      NAMESPACE = 173,
 
       REST = 174, // "..." in formal parameters, or an array pattern.
       SPREAD = 175, // "..." in a call expression, or an array literal.
@@ -189,6 +190,7 @@ public class Token {
       TEMPLATELIT_SUB = 179, // template literal substitution
 
       DEFAULT_VALUE = 180, // Formal parameter or destructuring element with a default value
+      NEW_TARGET = 181, // new.target
 
       // Used by type declaration ASTs
       STRING_TYPE = 200,
@@ -234,7 +236,8 @@ public class Token {
       MEMBER_VARIABLE_DEF = 319,
       INDEX_SIGNATURE = 320,
       CALL_SIGNATURE = 321,
-      NAMESPACE_ELEMENTS = 322,
+      NAMESPACE = 322,
+      NAMESPACE_ELEMENTS = 323,
 
       // Token Types to use for internal bookkeeping,
       // an AST is invalid while these are present.
@@ -528,6 +531,8 @@ public class Token {
         return "COMPUTED_PROP";
       case DEFAULT_VALUE:
         return "DEFAULT_VALUE";
+      case NEW_TARGET:
+        return "NEW_TARGET";
       case MEMBER_VARIABLE_DEF:
         return "MEMBER_VARIABLE_DEF";
 
@@ -599,7 +604,6 @@ public class Token {
       case LC:
       case COLON:
       case YIELD:
-      case REST:
         return -1;
       case NAME:
       case LABEL_NAME:
@@ -635,6 +639,7 @@ public class Token {
       case TYPE_ALIAS:
       case INDEX_SIGNATURE:
       case CALL_SIGNATURE:
+      case REST:
         return 1;
       case BITOR:
       case BITXOR:

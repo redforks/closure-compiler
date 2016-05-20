@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Ordering;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSTypeExpression;
@@ -25,6 +26,7 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -163,7 +165,10 @@ public final class JSDocInfoPrinter {
 
     Set<String> suppressions = info.getSuppressions();
     if (!suppressions.isEmpty()) {
-      parts.add("@suppress {" + Joiner.on(',').join(suppressions) + "}");
+      // Print suppressions in sorted order to avoid non-deterministic output.
+      String[] arr = suppressions.toArray(new String[0]);
+      Arrays.sort(arr, Ordering.<String>natural());
+      parts.add("@suppress {" + Joiner.on(',').join(arr) + "}");
       multiline = true;
     }
 
@@ -254,7 +259,7 @@ public final class JSDocInfoPrinter {
       for (int i = 0; i < lb.getChildCount() - 1; i++) {
         Node colon = lb.getChildAtIndex(i);
         if (colon.hasChildren()) {
-          sb.append(colon.getFirstChild().getString() + ":");
+          sb.append(colon.getFirstChild().getString()).append(":");
           appendTypeNode(sb, colon.getLastChild());
         } else {
           sb.append(colon.getString());
@@ -263,7 +268,7 @@ public final class JSDocInfoPrinter {
       }
       Node lastColon = lb.getLastChild();
       if (lastColon.hasChildren()) {
-        sb.append(lastColon.getFirstChild().getString() + ":");
+        sb.append(lastColon.getFirstChild().getString()).append(":");
         appendTypeNode(sb, lastColon.getLastChild());
       } else {
         sb.append(lastColon.getString());

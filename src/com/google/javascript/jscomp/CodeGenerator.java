@@ -18,7 +18,6 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.debugging.sourcemap.Util;
-import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -46,15 +45,15 @@ class CodeGenerator {
   private final boolean preferSingleQuotes;
   private final boolean preserveTypeAnnotations;
   private final boolean trustedStrings;
-  private final LanguageMode languageMode;
+  private final boolean quoteKeywordProperties;
 
   private CodeGenerator(CodeConsumer consumer) {
     cc = consumer;
     outputCharsetEncoder = null;
     preferSingleQuotes = false;
     trustedStrings = true;
-    languageMode = LanguageMode.ECMASCRIPT5;
     preserveTypeAnnotations = false;
+    quoteKeywordProperties = false;
   }
 
   static CodeGenerator forCostEstimation(CodeConsumer consumer) {
@@ -69,8 +68,8 @@ class CodeGenerator {
     this.outputCharsetEncoder = new OutputCharsetEncoder(options.getOutputCharset());
     this.preferSingleQuotes = options.preferSingleQuotes;
     this.trustedStrings = options.trustedStrings;
-    this.languageMode = options.getLanguageOut();
     this.preserveTypeAnnotations = options.preserveTypeAnnotations;
+    this.quoteKeywordProperties = options.quoteKeywordProperties;
   }
 
   /**
@@ -98,7 +97,11 @@ class CodeGenerator {
     }
 
     if (preserveTypeAnnotations && n.getJSDocInfo() != null) {
-      add(JSDocInfoPrinter.print(n.getJSDocInfo()));
+      String jsdocAsString = JSDocInfoPrinter.print(n.getJSDocInfo());
+      // Don't print an empty jsdoc
+      if (!jsdocAsString.equals("/** */ ")) {
+        add(jsdocAsString);
+      }
     }
 
     int type = n.getType();
@@ -358,7 +361,7 @@ class CodeGenerator {
       }
       case Token.REST:
         add("...");
-        add(first.getString());
+        add(first);
         maybeAddTypeDecl(n);
         break;
 
@@ -705,9 +708,7 @@ class CodeGenerator {
           if (needsParens) {
             add(")");
           }
-          if (this.languageMode == LanguageMode.ECMASCRIPT3
-              && TokenStream.isKeyword(last.getString())) {
-            // Check for ECMASCRIPT3 keywords.
+          if (quoteKeywordProperties && TokenStream.isKeyword(last.getString())) {
             add("[");
             add(last);
             add("]");
@@ -821,6 +822,11 @@ class CodeGenerator {
       case Token.SUPER:
         Preconditions.checkState(childCount == 0);
         add("super");
+        break;
+
+      case Token.NEW_TARGET:
+        Preconditions.checkState(childCount == 0);
+        add("new.target");
         break;
 
       case Token.YIELD:
@@ -1495,8 +1501,7 @@ class CodeGenerator {
     // Object literal property names don't have to be quoted if they
     // are not JavaScript keywords
     if (!n.isQuotedString()
-        && !(languageMode == LanguageMode.ECMASCRIPT3
-            && TokenStream.isKeyword(key))
+        && !(quoteKeywordProperties && TokenStream.isKeyword(key))
         && TokenStream.isJSIdentifier(key)
         // do not encode literally any non-literal characters that
         // were Unicode escaped.

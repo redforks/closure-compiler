@@ -363,7 +363,7 @@ public class CompilerOptions {
   public boolean crossModuleMethodMotion;
 
   /** Inlines trivial getters */
-  public boolean inlineGetters;
+  boolean inlineGetters;
 
   /** Inlines variables */
   public boolean inlineVariables;
@@ -789,7 +789,7 @@ public class CompilerOptions {
   List<String> forceLibraryInjection = ImmutableList.of();
 
   /** Runtime libraries to never inject. */
-  Set<String> preventLibraryInjection = ImmutableSet.of();
+  boolean preventLibraryInjection = false;
 
 
   //--------------------------------
@@ -813,6 +813,9 @@ public class CompilerOptions {
 
   /** The string to use as the separator for printInputDelimiter */
   public String inputDelimiter = "// Input %num%";
+
+  /** Whether to write keyword properties as foo['class'] instead of foo.class; needed for IE8. */
+  boolean quoteKeywordProperties;
 
   boolean preferSingleQuotes;
 
@@ -1532,6 +1535,9 @@ public class CompilerOptions {
 
   public void setJ2clPass(boolean j2clPass) {
     this.j2clPass = j2clPass;
+    if (j2clPass) {
+      setWarningLevel(DiagnosticGroup.forType(SourceFile.DUPLICATE_ZIP_CONTENTS), CheckLevel.OFF);
+    }
   }
 
   public void setCodingConvention(CodingConvention codingConvention) {
@@ -1668,6 +1674,9 @@ public class CompilerOptions {
    */
   public void setLanguageOut(LanguageMode languageOut) {
     this.languageOut = languageOut;
+    if (languageOut == LanguageMode.ECMASCRIPT3) {
+      this.quoteKeywordProperties = true;
+    }
   }
 
   public LanguageMode getLanguageOut() {
@@ -1930,9 +1939,6 @@ public class CompilerOptions {
   public void setCrossModuleMethodMotion(boolean crossModuleMethodMotion) {
     this.crossModuleMethodMotion = crossModuleMethodMotion;
   }
-
-  // No-op: will delete in a follow-up CL.
-  public void setInlineGetters(boolean inlineGetters) {}
 
   public void setInlineVariables(boolean inlineVariables) {
     this.inlineVariables = inlineVariables;
@@ -2278,6 +2284,10 @@ public class CompilerOptions {
     this.inputDelimiter = inputDelimiter;
   }
 
+  public void setQuoteKeywordProperties(boolean quoteKeywordProperties) {
+    this.quoteKeywordProperties = quoteKeywordProperties;
+  }
+
   public void setErrorFormat(ErrorFormat errorFormat) {
     this.errorFormat = errorFormat;
   }
@@ -2372,8 +2382,8 @@ public class CompilerOptions {
   /**
    * Sets the set of libraries to never inject, even if required.
    */
-  public void setPreventLibraryInjection(Iterable<String> libraries) {
-    this.preventLibraryInjection = ImmutableSet.copyOf(libraries);
+  public void setPreventLibraryInjection(boolean preventLibraryInjection) {
+    this.preventLibraryInjection = preventLibraryInjection;
   }
 
   /**

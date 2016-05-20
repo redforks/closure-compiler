@@ -28,6 +28,7 @@ import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckMissingSemicolon;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
+import com.google.javascript.jscomp.lint.CheckPrimitiveAsObject;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
 import com.google.javascript.jscomp.lint.CheckUnusedLabels;
@@ -46,8 +47,8 @@ public class DiagnosticGroups {
   static final DiagnosticType UNUSED =
       DiagnosticType.warning("JSC_UNUSED", "{0}");
 
-  public static final Set<String> wildcardExcludedGroups =
-      ImmutableSet.of("reportUnknownTypes");
+  public static final Set<String> wildcardExcludedGroups = ImmutableSet.of(
+      "reportUnknownTypes", "analyzerChecks", "oldReportUnknownTypes");
 
   public DiagnosticGroups() {}
 
@@ -320,9 +321,14 @@ public class DiagnosticGroups {
           CheckEventfulObjectDisposal.OVERWRITE_PRIVATE_EVENTFUL_OBJECT,
           CheckEventfulObjectDisposal.UNLISTEN_WITH_ANONBOUND);
 
+  public static final DiagnosticGroup OLD_REPORT_UNKNOWN_TYPES =
+      DiagnosticGroups.registerGroup("oldReportUnknownTypes", // undocumented
+          TypeCheck.UNKNOWN_EXPR_TYPE);
+
   public static final DiagnosticGroup REPORT_UNKNOWN_TYPES =
       DiagnosticGroups.registerGroup("reportUnknownTypes",
-          TypeCheck.UNKNOWN_EXPR_TYPE);
+          TypeCheck.UNKNOWN_EXPR_TYPE,
+          NewTypeInference.UNKNOWN_EXPR_TYPE);
 
   public static final DiagnosticGroup CHECK_VARIABLES =
       DiagnosticGroups.registerGroup("checkVars",
@@ -473,46 +479,43 @@ public class DiagnosticGroups {
   public static final DiagnosticGroup LINT_CHECKS =
       DiagnosticGroups.registerGroup(
           "lintChecks", // undocumented
-          CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
-          CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
-          CheckEnums.DUPLICATE_ENUM_VALUE,
-          CheckEnums.ENUM_PROP_NOT_CONSTANT,
-          CheckEnums.SHORTHAND_ASSIGNMENT_IN_ENUM,
-          // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
-          // checkTypes DiagnosticGroup
-          CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
-          CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
-          CheckJSDocStyle.MISSING_PARAMETER_JSDOC,
-          CheckJSDocStyle.MISSING_JSDOC,
-          CheckJSDocStyle.MISSING_RETURN_JSDOC,
-          CheckJSDocStyle.EXTERNS_FILES_SHOULD_BE_ANNOTATED,
-          CheckJSDocStyle.INCORRECT_PARAM_NAME,
-          CheckJSDocStyle.INVALID_SUPPRESS,
-          CheckJSDocStyle.MIXED_PARAM_JSDOC_STYLES,
-          CheckJSDocStyle.MUST_BE_PRIVATE,
-          CheckJSDocStyle.MUST_HAVE_TRAILING_UNDERSCORE,
-          CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL,
-          CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
-          CheckJSDocStyle.WRONG_NUMBER_OF_PARAMS,
-          CheckMissingSemicolon.MISSING_SEMICOLON,
-          CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
-          CheckRequiresAndProvidesSorted.REQUIRES_NOT_SORTED,
-          CheckRequiresAndProvidesSorted.PROVIDES_NOT_SORTED,
-          CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES,
-          // TODO(tbreisacher): Move MISSING_REQUIRE_CALL_WARNING to missingRequire group
-          // as soon as projects that enable that group are fixed.
-          CheckRequiresForConstructors.MISSING_REQUIRE_CALL_WARNING,
-          CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
-          CheckUnusedLabels.UNUSED_LABEL,
-          CheckUselessBlocks.USELESS_BLOCK,
-          ClosureCheckModule.LET_GOOG_REQUIRE,
-          ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME,
-          ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME,
-          ClosureRewriteModule.USELESS_USE_STRICT_DIRECTIVE,
-          RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
-          RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,
-          RhinoErrorReporter.TOO_MANY_TEMPLATE_PARAMS,
-          VariableReferenceCheck.UNUSED_LOCAL_ASSIGNMENT);
+          CheckJSDocStyle.ALL_DIAGNOSTICS,
+          new DiagnosticGroup(
+              CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
+              CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
+              CheckEnums.DUPLICATE_ENUM_VALUE,
+              CheckEnums.ENUM_PROP_NOT_CONSTANT,
+              CheckEnums.SHORTHAND_ASSIGNMENT_IN_ENUM,
+              // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
+              // checkTypes DiagnosticGroup
+              CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
+              CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
+
+              // TODO(tbreisacher): Make these two errors once all Google projects are fixed.
+              ClosureCheckModule.AT_EXPORT_IN_NON_LEGACY_GOOG_MODULE,
+              ClosureCheckModule.AT_EXPORT_IN_GOOG_MODULE,
+
+              CheckMissingSemicolon.MISSING_SEMICOLON,
+              CheckPrimitiveAsObject.NEW_PRIMITIVE_OBJECT,
+              CheckPrimitiveAsObject.PRIMITIVE_OBJECT_DECLARATION,
+              CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
+              CheckRequiresAndProvidesSorted.REQUIRES_NOT_SORTED,
+              CheckRequiresAndProvidesSorted.PROVIDES_NOT_SORTED,
+              CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES,
+              // TODO(tbreisacher): Move MISSING_REQUIRE_CALL_WARNING to missingRequire group
+              // as soon as projects that enable that group are fixed.
+              CheckRequiresForConstructors.MISSING_REQUIRE_CALL_WARNING,
+              CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
+              CheckUnusedLabels.UNUSED_LABEL,
+              CheckUselessBlocks.USELESS_BLOCK,
+              ClosureCheckModule.LET_GOOG_REQUIRE,
+              ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME,
+              ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME,
+              ClosureRewriteModule.USELESS_USE_STRICT_DIRECTIVE,
+              RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
+              RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,
+              RhinoErrorReporter.TOO_MANY_TEMPLATE_PARAMS,
+              VariableReferenceCheck.UNUSED_LOCAL_ASSIGNMENT));
 
   // Similar to the lintChecks group above, but includes things that cannot be done on a single
   // file at a time, for example because they require typechecking.

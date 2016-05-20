@@ -36,8 +36,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * <p>Base class for testing JS compiler classes that change
@@ -495,6 +497,14 @@ public abstract class CompilerTestCase extends TestCase {
   public void testError(String js, DiagnosticType error) {
     assertNotNull(error);
     test(js, null, error, null);
+  }
+
+  /**
+   * Verifies that the compiler generates the given error and description for the given input.
+   */
+  public void testError(String js, DiagnosticType error, String description) {
+    assertNotNull(error);
+    test(js, null, error, null, description);
   }
 
   /**
@@ -1128,7 +1138,7 @@ public abstract class CompilerTestCase extends TestCase {
     assert_().withFailureMessage("Unexpected parse error(s): " + errorMsg).that(root).isNotNull();
     if (!expectParseWarningsThisTest) {
       assertEquals(
-          "Unexpected parse warnings(s): " + LINE_JOINER.join(compiler.getWarnings()),
+          "Unexpected parse warning(s): " + LINE_JOINER.join(compiler.getWarnings()),
           0,
           compiler.getWarnings().length);
     } else {
@@ -1160,7 +1170,7 @@ public abstract class CompilerTestCase extends TestCase {
 
         if (rewriteClosureCode && i == 0) {
           new ClosureRewriteClass(compiler).process(null, mainRoot);
-          new ClosureRewriteModule(compiler).process(null, mainRoot);
+          new ClosureRewriteModule(compiler, null, null).process(null, mainRoot);
           new ScopedAliases(compiler, null, CompilerOptions.NULL_ALIAS_TRANSFORMATION_HANDLER)
               .process(null, mainRoot);
           hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
@@ -1499,7 +1509,7 @@ public abstract class CompilerTestCase extends TestCase {
 
     if (rewriteClosureCode) {
       new ClosureRewriteClass(compiler).process(externsRoot, mainRoot);
-      new ClosureRewriteModule(compiler).process(externsRoot, mainRoot);
+      new ClosureRewriteModule(compiler, null, null).process(externsRoot, mainRoot);
       new ScopedAliases(compiler, null, CompilerOptions.NULL_ALIAS_TRANSFORMATION_HANDLER)
           .process(externsRoot, mainRoot);
     }
@@ -1562,10 +1572,11 @@ public abstract class CompilerTestCase extends TestCase {
           externs.hasOneChild(), "Compare as tree only works when output has a single script.");
       externs = externs.getFirstChild();
       String explanation = expected.checkTreeEqualsIncludingJsDoc(externs);
-      assertNull(
-          "\nExpected: " + compiler.toSource(expected) +
-          "\nResult:   " + compiler.toSource(externs) +
-          "\n" + explanation, explanation);
+      assertNull(""
+          + "\nExpected: " + compiler.toSource(expected)
+          + "\nResult:   " + compiler.toSource(externs)
+          + "\n" + explanation,
+          explanation);
     } else {
       String externsCode = compiler.toSource(externs);
       String expectedCode = compiler.toSource(expected);
@@ -1649,7 +1660,7 @@ public abstract class CompilerTestCase extends TestCase {
     JSModule[] modules = new JSModule[inputs.length];
     for (int i = 0; i < inputs.length; i++) {
       JSModule module = modules[i] = new JSModule("m" + i);
-      module.add(SourceFile.fromCode("i" + i, inputs[i]));
+      module.add(SourceFile.fromCode("i" + i + ".js", inputs[i]));
     }
     return modules;
   }
@@ -1683,5 +1694,14 @@ public abstract class CompilerTestCase extends TestCase {
         },
         Predicates.<Node>alwaysTrue());
     return matches;
+  }
+
+  /** A Compiler that records requested runtime libraries, rather than injecting. */
+  protected static class NoninjectingCompiler extends Compiler {
+    protected final Set<String> injected = new HashSet<>();
+    @Override Node ensureLibraryInjected(String library, boolean force) {
+      injected.add(library);
+      return null;
+    }
   }
 }

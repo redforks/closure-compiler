@@ -29,9 +29,11 @@ import static com.google.javascript.jscomp.lint.CheckJSDocStyle.OPTIONAL_PARAM_N
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.WRONG_NUMBER_OF_PARAMS;
 
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CodingConvention;
 import com.google.javascript.jscomp.Compiler;
+import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CompilerTestCase;
@@ -57,6 +59,13 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
     return new CheckJSDocStyle(compiler);
+  }
+
+  @Override
+  protected CompilerOptions getOptions(CompilerOptions options) {
+    super.getOptions(options);
+    options.setWarningLevel(CheckJSDocStyle.ALL_DIAGNOSTICS, CheckLevel.WARNING);
+    return options;
   }
 
   protected CodingConvention getCodingConvention() {
@@ -121,6 +130,14 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
             " * @return {function(Object): boolean}",
             " */",
             "var haskellStyleEquals = a => b => a == b;"));
+  }
+
+  public void testGetterSetterMissingJsDoc() {
+    testWarning("class Foo { get twentyone() { return 21; } }", MISSING_JSDOC);
+    testWarning("class Foo { set someString(s) { this.someString_ = s; } }", MISSING_JSDOC);
+
+    testSame("class Foo { /** @return {number} */ get twentyone() { return 21; } }");
+    testSame("class Foo { /** @param {string} s */ set someString(s) { this.someString_ = s; } }");
   }
 
   public void testMissingJsDoc() {
@@ -495,6 +512,15 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
             "  set foo(val) { }",
             "}"),
         MUST_HAVE_TRAILING_UNDERSCORE);
+  }
+
+  public void testMissingPrivate_dontWarnOnObjectLiteral() {
+    testSame(
+        LINE_JOINER.join(
+            "var obj = {",
+            "  /** @return {number} */",
+            "  foo_() { return 0; }",
+            "}"));
   }
 
   public void testOptionalArgs() {

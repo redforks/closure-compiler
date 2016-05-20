@@ -16,7 +16,9 @@
 
 // GENERATED FILE. DO NOT EDIT. REBUILD WITH build_runtime.sh.
 
-'use strict';/**
+'use strict';"require base";
+"declare window global";
+/**
  @param {!Object} maybeGlobal
  @return {!Object}
  @suppress {undefinedVars}
@@ -121,7 +123,7 @@ $jscomp.inherits = function(childCtor, parentCtor) {
     }
   }
 };
-/** */ $jscomp.array = $jscomp.array || {};
+$jscomp.array = $jscomp.array || {};
 /**
  @private
  @return {{done:boolean}}
@@ -376,7 +378,7 @@ $jscomp.array.findIndex = function(callback, opt_thisArg) {
 $jscomp.array.findIndex$install = function() {
   $jscomp.array.installHelper_("findIndex", $jscomp.array.findIndex);
 };
-/** */ /**
+/**
  @struct
  @constructor
  @implements {Iterable<!Array<(KEY|VALUE)>>}
@@ -431,7 +433,7 @@ $jscomp.Map.checkBrowserConformance_ = function() {
  @suppress {checkTypes}
  */
 $jscomp.Map.createHead_ = function() {
-  /** @const */ var head = /** */ {};
+  /** @const */ var head = {};
   head.previous = head.next = head.head = head;
   return head;
 };
@@ -500,7 +502,7 @@ $jscomp.Map.prototype.delete = function(key) {
   }
   return false;
 };
-/** */ $jscomp.Map.prototype.clear = function() {
+$jscomp.Map.prototype.clear = function() {
   this.data_ = {};
   this.head_ = this.head_.previous = $jscomp.Map.createHead_();
   this.size = 0;
@@ -514,7 +516,7 @@ $jscomp.Map.prototype.has = function(key) {
 };
 /**
  @param {*} key
- @return {(VALUE|undefined)}
+ @return {VALUE}
  */
 $jscomp.Map.prototype.get = function(key) {
   /** @const */ var $jscomp$destructuring$var2 = this.maybeGetEntry_(key);
@@ -627,7 +629,7 @@ $jscomp.Map.Entry_ = function() {
 /** @type {KEY} */ $jscomp.Map.Entry_.prototype.key;
 /** @type {VALUE} */ $jscomp.Map.Entry_.prototype.value;
 /** @define {boolean} */ $jscomp.Map.ASSUME_NO_NATIVE = false;
-/** */ $jscomp.Map$install = function() {
+$jscomp.Map$install = function() {
   $jscomp.initSymbol();
   $jscomp.initSymbolIterator();
   if (!$jscomp.Map.ASSUME_NO_NATIVE && $jscomp.Map.checkBrowserConformance_()) {
@@ -642,7 +644,7 @@ $jscomp.Map.Entry_ = function() {
   $jscomp.Map$install = function() {
   };
 };
-/** */ $jscomp.math = $jscomp.math || {};
+$jscomp.math = $jscomp.math || {};
 /**
  @param {*} x
  @return {number}
@@ -874,7 +876,7 @@ $jscomp.math.cbrt = function(x) {
   /** @const */ var y = Math.pow(Math.abs(x), 1 / 3);
   return x < 0 ? -y : y;
 };
-/** */ $jscomp.number = $jscomp.number || {};
+$jscomp.number = $jscomp.number || {};
 /**
  @param {*} x
  @return {boolean}
@@ -912,7 +914,7 @@ $jscomp.number.isSafeInteger = function(x) {
 /** @const @type {number} */ $jscomp.number.EPSILON = Math.pow(2, -52);
 /** @const @type {number} */ $jscomp.number.MAX_SAFE_INTEGER = 9007199254740991;
 /** @const @type {number} */ $jscomp.number.MIN_SAFE_INTEGER = -9007199254740991;
-/** */ $jscomp.object = $jscomp.object || {};
+$jscomp.object = $jscomp.object || {};
 /**
  @param {!Object} target
  @param {...?Object} sources
@@ -949,7 +951,7 @@ $jscomp.object.is = function(left, right) {
     return left !== left && right !== right;
   }
 };
-/** */ /**
+/**
  @struct
  @constructor
  @implements {Iterable<VALUE>}
@@ -1009,7 +1011,7 @@ $jscomp.Set.prototype.delete = function(value) {
   this.size = this.map_.size;
   return result;
 };
-/** */ $jscomp.Set.prototype.clear = function() {
+$jscomp.Set.prototype.clear = function() {
   this.map_.clear();
   this.size = 0;
 };
@@ -1044,7 +1046,7 @@ $jscomp.Set.prototype.forEach = function(callback, opt_thisArg) {
   });
 };
 /** @define {boolean} */ $jscomp.Set.ASSUME_NO_NATIVE = false;
-/** */ $jscomp.Set$install = function() {
+$jscomp.Set$install = function() {
   if (!$jscomp.Set.ASSUME_NO_NATIVE && $jscomp.Set.checkBrowserConformance_()) {
     $jscomp.Set = $jscomp.global["Set"];
   } else {
@@ -1056,7 +1058,7 @@ $jscomp.Set.prototype.forEach = function(callback, opt_thisArg) {
   $jscomp.Set$install = function() {
   };
 };
-/** */ $jscomp.string = $jscomp.string || {};
+$jscomp.string = $jscomp.string || {};
 /**
  @private
  @param {*} str

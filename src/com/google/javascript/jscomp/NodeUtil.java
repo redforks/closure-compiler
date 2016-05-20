@@ -31,6 +31,7 @@ import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
 import com.google.javascript.rhino.TokenUtil;
+import com.google.javascript.rhino.dtoa.DToA;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
@@ -209,7 +210,7 @@ public final class NodeUtil {
         break;
 
       case Token.NUMBER:
-        return getStringValue(n.getDouble());
+        return DToA.numberToString(n.getDouble());
 
       case Token.FALSE:
         return "false";
@@ -237,17 +238,6 @@ public final class NodeUtil {
         return "[object Object]";
     }
     return null;
-  }
-
-  static String getStringValue(double value) {
-    long longValue = (long) value;
-
-    // Return "1" instead of "1.0"
-    if (longValue == value) {
-      return Long.toString(longValue);
-    } else {
-      return Double.toString(value);
-    }
   }
 
   /**
@@ -657,7 +647,7 @@ public final class NodeUtil {
         return true;
 
       case Token.REGEXP:
-        // Return true only if all children are const.
+        // Return true only if all descendants are const.
         for (Node child = n.getFirstChild(); child != null;
              child = child.getNext()) {
           if (!isLiteralValue(child, includeFunctions)) {
@@ -1760,18 +1750,11 @@ public final class NodeUtil {
     }
   }
 
-  /**
-   * @return Whether the results is possibly a string.
-   */
-  static boolean mayBeObect(Node n) {
-    return mayBeObect(getKnownValueType(n));
+  static boolean mayBeObject(Node n) {
+    return mayBeObject(getKnownValueType(n));
   }
 
-  /**
-   * @return Whether the results is possibly a string, this includes Objects which may implicitly
-   * be converted to a string.
-   */
-  static boolean mayBeObect(ValueType type) {
+  static boolean mayBeObject(ValueType type) {
     switch (type) {
       case BOOLEAN:
       case NULL:
@@ -1955,7 +1938,7 @@ public final class NodeUtil {
   /**
    * Finds the class containing the given node.
    */
-  static Node getEnclosingClass(Node n) {
+  public static Node getEnclosingClass(Node n) {
     return getEnclosingType(n, Token.CLASS);
   }
 
@@ -2155,14 +2138,6 @@ public final class NodeUtil {
   static boolean isExprCall(Node n) {
     return n.isExprResult()
         && n.getFirstChild().isCall();
-  }
-
-  static boolean isIIFE(Node n) {
-    Node parent = n.getParent();
-    return n.isFunction()
-        && parent.isCall()
-        && parent.getFirstChild() == n
-        && parent.getParent().isExprResult();
   }
 
   static boolean isVanillaFunction(Node n) {
@@ -2429,7 +2404,10 @@ public final class NodeUtil {
     return n.getSourceFileName() != null && n.getSourceFileName().startsWith(" [synthetic:");
   }
 
-  /** Safely remove children while maintaining a valid node structure. */
+  /**
+   * Safely remove children while maintaining a valid node structure.
+   * In some cases, this is done by removing the parent from the AST as well.
+   */
   public static void removeChild(Node parent, Node node) {
     if (isTryFinallyNode(parent, node)) {
       if (NodeUtil.hasCatchHandler(getCatchBlock(parent))) {
@@ -2458,7 +2436,7 @@ public final class NodeUtil {
         || isSwitchCase(node)) {
       // A statement in a block can simply be removed.
       parent.removeChild(node);
-    } else if (parent.isVar()) {
+    } else if (parent.isVar() || parent.isExprResult()) {
       if (parent.hasMoreThanOneChild()) {
         parent.removeChild(node);
       } else {
@@ -2740,9 +2718,9 @@ public final class NodeUtil {
    * @return True if n is an L-value.
    */
   public static boolean isLValue(Node n) {
-    Preconditions.checkArgument(
-        n.isName() || n.isGetProp() || n.isGetElem() || n.isStringKey(),
-        n);
+    if (!n.isName() && !n.isGetProp() && !n.isGetElem() && !n.isStringKey()) {
+      return false;
+    }
     Node parent = n.getParent();
     if (parent == null) {
       return false;
@@ -2941,7 +2919,7 @@ public final class NodeUtil {
   }
 
   /**
-   * @return true if n or any of its children are of the specified type
+   * @return true if n or any of its descendants are of the specified type.
    */
   static boolean containsType(Node node,
                               int type,
@@ -2950,7 +2928,7 @@ public final class NodeUtil {
   }
 
   /**
-   * @return true if n or any of its children are of the specified type
+   * @return true if n or any of its descendants are of the specified type.
    */
   public static boolean containsType(Node node, int type) {
     return containsType(node, type, Predicates.<Node>alwaysTrue());
@@ -3620,7 +3598,7 @@ public final class NodeUtil {
   }
 
   /**
-   * @return Whether the predicate is true for the node or any of its children.
+   * @return Whether the predicate is true for the node or any of its descendants.
    */
   public static boolean has(Node node,
                      Predicate<Node> pred,
@@ -3644,7 +3622,7 @@ public final class NodeUtil {
 
   /**
    * @return The number of times the the predicate is true for the node
-   * or any of its children.
+   * or any of its descendants.
    */
   public static int getCount(
       Node n, Predicate<Node> pred, Predicate<Node> traverseChildrenPred) {
@@ -3688,7 +3666,7 @@ public final class NodeUtil {
   }
 
   /**
-   * A post-order traversal, calling Visitor.visit for each child matching
+   * A post-order traversal, calling Visitor.visit for each descendant matching
    * the predicate.
    */
   public static void visitPostOrder(Node node,
@@ -4079,6 +4057,17 @@ public final class NodeUtil {
     Node parent = n.getParent();
     switch (parent.getType()) {
       case Token.ASSIGN:
+      case Token.ASSIGN_BITOR:
+      case Token.ASSIGN_BITXOR:
+      case Token.ASSIGN_BITAND:
+      case Token.ASSIGN_LSH:
+      case Token.ASSIGN_RSH:
+      case Token.ASSIGN_URSH:
+      case Token.ASSIGN_ADD:
+      case Token.ASSIGN_SUB:
+      case Token.ASSIGN_MUL:
+      case Token.ASSIGN_DIV:
+      case Token.ASSIGN_MOD:
         return n.getNext();
       case Token.VAR:
       case Token.LET:
@@ -4405,11 +4394,27 @@ public final class NodeUtil {
     return false;
   }
 
+  private static boolean isGoogModuleDeclareLegacyNamespaceCall(Node n) {
+    if (isExprCall(n)) {
+      Node target = n.getFirstFirstChild();
+      return (target.matchesQualifiedName("goog.module.declareLegacyNamespace"));
+    }
+    return false;
+  }
+
   /**
    * @return Whether the node is a goog.module file's SCRIPT node.
    */
-  static boolean isModuleFile(Node n) {
+  static boolean isGoogModuleFile(Node n) {
     return n.isScript() && n.hasChildren() && isGoogModuleCall(n.getFirstChild());
+  }
+
+  /**
+   * @return Whether the node is a SCRIPT node for a goog.module that has a
+   *     declareLegacyNamespace call.
+   */
+  static boolean isLegacyGoogModuleFile(Node n) {
+    return isGoogModuleFile(n) && isGoogModuleDeclareLegacyNamespaceCall(n.getSecondChild());
   }
 
 }

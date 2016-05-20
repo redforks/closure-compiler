@@ -56,7 +56,7 @@ Map.prototype.forEach;
 
 /**
  * @param {KEY} key
- * @return {VALUE|undefined}
+ * @return {VALUE}
  * @nosideeffects
  */
 Map.prototype.get;
@@ -119,7 +119,7 @@ WeakMap.prototype.delete;
 
 /**
  * @param {KEY} key
- * @return {VALUE|undefined}
+ * @return {VALUE}
  * @nosideeffects
  */
 WeakMap.prototype.get;
@@ -178,7 +178,7 @@ Set.prototype.delete;
 Set.prototype.entries;
 
 /**
- * @param {function(VALUE, VALUE, SET)} callback
+ * @param {function(this: THIS, VALUE, VALUE, SET)} callback
  * @param {THIS=} opt_thisArg
  * @this {SET}
  * @template SET,THIS
@@ -249,5 +249,3 @@ WeakSet.prototype.delete;
  * @nosideeffects
  */
 WeakSet.prototype.has;
-
-

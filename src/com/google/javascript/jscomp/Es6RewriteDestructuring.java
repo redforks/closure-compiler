@@ -166,7 +166,10 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
     } else if (parent.isAssign() && parent.getParent().isExprResult()) {
       rhs = parent.getLastChild();
       nodeToDetach = parent.getParent();
-    } else if (parent.isStringKey() || parent.isArrayPattern() || parent.isDefaultValue()) {
+    } else if (parent.isRest()
+        || parent.isStringKey()
+        || parent.isArrayPattern()
+        || parent.isDefaultValue()) {
       // Nested object pattern; do nothing. We will visit it after rewriting the parent.
       return;
     } else if (NodeUtil.isEnhancedFor(parent) || NodeUtil.isEnhancedFor(parent.getParent())) {
@@ -275,7 +278,10 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
       rhs = arrayPattern.getNext();
       nodeToDetach = parent.getParent();
       Preconditions.checkState(nodeToDetach.isExprResult());
-    } else if (parent.isArrayPattern() || parent.isDefaultValue() || parent.isStringKey()) {
+    } else if (parent.isArrayPattern()
+        || parent.isRest()
+        || parent.isDefaultValue()
+        || parent.isStringKey()) {
       // This is a nested array pattern. Don't do anything now; we'll visit it
       // after visiting the parent.
       return;
@@ -299,6 +305,7 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
         makeIterator(compiler, rhs.detachFromParent()));
     tempDecl.useSourceInfoIfMissingFromForTree(arrayPattern);
     nodeToDetach.getParent().addChildBefore(tempDecl, nodeToDetach);
+    boolean needsRuntime = false;
 
     for (Node child = arrayPattern.getFirstChild(), next; child != null; child = next) {
       next = child.getNext();
@@ -338,6 +345,7 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
             IR.call(
                 NodeUtil.newQName(compiler, "$jscomp.arrayFromIterator"),
                 IR.name(tempVarName));
+        needsRuntime = true;
       } else {
         // LHS is just a name (or a nested pattern).
         //   var [x] = rhs;
@@ -364,6 +372,10 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
       visit(t, newLHS, newLHS.getParent());
     }
     nodeToDetach.detachFromParent();
+
+    if (needsRuntime) {
+      compiler.ensureLibraryInjected("es6_runtime", false);
+    }
     compiler.reportCodeChange();
   }
 

@@ -21,6 +21,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -131,6 +132,10 @@ public class Compiler extends AbstractCompiler {
   // the library, so code can be inserted after.
   private final Map<String, Node> injectedLibraries = new LinkedHashMap<>();
 
+  // Node of the final injected library. Future libraries will be injected
+  // after this node.
+  private Node lastInjectedLibrary;
+
   // Parse tree root nodes
   Node externsRoot;
   Node jsRoot;
@@ -206,12 +211,8 @@ public class Compiler extends AbstractCompiler {
   // For use by the new type inference
   private GlobalTypeInfo symbolTable;
 
-  // The oldErrorReporter exists so we can get errors from the JSTypeRegistry.
-  private final com.google.javascript.rhino.ErrorReporter oldErrorReporter =
-      RhinoErrorReporter.forOldRhino(this);
-
-  // This error reporter gets the messages from the current Rhino parser.
-  private final ErrorReporter defaultErrorReporter =
+  // This error reporter gets the messages from the current Rhino parser or TypeRegistry.
+  private final ErrorReporter oldErrorReporter =
       RhinoErrorReporter.forOldRhino(this);
 
   /** Error strings used for reporting JSErrors */
@@ -352,7 +353,15 @@ public class Compiler extends AbstractCompiler {
     if (options.getNewTypeInference()) {
       options.checkTypes = true;
       if (!options.reportOTIErrorsUnderNTI) {
-        options.setWarningLevel(DiagnosticGroups.OLD_CHECK_TYPES, CheckLevel.OFF);
+        options.setWarningLevel(
+            DiagnosticGroups.OLD_CHECK_TYPES,
+            CheckLevel.OFF);
+        options.setWarningLevel(
+            DiagnosticGroups.OLD_REPORT_UNKNOWN_TYPES,
+            CheckLevel.OFF);
+        options.setWarningLevel(
+            FunctionTypeBuilder.ALL_DIAGNOSTICS,
+            CheckLevel.OFF);
       }
       options.setWarningLevel(
           DiagnosticGroup.forType(RhinoErrorReporter.TYPE_PARSE_ERROR),
@@ -1303,8 +1312,10 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  void setSymbolTable(GlobalTypeInfo symbolTable) {
-    this.symbolTable = symbolTable;
+  void setSymbolTable(CompilerPass symbolTable) {
+    Preconditions.checkArgument(
+        symbolTable == null || symbolTable instanceof GlobalTypeInfo);
+    this.symbolTable = (GlobalTypeInfo) symbolTable;
   }
 
   @Override
@@ -1429,7 +1440,7 @@ public class Compiler extends AbstractCompiler {
           SourceInformationAnnotator sia =
               new SourceInformationAnnotator(
                   input.getName(), options.devMode != DevMode.OFF);
-          NodeTraversal.traverse(this, n, sia);
+          NodeTraversal.traverseEs6(this, n, sia);
         }
 
         jsRoot.addChildToBack(n);
@@ -1571,7 +1582,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   void processEs6Modules(List<CompilerInput> inputsToProcess, boolean forceRewrite) {
-    ES6ModuleLoader loader = new ES6ModuleLoader(options.moduleRoots, inputs);
+    ES6ModuleLoader loader = new ES6ModuleLoader(this, options.moduleRoots, inputs);
     for (CompilerInput input : inputsToProcess) {
       input.setCompiler(this);
       Node root = input.getAstRoot(this);
@@ -1588,7 +1599,7 @@ public class Compiler extends AbstractCompiler {
    * on the way.
    */
   void processAMDAndCommonJSModules() {
-    ES6ModuleLoader loader = new ES6ModuleLoader(options.moduleRoots, inputs);
+    ES6ModuleLoader loader = new ES6ModuleLoader(this, options.moduleRoots, inputs);
     for (CompilerInput input : inputs) {
       input.setCompiler(this);
       Node root = input.getAstRoot(this);
@@ -1656,7 +1667,7 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   ErrorReporter getDefaultErrorReporter() {
-    return defaultErrorReporter;
+    return oldErrorReporter;
   }
 
   //------------------------------------------------------------------------
@@ -2574,46 +2585,71 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  Node ensureLibraryInjected(String resourceName,
-      boolean normalizeAndUniquifyNames) {
-    if (injectedLibraries.containsKey(resourceName)
-        || options.preventLibraryInjection.contains(resourceName)) {
-      return null;
+  Node ensureLibraryInjected(String resourceName, boolean force) {
+    boolean doNotInject =
+        !force && (options.skipNonTranspilationPasses || options.preventLibraryInjection);
+    if (injectedLibraries.containsKey(resourceName) || doNotInject) {
+      return lastInjectedLibrary;
     }
 
-    // All libraries depend on js/base.js
-    boolean isBase = "base".equals(resourceName);
-    if (!isBase) {
-      ensureLibraryInjected("base", true);
-    }
-
-    Node firstChild = loadLibraryCode(resourceName, normalizeAndUniquifyNames)
-        .removeChildren();
-    Node lastChild = firstChild.getLastSibling();
-
-    Node parent = getNodeForCodeInsertion(null);
-    if (isBase || options.preventLibraryInjection.contains("base")) {
-      parent.addChildrenToFront(firstChild);
-    } else {
-      parent.addChildrenAfter(
-          firstChild, injectedLibraries.get("base"));
-    }
-    reportCodeChange();
-
-    injectedLibraries.put(resourceName, lastChild);
-    return lastChild;
-  }
-
-  /** Load a library as a resource */
-  @VisibleForTesting
-  Node loadLibraryCode(String resourceName, boolean normalizeAndUniquifyNames) {
+    // Load/parse the code.
     String originalCode = ResourceLoader.loadTextResource(
         Compiler.class, "js/" + resourceName + ".js");
     Node ast = parseSyntheticCode(originalCode);
-    if (normalizeAndUniquifyNames) {
+
+    // Look for string literals of the form 'require foo bar' or 'externs baz' or 'normalize'.
+    // As we process each one, remove it from its parent.
+    for (Node node = ast.getFirstChild();
+         node != null && node.isExprResult() && node.getFirstChild().isString();
+         node = ast.getFirstChild()) {
+      String directive = node.getFirstChild().getString();
+      List<String> words = Splitter.on(' ').splitToList(directive);
+      switch (words.get(0)) {
+        case "use":
+          // 'use strict' is ignored (and deleted).
+          break;
+        case "require":
+          // 'require lib1 lib2'; pulls in the named libraries before this one.
+          for (String dependency : words.subList(1, words.size())) {
+            ensureLibraryInjected(dependency, force);
+          }
+          break;
+        case "declare":
+          // 'declare name1 name2'; adds the names to the externs (with no type information).
+          // Note that we could simply add the entire externs library, but that leads to
+          // potentially-surprising behavior when the externs that are present depend on
+          // whether or not a polyfill is used.
+          for (String extern : words.subList(1, words.size())) {
+            getSynthesizedExternsInputAtEnd()
+                .getAstRoot(this)
+                .addChildToBack(IR.var(IR.name(extern)));
+          }
+          break;
+        default:
+          throw new RuntimeException("Bad directive: " + directive);
+      }
+      ast.removeChild(node);
+    }
+
+    // If we've already started optimizations, then we need to normalize this.
+    if (getLifeCycleStage().isNormalized()) {
       Normalize.normalizeSyntheticCode(this, ast, "jscomp_" + resourceName + "_");
     }
-    return ast;
+
+    // Insert the code immediately after the last-inserted runtime library.
+    Node firstChild = ast.removeChildren();
+    Node lastChild = firstChild.getLastSibling();
+    Node parent = getNodeForCodeInsertion(null);
+    if (lastInjectedLibrary == null) {
+      parent.addChildrenToFront(firstChild);
+    } else {
+      parent.addChildrenAfter(firstChild, lastInjectedLibrary);
+    }
+    lastInjectedLibrary = lastChild;
+    injectedLibraries.put(resourceName, lastChild);
+
+    reportCodeChange();
+    return lastChild;
   }
 
   /** Returns the compiler version baked into the jar. */

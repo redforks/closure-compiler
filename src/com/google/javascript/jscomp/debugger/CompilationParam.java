@@ -304,14 +304,6 @@ enum CompilationParam {
     }
   },
 
-  /** Inlines trivial getters */
-  INLINE_GETTERS {
-    @Override
-    void apply(CompilerOptions options, boolean value) {
-      options.setInlineGetters(value);
-    }
-  },
-
   /** Inlines variables */
   INLINE_VARIABLES {
     @Override
@@ -561,7 +553,7 @@ enum CompilationParam {
   //--------------------------------
 
   /** Processes goog.provide() and goog.require() calls */
-  CLOSURE_PASS {
+  CLOSURE_PASS(true) {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setClosurePass(value);

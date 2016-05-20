@@ -39,6 +39,7 @@ import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckMissingSemicolon;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
+import com.google.javascript.jscomp.lint.CheckPrimitiveAsObject;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
 import com.google.javascript.jscomp.lint.CheckUnusedLabels;
@@ -101,6 +102,12 @@ public final class DefaultPassConfig extends PassConfig {
    * preprocessing.
    */
   private PreprocessorSymbolTable preprocessorSymbolTable = null;
+
+  /**
+   * Global state necessary for doing hotswap recompilation of files with references to
+   * processed goog.modules.
+   */
+  private ClosureRewriteModule.GlobalRewriteState moduleRewriteState = null;
 
   /** Names exported by goog.exportSymbol. */
   private Set<String> exportedNames = null;
@@ -177,6 +184,12 @@ public final class DefaultPassConfig extends PassConfig {
           preprocessorSymbolTable.getRootNode() != root) {
         preprocessorSymbolTable = new PreprocessorSymbolTable(root);
       }
+    }
+  }
+
+  void maybeInitializeModuleRewriteState() {
+    if (options.ideMode && this.moduleRewriteState == null) {
+      this.moduleRewriteState = new ClosureRewriteModule.GlobalRewriteState();
     }
   }
 
@@ -306,6 +319,7 @@ public final class DefaultPassConfig extends PassConfig {
 
     if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
       checks.add(es6ExternsCheck);
+      checks.add(es6SuperCheck);
       TranspilationPasses.addEs6EarlyPasses(checks);
     }
 
@@ -324,9 +338,8 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(convertToTypedES6);
     }
 
-    if ((options.getLanguageIn().isEs6OrHigher() && !options.skipNonTranspilationPasses)
-        || !options.forceLibraryInjection.isEmpty()) {
-      checks.add(es6RuntimeLibrary);
+    if (!options.forceLibraryInjection.isEmpty()) {
+      checks.add(injectRuntimeLibraries);
     }
 
     if (options.skipNonTranspilationPasses) {
@@ -632,6 +645,7 @@ public final class DefaultPassConfig extends PassConfig {
     }
 
     passes.addAll(getMainOptimizationLoop());
+    passes.add(createEmptyPass("afterMainOptimizations"));
 
     passes.add(createEmptyPass("beforeModuleMotion"));
 
@@ -887,7 +901,9 @@ public final class DefaultPassConfig extends PassConfig {
     }
 
     if (options.j2clPass) {
-      passes.add(j2clEmptyClinitPrunerPass);
+      passes.add(j2clClinitPrunerPass);
+      passes.add(j2clConstantHoisterPass);
+      passes.add(j2clEqualitySameRewriterPass);
     }
 
     assertAllLoopablePasses(passes);
@@ -1003,9 +1019,9 @@ public final class DefaultPassConfig extends PassConfig {
         TranspilationPasses.es6ConvertSuper,
         "The Dart super accessors pass must run before ES6->ES3 super lowering.");
 
-    if (checks.indexOf(closureGoogScopeAliases) != -1) {
+    if (checks.contains(closureGoogScopeAliases)) {
       Preconditions.checkState(
-          checks.indexOf(checkVariableReferences) != -1,
+          checks.contains(checkVariableReferences),
           "goog.scope processing requires variable checking");
     }
     assertPassOrder(
@@ -1201,11 +1217,11 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
-  private final PassFactory es6RuntimeLibrary =
-      new PassFactory("Es6RuntimeLibrary", true) {
+  private final PassFactory injectRuntimeLibraries =
+      new PassFactory("InjectRuntimeLibraries", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
-      return new InjectEs6RuntimeLibrary(compiler);
+      return new InjectRuntimeLibraries(compiler);
     }
   };
 
@@ -1214,6 +1230,14 @@ public final class DefaultPassConfig extends PassConfig {
         @Override
         protected CompilerPass create(final AbstractCompiler compiler) {
           return new Es6ExternsCheck(compiler);
+        }
+      };
+
+  private final PassFactory es6SuperCheck =
+      new PassFactory("es6SuperCheck", true) {
+        @Override
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          return new Es6SuperCheck(compiler);
         }
       };
 
@@ -1295,11 +1319,13 @@ public final class DefaultPassConfig extends PassConfig {
   /** Rewrites goog.module */
   private final HotSwapPassFactory closureRewriteModule =
       new HotSwapPassFactory("closureRewriteModule", true) {
-    @Override
-    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      return new ClosureRewriteModule(compiler);
-    }
-  };
+        @Override
+        protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+          maybeInitializePreprocessorSymbolTable(compiler);
+          maybeInitializeModuleRewriteState();
+          return new ClosureRewriteModule(compiler, preprocessorSymbolTable, moduleRewriteState);
+        }
+      };
 
   /** Checks that CSS class names are wrapped in goog.getCssName */
   private final PassFactory closureCheckGetCssName =
@@ -1603,21 +1629,23 @@ public final class DefaultPassConfig extends PassConfig {
 
   private final HotSwapPassFactory lintChecks =
       new HotSwapPassFactory("lintChecks", true) {
-    @Override
-    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      ImmutableList.Builder<Callback> callbacks = ImmutableList.<Callback>builder()
-          .add(new CheckEmptyStatements(compiler))
-          .add(new CheckEnums(compiler))
-          .add(new CheckInterfaces(compiler))
-          .add(new CheckJSDocStyle(compiler))
-          .add(new CheckMissingSemicolon(compiler))
-          .add(new CheckPrototypeProperties(compiler))
-          .add(new CheckUnusedLabels(compiler))
-          .add(new CheckUnusedPrivateProperties(compiler))
-          .add(new CheckUselessBlocks(compiler));
-      return combineChecks(compiler, callbacks.build());
-    }
-  };
+        @Override
+        protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+          ImmutableList.Builder<Callback> callbacks =
+              ImmutableList.<Callback>builder()
+                  .add(new CheckEmptyStatements(compiler))
+                  .add(new CheckEnums(compiler))
+                  .add(new CheckInterfaces(compiler))
+                  .add(new CheckJSDocStyle(compiler))
+                  .add(new CheckMissingSemicolon(compiler))
+                  .add(new CheckPrimitiveAsObject(compiler))
+                  .add(new CheckPrototypeProperties(compiler))
+                  .add(new CheckUnusedLabels(compiler))
+                  .add(new CheckUnusedPrivateProperties(compiler))
+                  .add(new CheckUselessBlocks(compiler));
+          return combineChecks(compiler, callbacks.build());
+        }
+      };
 
   private final HotSwapPassFactory analyzerChecks =
       new HotSwapPassFactory("analyzerChecks", true) {
@@ -2628,11 +2656,29 @@ public final class DefaultPassConfig extends PassConfig {
   };
 
   /** Rewrites J2CL constructs to be more optimizable. */
-  private final PassFactory j2clEmptyClinitPrunerPass =
-      new PassFactory("j2clEmptyClinitPrunerPass", false) {
+  private final PassFactory j2clClinitPrunerPass =
+      new PassFactory("j2clClinitPrunerPass", false) {
         @Override
         protected CompilerPass create(AbstractCompiler compiler) {
-          return new J2clEmptyClinitPrunerPass(compiler);
+          return new J2clClinitPrunerPass(compiler);
+        }
+      };
+
+  /** Rewrites J2CL constructs to be more optimizable. */
+  private final PassFactory j2clConstantHoisterPass =
+      new PassFactory("j2clConstantHoisterPass", false) {
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new J2clConstantHoisterPass(compiler);
+        }
+      };
+
+  /** Rewrites J2CL constructs to be more optimizable. */
+  private final PassFactory j2clEqualitySameRewriterPass =
+      new PassFactory("j2clEqualitySameRewriterPass", false) {
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new J2clEqualitySameRewriterPass(compiler);
         }
       };
 

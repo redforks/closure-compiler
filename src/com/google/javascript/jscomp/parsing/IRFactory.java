@@ -95,10 +95,10 @@ import com.google.javascript.jscomp.parsing.parser.trees.MemberExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.MemberLookupExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.MemberVariableTree;
 import com.google.javascript.jscomp.parsing.parser.trees.MissingPrimaryExpressionTree;
-import com.google.javascript.jscomp.parsing.parser.trees.ModuleImportTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NamespaceDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NamespaceNameTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NewExpressionTree;
+import com.google.javascript.jscomp.parsing.parser.trees.NewTargetExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NullTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ObjectLiteralExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ObjectPatternTree;
@@ -148,7 +148,9 @@ import com.google.javascript.rhino.Node.TypeDeclarationNode;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
+import com.google.javascript.rhino.dtoa.DToA;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -194,7 +196,7 @@ class IRFactory {
 
   static final String STRING_CONTINUATION_WARNING =
       "String continuations are not recommended. See"
-      + " https://google-styleguide.googlecode.com/svn/trunk/javascriptguide.xml#Multiline_string_literals";
+      + " https://google.github.io/styleguide/javascriptguide.xml?showone=Multiline_string_literals#Multiline_string_literals";
 
   static final String BINARY_NUMBER_LITERAL_WARNING =
       "Binary integer literals are not supported in this language mode.";
@@ -276,7 +278,7 @@ class IRFactory {
                     ImmutableList<Comment> comments) {
     this.sourceString = sourceString;
     this.nextCommentIter = comments.iterator();
-    this.currentComment = nextCommentIter.hasNext() ? nextCommentIter.next() : null;
+    this.currentComment = skipNonJsDoc(nextCommentIter);
     this.newlines = new ArrayList<>();
     this.sourceFile = sourceFile;
     this.fileLevelJsDocBuilder = new JSDocInfoBuilder(
@@ -318,6 +320,16 @@ class IRFactory {
     }
   }
 
+  private static Comment skipNonJsDoc(UnmodifiableIterator<Comment> comments) {
+    while (comments.hasNext()) {
+      Comment comment = comments.next();
+      if (comment.type == Comment.Type.JSDOC) {
+        return comment;
+      }
+    }
+    return null;
+  }
+
   // Create a template node to use as a source of common attributes, this allows
   // the prop structure to be shared among all the node from this source file.
   // This reduces the cost of these properties to O(nodes) to O(files).
@@ -342,8 +354,8 @@ class IRFactory {
 
     if (tree.sourceComments != null) {
       for (Comment comment : tree.sourceComments) {
-        if (comment.type == Comment.Type.JSDOC &&
-            !irFactory.parsedComments.contains(comment)) {
+        if (comment.type == Comment.Type.JSDOC
+            && !irFactory.parsedComments.contains(comment)) {
           irFactory.handlePossibleFileOverviewJsDoc(comment);
         } else if (comment.type == Comment.Type.BLOCK) {
           irFactory.handleBlockComment(comment);
@@ -391,10 +403,26 @@ class IRFactory {
   }
 
   private void validateAll(Node n) {
-    validate(n);
-    for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
-      validateAll(c);
+    ArrayDeque<Node> work = new ArrayDeque<>();
+    while (n != null) {
+      validate(n);
+      Node nextSibling = n.getNext();
+      Node firstChild = n.getFirstChild();
+      if (firstChild != null) {
+        if (nextSibling != null) {
+          // handle the siblings later
+          work.push(nextSibling);
+        }
+        n = firstChild;
+      } else if (nextSibling != null) {
+        // no children, handle the next sibling
+        n = nextSibling;
+      } else {
+        // no siblings, continue with work we have saved on the work queue
+        n = work.poll();
+      }
     }
+    Preconditions.checkState(work.isEmpty());
   }
 
   private void validate(Node n) {
@@ -628,16 +656,9 @@ class IRFactory {
 
   private Comment getJsDoc(SourceRange location) {
     Comment closestPreviousComment = null;
-    while (currentComment != null &&
-        currentComment.location.end.offset <= location.start.offset) {
-      if (currentComment.type == Comment.Type.JSDOC) {
-        closestPreviousComment = currentComment;
-      }
-      if (this.nextCommentIter.hasNext()) {
-        currentComment = this.nextCommentIter.next();
-      } else {
-        currentComment = null;
-      }
+    while (hasPendingCommentBefore(location)) {
+      closestPreviousComment = currentComment;
+      currentComment = skipNonJsDoc(nextCommentIter);
     }
 
     return closestPreviousComment;
@@ -650,6 +671,15 @@ class IRFactory {
   private Comment getJsDoc(
       com.google.javascript.jscomp.parsing.parser.Token token) {
     return getJsDoc(token.location);
+  }
+
+  private boolean hasPendingCommentBefore(SourceRange location) {
+    return currentComment != null
+        && currentComment.location.end.offset <= location.start.offset;
+  }
+
+  private boolean hasPendingCommentBefore(ParseTree tree) {
+    return hasPendingCommentBefore(tree.location);
   }
 
   private JSDocInfo handleJsDoc(Comment comment) {
@@ -784,24 +814,13 @@ class IRFactory {
 
   Node transformNumberAsString(LiteralToken token) {
     double value = normalizeNumber(token);
-    Node irNode = newStringNode(getStringValue(value));
+    Node irNode = newStringNode(DToA.numberToString(value));
     JSDocInfo jsDocInfo = handleJsDoc(token);
     if (jsDocInfo != null) {
       irNode.setJSDocInfo(jsDocInfo);
     }
     setSourceInfo(irNode, token);
     return irNode;
-  }
-
-  private static String getStringValue(double value) {
-    long longValue = (long) value;
-
-    // Return "1" instead of "1.0"
-    if (longValue == value) {
-      return Long.toString(longValue);
-    } else {
-      return Double.toString(value);
-    }
   }
 
   static int lineno(ParseTree node) {
@@ -995,9 +1014,7 @@ class IRFactory {
     }
 
     Node processAssignmentRestElement(AssignmentRestElementTree tree) {
-      Node name = newStringNode(Token.NAME, tree.identifier.value);
-      setSourceInfo(name, tree.identifier);
-      return newNode(Token.REST, name);
+      return newNode(Token.REST, transformNodeWithInlineJsDoc(tree.assignmentTarget));
     }
 
     Node processAstRoot(ProgramTree rootNode) {
@@ -1313,10 +1330,57 @@ class IRFactory {
     }
 
     Node processBinaryExpression(BinaryOperatorTree exprNode) {
-      return newNode(
-          transformBinaryTokenType(exprNode.operator.type),
-          transform(exprNode.left),
-          transform(exprNode.right));
+      if (hasPendingCommentBefore(exprNode.right)) {
+        return newNode(
+            transformBinaryTokenType(exprNode.operator.type),
+            transform(exprNode.left),
+            transform(exprNode.right));
+      } else {
+        // No JSDoc, we can traverse out of order.
+        return processBinaryExpressionHelper(exprNode);
+      }
+    }
+
+    // Deep binary ops (typical string concatentations) can cause stack overflows,
+    // avoid recursing in this case and loop instead.
+    private Node processBinaryExpressionHelper(BinaryOperatorTree exprTree) {
+      Node root = null;
+      Node current = null;
+      Node previous = null;
+      while (exprTree != null) {
+        previous = current;
+        // Skip the first child but recurse normally into the right operand as typically this isn't
+        // deep and because we have already checked that there isn't any JSDoc we can traverse
+        // out of order.
+        current = newNode(
+            transformBinaryTokenType(exprTree.operator.type),
+            transform(exprTree.right));
+        // We have inlined "transform" here. Normally, we would need to handle the JSDoc here but we
+        // know there is no JSDoc to attach, which simplifies things.
+        setSourceInfo(current, exprTree);
+
+        // As the iteration continues add the left operand.
+        if (previous != null) {
+          previous.addChildToFront(current);
+        }
+
+        if (exprTree.left instanceof BinaryOperatorTree) {
+          // continue with the left hand child
+          exprTree = (BinaryOperatorTree) exprTree.left;
+        } else {
+          // Finish things off, add the left operand to the current node.
+          Node leftNode = transform(exprTree.left);
+          current.addChildToFront(leftNode);
+          // Nothing left to do.
+          exprTree = null;
+        }
+
+        // Save the top binary op, this is the result to return.
+        if (root == null) {
+          root = current;
+        }
+      }
+      return root;
     }
 
     /**
@@ -2062,6 +2126,11 @@ class IRFactory {
       return newNode(Token.SUPER);
     }
 
+    Node processNewTarget(NewTargetExpressionTree tree) {
+      maybeWarnEs6Feature(tree, Feature.NEW_TARGET);
+      return newNode(Token.NEW_TARGET);
+    }
+
     Node processMemberVariable(MemberVariableTree tree) {
       Node member = newStringNode(Token.MEMBER_VARIABLE_DEF, tree.name.value);
       maybeProcessType(member, tree.declaredType);
@@ -2141,14 +2210,6 @@ class IRFactory {
         importSpec.addChildToBack(processName(tree.destinationName));
       }
       return importSpec;
-    }
-
-    Node processModuleImport(ModuleImportTree tree) {
-      maybeWarnEs6Feature(tree, Feature.MODULES);
-      Node module = newNode(Token.NAMESPACE,
-          processName(tree.name),
-          processString(tree.from));
-      return module;
     }
 
     Node processTypeName(TypeNameTree tree) {
@@ -2643,6 +2704,8 @@ class IRFactory {
           return processClassDeclaration(node.asClassDeclaration());
         case SUPER_EXPRESSION:
           return processSuper(node.asSuperExpression());
+        case NEW_TARGET_EXPRESSION:
+          return processNewTarget(node.asNewTargetExpression());
         case YIELD_EXPRESSION:
           return processYield(node.asYieldStatement());
         case FOR_OF_STATEMENT:
@@ -2656,8 +2719,6 @@ class IRFactory {
           return processImportDecl(node.asImportDeclaration());
         case IMPORT_SPECIFIER:
           return processImportSpec(node.asImportSpecifier());
-        case MODULE_IMPORT:
-          return processModuleImport(node.asModuleImport());
 
         case ARRAY_PATTERN:
           return processArrayPattern(node.asArrayPattern());

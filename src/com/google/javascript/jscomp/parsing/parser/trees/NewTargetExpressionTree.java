@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 The Closure Compiler Authors.
+ * Copyright 2016 The Closure Compiler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,13 @@
 
 package com.google.javascript.jscomp.parsing.parser.trees;
 
-import com.google.javascript.jscomp.parsing.parser.IdentifierToken;
-import com.google.javascript.jscomp.parsing.parser.LiteralToken;
 import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 
-public class ModuleImportTree extends ParseTree {
-
-  public final IdentifierToken name;
-  public final LiteralToken from;
-
-  public ModuleImportTree(SourceRange location, IdentifierToken name,
-      LiteralToken from) {
-    super(ParseTreeType.MODULE_IMPORT, location);
-    this.name = name;
-    this.from = from;
+/**
+ * Represents 'new.target'.
+ */
+public class NewTargetExpressionTree extends ParseTree {
+  public NewTargetExpressionTree(SourceRange location) {
+    super(ParseTreeType.NEW_TARGET_EXPRESSION, location);
   }
 }

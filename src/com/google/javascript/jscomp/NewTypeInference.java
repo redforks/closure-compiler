@@ -31,6 +31,7 @@ import com.google.javascript.jscomp.newtypes.FunctionType;
 import com.google.javascript.jscomp.newtypes.FunctionTypeBuilder;
 import com.google.javascript.jscomp.newtypes.JSType;
 import com.google.javascript.jscomp.newtypes.JSTypes;
+import com.google.javascript.jscomp.newtypes.MismatchInfo;
 import com.google.javascript.jscomp.newtypes.QualifiedName;
 import com.google.javascript.jscomp.newtypes.TypeEnv;
 import com.google.javascript.jscomp.newtypes.UniqueNameGenerator;
@@ -69,33 +70,28 @@ final class NewTypeInference implements CompilerPass {
   static final DiagnosticType MISTYPED_ASSIGN_RHS = DiagnosticType.warning(
       "JSC_NTI_MISTYPED_ASSIGN_RHS",
       "The right side in the assignment is not a subtype of the left side.\n"
-      + "left side  : {0}\n"
-      + "right side : {1}\n");
+      + "{0}");
 
   static final DiagnosticType INVALID_OPERAND_TYPE = DiagnosticType.warning(
       "JSC_NTI_INVALID_OPERAND_TYPE",
       "Invalid type(s) for operator {0}.\n"
-      + "expected : {1}\n"
-      + "found    : {2}\n");
+      + "{1}");
 
   static final DiagnosticType RETURN_NONDECLARED_TYPE = DiagnosticType.warning(
       "JSC_NTI_RETURN_NONDECLARED_TYPE",
-      "Returned type does not match declared return type.\n" +
-      "declared : {0}\n" +
-      "found    : {1}\n");
+      "Returned type does not match declared return type.\n"
+      + "{0}");
 
   static final DiagnosticType INVALID_INFERRED_RETURN_TYPE =
       DiagnosticType.warning(
           "JSC_NTI_INVALID_INFERRED_RETURN_TYPE",
-          "Function called in context that expects incompatible type.\n" +
-          "expected : {0}\n" +
-          "found    : {1}\n");
+          "Function called in context that expects incompatible type.\n"
+          + "{0}");
 
   static final DiagnosticType INVALID_ARGUMENT_TYPE = DiagnosticType.warning(
       "JSC_NTI_INVALID_ARGUMENT_TYPE",
-      "Invalid type for parameter {0} of function {1}.\n" +
-      "expected : {2}\n" +
-      "found    : {3}\n");
+      "Invalid type for parameter {0} of function {1}.\n"
+      + "{2}");
 
   static final DiagnosticType CROSS_SCOPE_GOTCHA = DiagnosticType.warning(
       "JSC_NTI_CROSS_SCOPE_GOTCHA",
@@ -108,13 +104,6 @@ final class NewTypeInference implements CompilerPass {
           "JSC_NTI_POSSIBLY_INEXISTENT_PROPERTY",
           "Property {0} may not be present on {1}.");
 
-  // Not part of ALL_DIAGNOSTICS because it should not be enabled with
-  // --jscomp_error=newCheckTypes. It should only be enabled explicitly.
-  static final DiagnosticType NULLABLE_DEREFERENCE =
-      DiagnosticType.disabled(
-          "JSC_NTI_NULLABLE_DEREFERENCE",
-          "Attempt to use nullable type {0}.");
-
   static final DiagnosticType PROPERTY_ACCESS_ON_NONOBJECT =
       DiagnosticType.warning(
           "JSC_NTI_PROPERTY_ACCESS_ON_NONOBJECT",
@@ -123,8 +112,10 @@ final class NewTypeInference implements CompilerPass {
   static final DiagnosticType NOT_UNIQUE_INSTANTIATION =
       DiagnosticType.warning(
           "JSC_NTI_NOT_UNIQUE_INSTANTIATION",
-          "Illegal instantiation in function type {0} for the type variable "
-          + "{1}.\n You can only specify one type. Found {2}.");
+          "When instantiating a polymorphic function,"
+          + " you can only specify one type for each type variable.\n"
+          + " Found {0} types for type variable {1}: {2},\n"
+          + " when instantiating type: {3}");
 
   static final DiagnosticType FAILED_TO_UNIFY =
       DiagnosticType.warning(
@@ -135,8 +126,7 @@ final class NewTypeInference implements CompilerPass {
       DiagnosticType.warning(
           "JSC_NTI_INVALID_INDEX_TYPE",
           "Invalid type for index.\n"
-          + "expected : {0}\n"
-          + "found    : {1}\n");
+          + "{0}");
 
   static final DiagnosticType BOTTOM_INDEX_TYPE =
       DiagnosticType.warning(
@@ -147,7 +137,8 @@ final class NewTypeInference implements CompilerPass {
   static final DiagnosticType INVALID_OBJLIT_PROPERTY_TYPE =
       DiagnosticType.warning(
           "JSC_NTI_INVALID_OBJLIT_PROPERTY_TYPE",
-          "Object-literal property declared as {0} but has type {1}.");
+          "Invalid type for object-literal property.\n"
+          + "{0}");
 
   static final DiagnosticType FORIN_EXPECTS_OBJECT =
       DiagnosticType.warning(
@@ -187,8 +178,8 @@ final class NewTypeInference implements CompilerPass {
   static final DiagnosticType INVALID_THIS_TYPE_IN_BIND =
       DiagnosticType.warning(
           "JSC_NTI_INVALID_THIS_TYPE_IN_BIND",
-          "The first argument to bind has type {0} which is not a subtype of"
-          + " {1}.");
+          "Invalid type for the first argument to bind.\n"
+          + "{0}");
 
   static final DiagnosticType CANNOT_BIND_CTOR =
       DiagnosticType.warning(
@@ -250,7 +241,7 @@ final class NewTypeInference implements CompilerPass {
   static final DiagnosticType NOT_CALLABLE =
       DiagnosticType.warning(
           "JSC_NTI_NOT_FUNCTION_TYPE",
-          "{0} expressions are not callable");
+          "Cannot call non-function type {0}");
 
   static final DiagnosticType WRONG_ARGUMENT_COUNT =
       DiagnosticType.warning(
@@ -273,6 +264,19 @@ final class NewTypeInference implements CompilerPass {
           "JSC_NTI_UNKNOWN_NAMESPACE_PROPERTY",
           "Cannot determine the type of namespace property {0}. "
           + "Maybe a prefix of the property name has been redefined?");
+
+  // Not part of ALL_DIAGNOSTICS because it should not be enabled with
+  // --jscomp_error=newCheckTypes. It should only be enabled explicitly.
+
+  static final DiagnosticType NULLABLE_DEREFERENCE =
+      DiagnosticType.disabled(
+          "JSC_NTI_NULLABLE_DEREFERENCE",
+          "Attempt to use nullable type {0}.");
+
+  static final DiagnosticType UNKNOWN_EXPR_TYPE =
+      DiagnosticType.disabled(
+          "JSC_NTI_UNKNOWN_EXPR_TYPE",
+          "This {0} expression has the unknown type.");
 
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
       ASSERT_FALSE,
@@ -348,6 +352,9 @@ final class NewTypeInference implements CompilerPass {
   private static final String SETTER_PREFIX = "%setter_fun";
   private final String ABSTRACT_METHOD_NAME;
   private final Map<String, AssertionFunctionSpec> assertionFunctionsMap;
+  // To avoid creating warning objects for disabled warnings
+  private final boolean reportUnknownTypes;
+  private final boolean reportNullDeref;
 
   // Used only for development
   private static boolean showDebuggingPrints = false;
@@ -362,6 +369,10 @@ final class NewTypeInference implements CompilerPass {
     this.summaries = new LinkedHashMap<>();
     this.deferredChecks = new LinkedHashMap<>();
     this.ABSTRACT_METHOD_NAME = convention.getAbstractMethodName();
+    this.reportUnknownTypes =
+        compiler.getOptions().enables(DiagnosticGroups.REPORT_UNKNOWN_TYPES);
+    this.reportNullDeref = compiler.getOptions()
+        .enables(DiagnosticGroups.NEW_CHECK_TYPES_ALL_CHECKS);
     assertionFunctionsMap = new LinkedHashMap<>();
     for (AssertionFunctionSpec assertionFunction : convention.getAssertionFunctions()) {
       assertionFunctionsMap.put(
@@ -379,7 +390,7 @@ final class NewTypeInference implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     try {
-      this.symbolTable = compiler.getSymbolTable();
+      this.symbolTable = (GlobalTypeInfo) compiler.getSymbolTable();
       this.commonTypes = symbolTable.getTypesUtilObject();
       for (NTIScope scope : symbolTable.getScopes()) {
         analyzeFunction(scope);
@@ -839,7 +850,7 @@ final class NewTypeInference implements CompilerPass {
           }
           if (!actualRetType.isSubtypeOf(declRetType)) {
             warnings.add(JSError.make(n, RETURN_NONDECLARED_TYPE,
-                    declRetType.toString(), actualRetType.toString()));
+                    errorMsgWithTypeDiff(declRetType, actualRetType)));
           }
           break;
         }
@@ -1009,8 +1020,9 @@ final class NewTypeInference implements CompilerPass {
       // If someone uses the result of a function that doesn't return, they get a warning.
       builder.addRetType(actualRetType.isBottom() ? JSType.TOP : actualRetType);
     } else {
-      // Don't infer a return type for constructors
-      builder.addRetType(JSType.UNKNOWN);
+      // Don't infer a return type for constructors. We want to warn for
+      // constructors called without new who don't explicitly declare @return.
+      builder.addRetType(JSType.UNDEFINED);
     }
     JSType summary = commonTypes.fromFunctionType(builder.buildFunction());
     println("Function summary for ", fn.getReadableName());
@@ -1138,7 +1150,7 @@ final class NewTypeInference implements CompilerPass {
       if (!rhsType.isSubtypeOf(declType)) {
         warnings.add(JSError.make(
             rhs, MISTYPED_ASSIGN_RHS,
-            declType.toString(), rhsType.toString()));
+            errorMsgWithTypeDiff(declType, rhsType)));
         // Don't flow the wrong initialization
         rhsType = declType;
       } else {
@@ -1358,6 +1370,7 @@ final class NewTypeInference implements CompilerPass {
         throw new RuntimeException("Unhandled expression type: " +
               Token.name(expr.getType()));
     }
+    mayWarnAboutUnknownType(expr, resultPair.type);
     // TODO(dimvar): We attach the type to every expression because that's also
     // what the old type inference does.
     // But maybe most of these types are never looked at.
@@ -1371,6 +1384,21 @@ final class NewTypeInference implements CompilerPass {
           " ::resulttype: ", resultPair.type);
     }
     return resultPair;
+  }
+
+  private void mayWarnAboutUnknownType(Node expr, JSType t) {
+    boolean isKnownGetElem = expr.isGetElem() && expr.getLastChild().isString();
+    if (t.isUnknown()
+        && this.reportUnknownTypes
+        // Don't warn for expressions whose value isn't used
+        && !expr.getParent().isExprResult()
+        // The old type checker doesn't warn about unknown getelems.
+        // Maybe because we can't do anything about them, so why warn?
+        // We mimic that behavior here.
+        && (!expr.isGetElem() || isKnownGetElem)) {
+      warnings.add(JSError.make(expr, UNKNOWN_EXPR_TYPE,
+              Token.name(expr.getType())));
+    }
   }
 
   private EnvTypePair analyzeNameFwd(
@@ -1624,7 +1652,7 @@ final class NewTypeInference implements CompilerPass {
       if (!rhsPair.type.isSubtypeOf(declType)
           && !NodeUtil.isPrototypeAssignment(lhs)) {
         warnings.add(JSError.make(expr, MISTYPED_ASSIGN_RHS,
-                declType.toString(), rhsPair.type.toString()));
+                errorMsgWithTypeDiff(declType, rhsPair.type)));
       }
       return rhsPair;
     }
@@ -1634,7 +1662,7 @@ final class NewTypeInference implements CompilerPass {
         analyzeExprFwd(rhs, lvalue.env, requiredType, specializedType);
     if (declType != null && !rhsPair.type.isSubtypeOf(declType)) {
       warnings.add(JSError.make(expr, MISTYPED_ASSIGN_RHS,
-              declType.toString(), rhsPair.type.toString()));
+              errorMsgWithTypeDiff(declType, rhsPair.type)));
     } else {
       rhsPair.env = updateLvalueTypeInEnv(rhsPair.env, lhs, lvalue.ptr, rhsPair.type);
     }
@@ -1754,7 +1782,8 @@ final class NewTypeInference implements CompilerPass {
       return analyzeLooseCallNodeFwd(expr, envAfterCallee, requiredType);
     } else if (expr.isCall()
         && funType.isSomeConstructorOrInterface()
-        && funType.getReturnType().isUnknown()) {
+        && (funType.getReturnType().isUnknown()
+            || funType.getReturnType().isUndefined())) {
       warnings.add(JSError.make(expr, CONSTRUCTOR_NOT_CALLABLE, funType.toString()));
       return analyzeCallNodeArgsFwdWhenError(expr, envAfterCallee);
     } else if (expr.isNew()
@@ -1893,7 +1922,7 @@ final class NewTypeInference implements CompilerPass {
       env = pair.env;
       if (!pair.type.isSubtypeOf(reqThisType)) {
         warnings.add(JSError.make(call, INVALID_THIS_TYPE_IN_BIND,
-                pair.type.toString(), reqThisType.toString()));
+                errorMsgWithTypeDiff(reqThisType, pair.type)));
       }
     }
 
@@ -1934,7 +1963,7 @@ final class NewTypeInference implements CompilerPass {
         String fnName = getReadableCalleeName(call.getFirstChild());
         warnings.add(JSError.make(arg, INVALID_ARGUMENT_TYPE,
                 Integer.toString(i + 1), fnName,
-                formalType.toString(), pair.type.toString()));
+                errorMsgWithTypeDiff(formalType, pair.type)));
         argTypeForDeferredCheck = null; // No deferred check needed.
       }
       argTypesForDeferredCheck.add(argTypeForDeferredCheck);
@@ -1960,6 +1989,13 @@ final class NewTypeInference implements CompilerPass {
       warnings.add(JSError.make(callNode, NewTypeInference.UNKNOWN_ASSERTION_TYPE));
     }
     EnvTypePair pair = analyzeExprFwd(assertedNode, env, JSType.UNKNOWN, assertedType);
+    if (!pair.type.isSubtypeOf(assertedType)
+        && JSType.haveCommonSubtype(assertedType, pair.type)) {
+      // We do this because the assertion needs to return a subtype of the
+      // asserted type to its context, but sometimes the asserted expression
+      // can't be specialized.
+      pair.type = assertedType;
+    }
     if (pair.type.isBottom()) {
       JSType t = analyzeExprFwd(assertedNode, env).type.substituteGenericsWithUnknown();
       if (t.isSubtypeOf(assertedType)) {
@@ -2268,9 +2304,11 @@ final class NewTypeInference implements CompilerPass {
       if (types.size() > 1) {
         if (isFwd) {
           warnings.add(JSError.make(
-              callNode, NOT_UNIQUE_INSTANTIATION, funType.toString(),
+              callNode, NOT_UNIQUE_INSTANTIATION,
+              Integer.toString(types.size()),
               UniqueNameGenerator.getOriginalName(typeParam),
-              types.toString()));
+              types.toString(),
+              funType.toString()));
         }
         builder.put(typeParam, JSType.UNKNOWN);
       } else if (types.size() == 1) {
@@ -2417,7 +2455,7 @@ final class NewTypeInference implements CompilerPass {
           if (!pair.type.isSubtypeOf(jsdocType)) {
             warnings.add(JSError.make(
                 prop, INVALID_OBJLIT_PROPERTY_TYPE,
-                jsdocType.toString(), pair.type.toString()));
+                errorMsgWithTypeDiff(jsdocType, pair.type)));
             pair.type = jsdocType;
           }
         }
@@ -2571,6 +2609,60 @@ final class NewTypeInference implements CompilerPass {
         // This is important b/c analyzePropAccess & analyzePropLvalue introduce
         // loose objects, even if there are no undeclared formals.
         && required.isNonLooseSubtypeOf(inferred);
+  }
+
+  private static String errorMsgWithTypeDiff(JSType expected, JSType found) {
+    MismatchInfo mismatch = JSType.whyNotSubtypeOf(found, expected);
+    if (mismatch == null) {
+      return "Expected : " + expected + "\n"
+          + "Found    : " + found + "\n";
+    }
+    StringBuilder builder =
+        new StringBuilder("Expected : ")
+            .append(expected)
+            .append("\n" + "Found    : ")
+            .append(found)
+            .append("\n" + "More details:\n");
+    if (mismatch.isPropMismatch()) {
+      builder
+          .append("Incompatible types for property ")
+          .append(mismatch.getPropName())
+          .append(".\n" + "Expected : ")
+          .append(mismatch.getExpectedType())
+          .append("\n" + "Found    : ")
+          .append(mismatch.getFoundType());
+    } else if (mismatch.isMissingProp()) {
+      builder.append("The found type is missing property ").append(mismatch.getPropName());
+    } else if (mismatch.wantedRequiredFoundOptional()) {
+      builder
+          .append("In found type, property ")
+          .append(mismatch.getPropName())
+          .append(" is optional but should be required.");
+    } else if (mismatch.isArgTypeMismatch()) {
+      builder
+          .append(
+              "The expected and found types are functions which have"
+                  + " incompatible types for argument ")
+          .append(mismatch.getArgIndex() + 1)
+          .append(".\n" + "Expected a supertype of : ")
+          .append(mismatch.getExpectedType())
+          .append("\n" + "but found               : ")
+          .append(mismatch.getFoundType());
+    } else if (mismatch.isRetTypeMismatch()) {
+      builder
+          .append(
+              "The expected and found types are functions which have"
+                  + " incompatible return types.\n"
+                  + "Expected a subtype of : ")
+          .append(mismatch.getExpectedType())
+          .append("\n" + "but found             : ")
+          .append(mismatch.getFoundType());
+    } else if (mismatch.isUnionTypeMismatch()) {
+      builder
+          .append("The found type is a union that includes an unexpected type: ")
+          .append(mismatch.getFoundType());
+    }
+    return builder.toString();
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -2729,7 +2821,7 @@ final class NewTypeInference implements CompilerPass {
     if (!foundIndexType.isSubtypeOf(requiredIndexType)) {
       warnings.add(JSError.make(
           n, NewTypeInference.INVALID_INDEX_TYPE,
-          requiredIndexType.toString(), foundIndexType.toString()));
+          errorMsgWithTypeDiff(requiredIndexType, foundIndexType)));
       return true;
     }
     return false;
@@ -2750,14 +2842,21 @@ final class NewTypeInference implements CompilerPass {
         // else branch of "if (!x.prop)" is a property test.
         || specializedType.isTrueOrTruthy()) {
       recvReqType = reqObjType;
+      pair = analyzeExprFwd(receiver, inEnv, recvReqType);
+      JSType subtypeWithProp = pair.type.findSubtypeWithProp(propQname);
+      if (subtypeWithProp.isBottom()) {
+        recvSpecType = reqObjType;
+      } else {
+        recvSpecType = subtypeWithProp;
+      }
       if (specializedType.isTrueOrTruthy()) {
         // This handles cases like: if (x.prop1 && x.prop1.prop2) { ... }
         // In the THEN branch, the only thing we know about x.prop1 is that it
         // has a truthy property, so x.prop1 should be a loose object to avoid
         // spurious warnings.
-        recvSpecType = reqObjType.withLoose().withProperty(propQname, specializedType);
+        recvSpecType = recvSpecType.withLoose().withProperty(propQname, specializedType);
       } else {
-        recvSpecType = reqObjType.withProperty(propQname, specializedType);
+        recvSpecType = recvSpecType.withProperty(propQname, specializedType);
       }
     } else if (specializedType.isFalseOrFalsy()) {
       recvReqType = recvSpecType = reqObjType;
@@ -3512,9 +3611,16 @@ final class NewTypeInference implements CompilerPass {
         (expected instanceof String) || (expected instanceof JSType));
     Preconditions.checkArgument(
         (actual instanceof String) || (actual instanceof JSType));
-    warnings.add(JSError.make(
-        expr, INVALID_OPERAND_TYPE, Token.name(operatorType),
-        expected.toString(), actual.toString()));
+    if (expected instanceof JSType && actual instanceof JSType) {
+      warnings.add(JSError.make(
+          expr, INVALID_OPERAND_TYPE, Token.name(operatorType),
+          errorMsgWithTypeDiff((JSType) expected, (JSType) actual)));
+    } else {
+      warnings.add(JSError.make(
+          expr, INVALID_OPERAND_TYPE, Token.name(operatorType),
+          "Expected : " + expected.toString() + "\n"
+          + "Found    : " + actual.toString() + "\n"));
+    }
   }
 
   private static class EnvTypePair {
@@ -3701,6 +3807,7 @@ final class NewTypeInference implements CompilerPass {
       }
     }
     maybeSetTypeI(expr, lvalResult.type);
+    mayWarnAboutUnknownType(expr, lvalResult.type);
     return lvalResult;
   }
 
@@ -3729,7 +3836,10 @@ final class NewTypeInference implements CompilerPass {
             || JSType.UNDEFINED.isSubtypeOf(recvType))) {
       JSType minusNull = recvType.removeType(JSType.NULL_OR_UNDEF);
       if (!minusNull.isBottom()) {
-        warnings.add(JSError.make(obj, NULLABLE_DEREFERENCE, recvType.toString()));
+        if (this.reportNullDeref) {
+          warnings.add(JSError.make(
+              obj, NULLABLE_DEREFERENCE, recvType.toString()));
+        }
         TypeEnv outEnv = inEnv;
         if (obj.isQualifiedName()) {
           QualifiedName qname = QualifiedName.fromNode(obj);
@@ -3990,8 +4100,8 @@ final class NewTypeInference implements CompilerPass {
           !fnSummary.getReturnType().isSubtypeOf(this.expectedRetType)) {
         warnings.add(JSError.make(
             this.callSite, INVALID_INFERRED_RETURN_TYPE,
-            this.expectedRetType.toString(),
-            fnSummary.getReturnType().toString()));
+            errorMsgWithTypeDiff(
+                this.expectedRetType, fnSummary.getReturnType())));
       }
       int i = 0;
       Node argNode = callSite.getSecondChild();

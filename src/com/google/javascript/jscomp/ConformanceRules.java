@@ -405,17 +405,22 @@ public final class ConformanceRules {
       }
 
       if (n.isGetProp() || n.isName()) {
-        // TODO(johnlenz): restrict to global names
         if (n.isQualifiedName()) {
           for (int i = 0; i < names.size(); i++) {
             String name = names.get(i);
-            if (n.matchesQualifiedName(name)) {
+            if (n.matchesQualifiedName(name) && isRootOfQualifiedNameGlobal(t, n)) {
               return ConformanceResult.VIOLATION;
             }
           }
         }
       }
       return ConformanceResult.CONFORMANCE;
+    }
+
+    private static boolean isRootOfQualifiedNameGlobal(NodeTraversal t, Node n) {
+      String rootName = NodeUtil.getRootOfQualifiedName(n).getQualifiedName();
+      Var v = t.getScope().getVar(rootName);
+      return v != null && v.isGlobal();
     }
   }
 
@@ -464,11 +469,13 @@ public final class ConformanceRules {
 
     @Override
     protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
-      for (int i = 0; i < props.size(); i++) {
-        Property prop = props.get(i);
-        ConformanceResult result = checkConformance(t, n, prop);
-        if (result.level != ConformanceLevel.CONFORMANCE) {
-          return result;
+      if (NodeUtil.isGet(n) && n.getLastChild().isString()) {
+        for (int i = 0; i < props.size(); i++) {
+          Property prop = props.get(i);
+          ConformanceResult result = checkConformance(t, n, prop);
+          if (result.level != ConformanceLevel.CONFORMANCE) {
+            return result;
+          }
         }
       }
       return ConformanceResult.CONFORMANCE;
@@ -522,8 +529,7 @@ public final class ConformanceRules {
      * {@code n} is only a candidate if it is an l-value.
      */
     private boolean isCandidatePropUse(Node n, Property prop) {
-      if (NodeUtil.isGet(n) && n.getLastChild().isString()
-          && n.getLastChild().getString().equals(prop.property)) {
+      if (n.getLastChild().getString().equals(prop.property)) {
         if (requirementType == Type.BANNED_PROPERTY_WRITE) {
           return NodeUtil.isLValue(n);
         } else if (requirementType == Type.BANNED_PROPERTY_READ) {
