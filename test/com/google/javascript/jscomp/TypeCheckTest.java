@@ -16623,6 +16623,32 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         + "original definition at [testcode]:5 with type (null|rec<string>)");
   }
 
+  public void testModuloNullUndefThatWorkedWithoutSpecialSubtypingRules() {
+    testTypes(LINE_JOINER.join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "function f(/** function(?Foo, !Foo) */ x) {",
+        "  return /** @type {function(!Foo, ?Foo)} */ (x);",
+        "}"));
+
+    testTypes(LINE_JOINER.join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "function f(/** !Array<!Foo> */ to, /** !Array<?Foo> */ from) {",
+        "  to = from;",
+        "}"));
+
+    testTypes(LINE_JOINER.join(
+        "function f(/** ?Object */ x) {",
+        "  return {} instanceof x;",
+        "}"));
+
+    testTypes(LINE_JOINER.join(
+        "function f(/** ?Function */ x) {",
+        "  return x();",
+        "}"));
+  }
+
   private void testTypes(String js) {
     testTypes(js, (String) null);
   }

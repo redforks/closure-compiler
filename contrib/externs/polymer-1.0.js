@@ -35,6 +35,23 @@
 var Polymer = function(descriptor) {};
 
 
+/**
+ * Re-evaluates and applies custom CSS properties based on dynamic
+ * changes to this element's scope, such as adding or removing classes.
+ *
+ * For performance reasons, Polymer's custom CSS property shim relies
+ * on this explicit signal from the user to indicate when changes have
+ * been made that affect the values of custom properties.
+ *
+ * @param {Object=} properties Properties object which is mixed into
+ *     the document root `customStyle` property. This argument provides a
+ *     shortcut for setting `customStyle` and then calling `updateStyles`.
+ *
+ * @see http://polymer.github.io/polymer/
+ */
+Polymer.updateStyles = function(properties) {};
+
+
 /** @constructor @extends {HTMLElement} */
 var PolymerElement = function() {};
 
@@ -465,6 +482,17 @@ Polymer.Base;
 Polymer.Base.async = function(method, wait) {};
 
 /**
+ * Copies own properties (including accessor descriptors) from a source
+ * object to a target object.
+ *
+ * @param {?Object} target Target object to copy properties to.
+ * @param {?Object} source Source object to copy properties from.
+ * @return {?Object} Target object that was passed as first argument or source
+ *     object if the target was null.
+ */
+Polymer.Base.extend = function(target, source) {};
+
+/**
  * Returns a property descriptor object for the property specified.
  *
  * This method allows introspecting the configuration of a Polymer element's
@@ -475,6 +503,19 @@ Polymer.Base.async = function(method, wait) {};
  * @return {Object} Property descriptor for specified property.
 */
 Polymer.Base.getPropertyInfo = function(property) {};
+
+/**
+ * Copies props from a source object to a target object.
+ *
+ * Note, this method uses a simple `for...in` strategy for enumerating
+ * properties.  To ensure only `ownProperties` are copied from source
+ * to target and that accessor implementations are copied, use `extend`.
+ *
+ * @param {!Object} target Target object to copy properties to.
+ * @param {?Object} source Source object to copy properties from.
+ * @return {!Object} Target object that was passed as first argument.
+ */
+Polymer.Base.mixin = function(target, source) {};
 
 Polymer.Gestures;
 
@@ -632,6 +673,33 @@ PolymerElement.prototype._error = function(var_args) {};
  * @protected
  */
 PolymerElement.prototype._logf = function(var_args) {};
+
+/** @type {boolean} True after this.ready() has run */
+PolymerElement.prototype._readied;
+
+/**
+ * Do not call this function.
+ *
+ * @param {string} path .
+ * @param {*} value .
+ */
+PolymerElement.prototype._notifyPathUp = function(path, value) {};
+
+/**
+ * Do not call this function.
+ *
+ * @param {string} path .
+ * @param {*} value .
+ */
+PolymerElement.prototype._pathEffector = function(path, value) {};
+
+/**
+ * Do not call this function.
+ *
+ * @param {string} path .
+ * @param {*} value .
+ */
+PolymerElement.prototype._propertySetter = function(path, value) {};
 
 
 /**
@@ -840,6 +908,15 @@ Polymer.Debouncer.prototype = {
 
 /** @param {!Polymer.Debouncer} debouncer */
 Polymer.dom.addDebouncer = function(debouncer) {};
+
+
+/**
+ * Returns whether the given object is an instance of a Polymer element.
+ * @param {*} object
+ * @return {boolean}
+ */
+Polymer.isInstance = function(object) {};
+
 
 Polymer.CaseMap;
 

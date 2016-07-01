@@ -25,6 +25,50 @@
  */
 
 /**
+ * @param {string} s id.
+ * @return {Element}
+ * @nosideeffects
+ * @see https://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/core.html#ID-getElBId
+ */
+Document.prototype.getElementById = function(s) {};
+
+/**
+ * @param {?string} namespaceURI
+ * @param {string} qualifiedName
+ * @param {string=} opt_typeExtension
+ * @return {!Element}
+ * @see https://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/core.html#ID-DocCrElNS
+ */
+Document.prototype.createElementNS =
+    function(namespaceURI, qualifiedName, opt_typeExtension) {};
+
+/**
+ * @param {?string} namespaceURI
+ * @param {string} qualifiedName
+ * @return {!Attr}
+ * @see https://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/core.html#ID-DocCrElNS
+ */
+Document.prototype.createAttributeNS =
+    function(namespaceURI, qualifiedName) {};
+
+/**
+ * @param {string} namespace
+ * @param {string} name
+ * @return {!NodeList<!Element>}
+ * @nosideeffects
+ * @see https://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/core.html#ID-getElBTNNS
+ */
+Document.prototype.getElementsByTagNameNS = function(namespace, name) {};
+
+/**
+ * @param {Node} externalNode
+ * @param {boolean} deep
+ * @return {Node}
+ * @see https://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/core.html#Core-Document-importNode
+ */
+Document.prototype.importNode = function(externalNode, deep) {};
+
+/**
  * @constructor
  * @implements {IObject<(string|number),T>}
  * @implements {IArrayLike<T>}
@@ -184,7 +228,6 @@ HTMLDocument.prototype.writeln = function(text) {};
  * @param {string} elementName
  * @return {!NodeList<!Element>}
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-71555259
- * @override
  * @nosideeffects
  */
 HTMLDocument.prototype.getElementsByName = function(elementName) {};
@@ -645,6 +688,26 @@ HTMLBodyElement.prototype.text;
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-83224305
  */
 HTMLBodyElement.prototype.vLink;
+
+/**
+ * @constructor
+ * @extends {HTMLCollection<T>}
+ * @implements {IObject<string, (T|RadioNodeList<T>)>}
+ * @implements {IArrayLike<T>}
+ * @template T
+ * @see https://html.spec.whatwg.org/multipage/infrastructure.html#the-htmlformcontrolscollection-interface
+ */
+function HTMLFormControlsCollection() {}
+
+/**
+ * @param {string} name
+ * @return {T|RadioNodeList<T>|null}
+ * @see https://html.spec.whatwg.org/multipage/infrastructure.html#dom-htmlformcontrolscollection-nameditem
+ * @nosideeffects
+ * @override
+ * @suppress {newCheckTypes}
+ */
+HTMLFormControlsCollection.prototype.namedItem = function(name) {};
 
 /**
  * @constructor

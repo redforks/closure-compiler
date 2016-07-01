@@ -73,6 +73,9 @@ final class NTIScope implements DeclaredTypeRegistry {
   private ImmutableSet<String> unknownTypeNames = ImmutableSet.of();
   private Map<String, Typedef> localTypedefs = new LinkedHashMap<>();
   private Map<String, Namespace> localNamespaces = new LinkedHashMap<>();
+  // The namespace map that we preserve post-finalization, purely for use
+  // in GlobalTypeInfo for symbol table purposes.
+  private Map<String, Namespace> preservedNamespaces;
   // The set localEnums is used for enum resolution, and then discarded.
   private Set<EnumType> localEnums = new LinkedHashSet<>();
 
@@ -480,19 +483,21 @@ final class NTIScope implements DeclaredTypeRegistry {
       Preconditions.checkArgument(isDefinedLocally(varName, false));
       Preconditions.checkState(!this.localNamespaces.containsKey(varName));
       NTIScope s = Preconditions.checkNotNull(this.localFunDefs.get(varName));
-      this.localNamespaces.put(varName, new FunctionNamespace(varName, s));
+      this.localNamespaces.put(varName,
+          new FunctionNamespace(getCommonTypes(), varName, s));
     } else {
       Preconditions.checkArgument(!isNamespace(qnameNode));
       QualifiedName qname = QualifiedName.fromNode(qnameNode);
       Namespace ns = getNamespace(qname.getLeftmostName());
       NTIScope s = (NTIScope) ns.getDeclaration(qname).getFunctionScope();
       ns.addNamespace(qname.getAllButLeftmost(),
-          new FunctionNamespace(qname.toString(), s));
+          new FunctionNamespace(getCommonTypes(), qname.toString(), s));
     }
   }
 
   void addNamespaceLit(Node qnameNode) {
-    addNamespace(qnameNode, new NamespaceLit(qnameNode.getQualifiedName()));
+    addNamespace(qnameNode,
+        new NamespaceLit(getCommonTypes(), qnameNode.getQualifiedName()));
   }
 
   void updateType(String name, JSType newDeclType) {
@@ -624,6 +629,13 @@ final class NTIScope implements DeclaredTypeRegistry {
     return parent == null ? null : parent.getDeclaration(name, includeTypes);
   }
 
+  public JSType getType(String typeName) {
+    Preconditions.checkNotNull(
+        preservedNamespaces, "Failed to preserve namespaces post-finalization");
+    RawNominalType nominalType = (RawNominalType) preservedNamespaces.get(typeName);
+    return nominalType == null ? null : nominalType.getInstanceAsJSType();
+  }
+
   void resolveTypedefs(JSTypeCreatorFromJSDoc typeParser) {
     for (Typedef td : localTypedefs.values()) {
       if (!td.isResolved()) {
@@ -645,7 +657,6 @@ final class NTIScope implements DeclaredTypeRegistry {
     Preconditions.checkState(isTopLevel() || this.declaredType != null,
         "No declared type for function-scope: %s", this.root);
     unknownTypeNames = ImmutableSet.of();
-    JSTypes commonTypes = getCommonTypes();
     // For now, we put types of namespaces directly into the locals.
     // Alternatively, we could move this into NewTypeInference.initEdgeEnvs
     for (Map.Entry<String, Namespace> entry : localNamespaces.entrySet()) {
@@ -659,9 +670,9 @@ final class NTIScope implements DeclaredTypeRegistry {
         // window, but we don't check here to avoid hard-coding the name.
         // Enforced in GlobalTypeInfo.
         nslit.maybeSetWindowInstance(externs.get(name));
-        t = nslit.toJSType(commonTypes);
+        t = nslit.toJSType();
       } else {
-        t = ns.toJSType(commonTypes);
+        t = ns.toJSType();
       }
       if (externs.containsKey(name)) {
         externs.put(name, t);
@@ -673,6 +684,7 @@ final class NTIScope implements DeclaredTypeRegistry {
       locals.put(typedefName, JSType.UNDEFINED);
     }
     copyOuterVarsTransitively(this);
+    preservedNamespaces = localNamespaces;
     localNamespaces = ImmutableMap.of();
     localTypedefs = ImmutableMap.of();
     escapedVars = ImmutableSet.of();

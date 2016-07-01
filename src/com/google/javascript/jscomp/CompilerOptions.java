@@ -17,12 +17,14 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.annotations.GwtIncompatible;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
+import com.google.javascript.jscomp.parsing.Config;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SourcePosition;
@@ -105,33 +107,42 @@ public class CompilerOptions {
    */
   private boolean assumeStrictThis;
 
+  private boolean allowHotswapReplaceScript = false;
+  private boolean preserveDetailedSourceInfo = false;
+  private boolean continueAfterErrors = false;
+
   /**
-   * Configures the compiler for use as an IDE backend.  In this mode:
-   * <ul>
-   *  <li>No optimization passes will run.</li>
-   *  <li>The last time custom passes are invoked is
-   *      {@link CustomPassExecutionTime#BEFORE_OPTIMIZATIONS}</li>
-   *  <li>The compiler will always try to process all inputs fully, even
-   *      if it encounters errors.</li>
-   *  <li>The compiler may record more information than is strictly
-   *      needed for codegen.</li>
-   * </ul>
+   * Whether the compiler should generate an output file that represents the type-only interface
+   * of the code being compiled.  This is useful for incremental type checking.
    */
-  public boolean ideMode;
+  private boolean generateTypedExterns;
 
-  private boolean parseJsDocDocumentation = false;
-  private boolean preserveJsDocWhitespace = false;
+  public void setIncrementalTypeChecking(boolean value) {
+    generateTypedExterns = value;
+    if (value) {
+      setPreserveTypeAnnotations(value);
+      setOutputJs(OutputJs.NORMAL);
+    }
+  }
+
+  public boolean shouldGenerateTypedExterns() {
+    return generateTypedExterns;
+  }
+
+  private Config.JsDocParsing parseJsDocDocumentation = Config.JsDocParsing.TYPES_ONLY;
 
   /**
-   * Even if checkTypes is disabled, clients might want to still infer types.
-   * This is mostly used when ideMode is enabled.
+   * Even if checkTypes is disabled, clients such as IDEs might want to still infer types.
    */
   boolean inferTypes;
 
   private boolean useNewTypeInference;
 
+  private boolean runOTIAfterNTI = true;
+
   /**
-   * Relevant only when {@link #useNewTypeInference} is true, where we normally disable OTI errors.
+   * Relevant only when {@link #useNewTypeInference} and {@link #runOTIAfterNTI} are both true,
+   * where we normally disable OTI errors.
    * If you want both NTI and OTI errors in this case, set to true.
    * E.g. if using using a warnings guard to filter NTI or OTI warnings in new or legacy code,
    * respectively.
@@ -654,8 +665,8 @@ public class CompilerOptions {
   /** Processes goog.provide() and goog.require() calls */
   public boolean closurePass;
 
-  /** Do not strip goog.require() calls from the code. */
-  public boolean preserveGoogRequires;
+  /** Do not strip goog.provide()/goog.require() calls from the code. */
+  private boolean preserveGoogProvidesAndRequires;
 
   /** Processes jQuery aliases */
   public boolean jqueryPass;
@@ -728,7 +739,17 @@ public class CompilerOptions {
   /** Record function information */
   public boolean recordFunctionInformation;
 
-  public boolean checksOnly;
+  boolean checksOnly;
+
+  static enum OutputJs {
+    // Don't output anything.
+    NONE,
+    // Output a "sentinel" file containing just a comment.
+    SENTINEL,
+    // Output the compiled JS.
+    NORMAL,
+  }
+  OutputJs outputJs;
 
   public boolean generateExports;
 
@@ -753,6 +774,9 @@ public class CompilerOptions {
 
   /** Id generators to replace. */
   ImmutableMap<String, RenamingMap> idGenerators;
+
+  /** Hash function to use for xid generation. */
+  Xid.HashFunction xidHashFunction;
 
   /**
    * A previous map of ids (serialized to a string by a previous compile).
@@ -977,6 +1001,20 @@ public class CompilerOptions {
   }
 
   /**
+   * Print all configuration options to stderr after the compiler is initialized.
+   */
+  boolean printConfig = false;
+
+  /**
+   * Should the compiler print its configuration options to stderr when they are initialized?
+   *
+   * <p> Default {@code false}.
+   */
+  public void setPrintConfig(boolean printConfig) {
+    this.printConfig = printConfig;
+  }
+
+  /**
    * Initializes compiler options. All options are disabled by default.
    *
    * Command-line frontends to the compiler should set these properties
@@ -1073,7 +1111,7 @@ public class CompilerOptions {
     locale = null;
     markAsCompiled = false;
     closurePass = false;
-    preserveGoogRequires = false;
+    preserveGoogProvidesAndRequires = false;
     jqueryPass = false;
     angularPass = false;
     polymerPass = false;
@@ -1094,6 +1132,7 @@ public class CompilerOptions {
     appNameStr = "";
     recordFunctionInformation = false;
     checksOnly = false;
+    outputJs = OutputJs.NORMAL;
     generateExports = false;
     generateExportsAfterTypeChecking = true;
     exportLocalPropertyDefinitions = false;
@@ -1368,6 +1407,13 @@ public class CompilerOptions {
   }
 
   /**
+   * Sets the hash function to use for Xid
+   */
+  public void setXidHashFunction(Xid.HashFunction xidHashFunction) {
+    this.xidHashFunction = xidHashFunction;
+  }
+
+  /**
    * Sets the id generators to replace.
    */
   public void setIdGenerators(Map<String, RenamingMap> idGenerators) {
@@ -1511,6 +1557,10 @@ public class CompilerOptions {
 
   public void setChecksOnly(boolean checksOnly) {
     this.checksOnly = checksOnly;
+  }
+
+  void setOutputJs(OutputJs outputJs) {
+    this.outputJs = outputJs;
   }
 
   public void setGenerateExports(boolean generateExports) {
@@ -1764,6 +1814,14 @@ public class CompilerOptions {
     this.useNewTypeInference = enable;
   }
 
+  public boolean getRunOTIAfterNTI() {
+    return this.runOTIAfterNTI;
+  }
+
+  public void setRunOTIAfterNTI(boolean enable) {
+    this.runOTIAfterNTI = enable;
+  }
+
   // Not dead code; used by the open-source users of the compiler.
   public void setReportOTIErrorsUnderNTI(boolean enable) {
     this.reportOTIErrorsUnderNTI = enable;
@@ -1808,18 +1866,76 @@ public class CompilerOptions {
          ImmutableMap.copyOf(propertyInvalidationErrors);
   }
 
+  /**
+   * Configures the compiler for use as an IDE backend.  In this mode:
+   * <ul>
+   *  <li>No optimization passes will run.</li>
+   *  <li>The last time custom passes are invoked is
+   *      {@link CustomPassExecutionTime#BEFORE_OPTIMIZATIONS}</li>
+   *  <li>The compiler will always try to process all inputs fully, even
+   *      if it encounters errors.</li>
+   *  <li>The compiler may record more information than is strictly
+   *      needed for codegen.</li>
+   * </ul>
+   *
+   * @deprecated Some "IDE" clients will need some of these options but not
+   * others. Consider calling setChecksOnly, setAllowRecompilation, etc,
+   * explicitly, instead of calling this method which does a variety of
+   * different things.
+   */
+  @Deprecated
   public void setIdeMode(boolean ideMode) {
-    this.ideMode = ideMode;
+    setChecksOnly(ideMode);
+    setContinueAfterErrors(ideMode);
+    setAllowHotswapReplaceScript(ideMode);
+    setPreserveDetailedSourceInfo(ideMode);
+    setParseJsDocDocumentation(
+        ideMode
+            ? Config.JsDocParsing.INCLUDE_DESCRIPTIONS_NO_WHITESPACE
+            : Config.JsDocParsing.TYPES_ONLY);
+  }
+
+  public void setAllowHotswapReplaceScript(boolean allowRecompilation) {
+    this.allowHotswapReplaceScript = allowRecompilation;
+  }
+
+  boolean allowsHotswapReplaceScript() {
+    return allowHotswapReplaceScript;
+  }
+
+  public void setPreserveDetailedSourceInfo(boolean preserveDetailedSourceInfo) {
+    this.preserveDetailedSourceInfo = preserveDetailedSourceInfo;
+  }
+
+  boolean preservesDetailedSourceInfo() {
+    return preserveDetailedSourceInfo;
+  }
+
+  public void setContinueAfterErrors(boolean continueAfterErrors) {
+    this.continueAfterErrors = continueAfterErrors;
+  }
+
+  boolean canContinueAfterErrors() {
+    return continueAfterErrors;
+  }
+
+
+  @Deprecated
+  public void setParseJsDocDocumentation(boolean parseJsDocDocumentation) {
+    setParseJsDocDocumentation(
+        parseJsDocDocumentation
+            ? Config.JsDocParsing.INCLUDE_DESCRIPTIONS_NO_WHITESPACE
+            : Config.JsDocParsing.TYPES_ONLY);
   }
 
   /**
-   * Enables or disables the parsing of JSDoc documentation. When IDE mode is
-   * enabled then documentation is always parsed.
+   * Enables or disables the parsing of JSDoc documentation, and optionally also
+   * the preservation of all whitespace and formatting within a JSDoc comment.
+   * By default, whitespace is collapsed for all comments except {@literal @license} and
+   * {@literal @preserve} blocks,
    *
-   * @param parseJsDocDocumentation
-   *           True to enable JSDoc documentation parsing, false to disable it.
    */
-  public void setParseJsDocDocumentation(boolean parseJsDocDocumentation) {
+  public void setParseJsDocDocumentation(Config.JsDocParsing parseJsDocDocumentation) {
     this.parseJsDocDocumentation = parseJsDocDocumentation;
   }
 
@@ -1828,35 +1944,14 @@ public class CompilerOptions {
    *
    * @return True when JSDoc documentation will be parsed, false if not.
    */
-  public boolean isParseJsDocDocumentation() {
-    return this.ideMode || this.parseJsDocDocumentation;
+  public Config.JsDocParsing isParseJsDocDocumentation() {
+    return this.parseJsDocDocumentation;
   }
 
   /**
-   * Enables or disables the preservation of all whitespace and formatting within a JSDoc
-   * comment. By default, whitespace is collapsed for all comments except {@literal @license} and
-   * {@literal @preserve} blocks,
-   *
-   * <p>Setting this option has no effect if {@link #isParseJsDocDocumentation()}
-   * returns false.
-   *
-   * @param preserveJsDocWhitespace
-   *           True to preserve whitespace in text extracted from JSDoc comments.
-   */
-  public void setPreserveJsDocWhitespace(boolean preserveJsDocWhitespace) {
-    this.preserveJsDocWhitespace = preserveJsDocWhitespace;
-  }
-
-  /**
-   * @return Whether to preserve whitespace in all text extracted from JSDoc comments.
-   */
-  public boolean isPreserveJsDocWhitespace() {
-    return preserveJsDocWhitespace;
-  }
-
-  /**
-   * Skip all passes (other than transpilation, if requested). Don't inject es6_runtime.js
-   * or do any checks/optimizations (this is useful for per-file transpilation).
+   * Skip all passes (other than transpilation, if requested). Don't inject any
+   * runtime libraries (unless explicitly requested) or do any checks/optimizations
+   * (this is useful for per-file transpilation).
    */
   public void setSkipNonTranspilationPasses(boolean skipNonTranspilationPasses) {
     this.skipNonTranspilationPasses = skipNonTranspilationPasses;
@@ -2023,6 +2118,10 @@ public class CompilerOptions {
     this.convertToDottedProperties = convertToDottedProperties;
   }
 
+  public void setUseTypesForOptimization(boolean useTypesForOptimization) {
+    this.useTypesForOptimization = useTypesForOptimization;
+  }
+
   public void setRewriteFunctionExpressions(boolean rewriteFunctionExpressions) {
     this.rewriteFunctionExpressions = rewriteFunctionExpressions;
   }
@@ -2167,8 +2266,17 @@ public class CompilerOptions {
     this.closurePass = closurePass;
   }
 
-  public void setPreserveGoogRequires(boolean preserveGoogRequires) {
-    this.preserveGoogRequires = preserveGoogRequires;
+  @Deprecated
+  public void setPreserveGoogRequires(boolean preserveGoogProvidesAndRequires) {
+    setPreserveGoogProvidesAndRequires(preserveGoogProvidesAndRequires);
+  }
+
+  public void setPreserveGoogProvidesAndRequires(boolean preserveGoogProvidesAndRequires) {
+    this.preserveGoogProvidesAndRequires = preserveGoogProvidesAndRequires;
+  }
+
+  public boolean shouldPreservesGoogProvidesAndRequires() {
+    return this.preserveGoogProvidesAndRequires || this.shouldGenerateTypedExterns();
   }
 
   public void setPreserveTypeAnnotations(boolean preserveTypeAnnotations) {
@@ -2414,6 +2522,211 @@ public class CompilerOptions {
     this.conformanceConfigs = ImmutableList.copyOf(configs);
   }
 
+  @Override
+  public String toString() {
+    String strValue =
+        MoreObjects.toStringHelper(this)
+            .omitNullValues()
+            .add("aggressiveFusion", aggressiveFusion)
+            .add("aliasableStrings", aliasableStrings)
+            .add("aliasAllStrings", aliasAllStrings)
+            .add("aliasHandler", getAliasTransformationHandler())
+            .add("aliasStringsBlacklist", aliasStringsBlacklist)
+            .add("allowHotswapReplaceScript", allowsHotswapReplaceScript())
+            .add("ambiguateProperties", ambiguateProperties)
+            .add("angularPass", angularPass)
+            .add("anonymousFunctionNaming", anonymousFunctionNaming)
+            .add("appNameStr", appNameStr)
+            .add("assumeClosuresOnlyCaptureReferences", assumeClosuresOnlyCaptureReferences)
+            .add("assumeStrictThis", assumeStrictThis())
+            .add("brokenClosureRequiresLevel", brokenClosureRequiresLevel)
+            .add("chainCalls", chainCalls)
+            .add("checkDeterminism", getCheckDeterminism())
+            .add("checkEventfulObjectDisposalPolicy", checkEventfulObjectDisposalPolicy)
+            .add("checkGlobalNamesLevel", checkGlobalNamesLevel)
+            .add("checkGlobalThisLevel", checkGlobalThisLevel)
+            .add("checkMissingGetCssNameBlacklist", checkMissingGetCssNameBlacklist)
+            .add("checkMissingGetCssNameLevel", checkMissingGetCssNameLevel)
+            .add("checksOnly", checksOnly)
+            .add("checkSuspiciousCode", checkSuspiciousCode)
+            .add("checkSymbols", checkSymbols)
+            .add("checkTypes", checkTypes)
+            .add("closurePass", closurePass)
+            .add("coalesceVariableNames", coalesceVariableNames)
+            .add("codingConvention", getCodingConvention())
+            .add("collapseAnonymousFunctions", collapseAnonymousFunctions)
+            .add("collapseObjectLiterals", collapseObjectLiterals)
+            .add("collapseProperties", collapseProperties)
+            .add("collapseVariableDeclarations", collapseVariableDeclarations)
+            .add("colorizeErrorOutput", shouldColorizeErrorOutput())
+            .add("computeFunctionSideEffects", computeFunctionSideEffects)
+            .add("conformanceConfigs", getConformanceConfigs())
+            .add("continueAfterErrors", canContinueAfterErrors())
+            .add("convertToDottedProperties", convertToDottedProperties)
+            .add("crossModuleCodeMotion", crossModuleCodeMotion)
+            .add("crossModuleCodeMotionNoStubMethods", crossModuleCodeMotionNoStubMethods)
+            .add("crossModuleMethodMotion", crossModuleMethodMotion)
+            .add("cssRenamingMap", cssRenamingMap)
+            .add("cssRenamingWhitelist", cssRenamingWhitelist)
+            .add("customPasses", customPasses)
+            .add("dartPass", dartPass)
+            .add("deadAssignmentElimination", deadAssignmentElimination)
+            .add("debugFunctionSideEffectsPath", debugFunctionSideEffectsPath)
+            .add("declaredGlobalExternsOnWindow", declaredGlobalExternsOnWindow)
+            .add("defineReplacements", getDefineReplacements())
+            .add("dependencyOptions", dependencyOptions)
+            .add("devirtualizePrototypeMethods", devirtualizePrototypeMethods)
+            .add("devMode", devMode)
+            .add("disambiguatePrivateProperties", disambiguatePrivateProperties)
+            .add("disambiguateProperties", disambiguateProperties)
+            .add("enforceAccessControlCodingConventions", enforceAccessControlCodingConventions)
+            .add("environment", getEnvironment())
+            .add("errorFormat", errorFormat)
+            .add("errorHandler", errorHandler)
+            .add("exportLocalPropertyDefinitions", exportLocalPropertyDefinitions)
+            .add("exportTestFunctions", exportTestFunctions)
+            .add("externExports", isExternExportsEnabled())
+            .add("externExportsPath", externExportsPath)
+            .add("extraAnnotationNames", extraAnnotationNames)
+            .add("extractPrototypeMemberDeclarations", extractPrototypeMemberDeclarations)
+            .add("extraSmartNameRemoval", extraSmartNameRemoval)
+            .add("flowSensitiveInlineVariables", flowSensitiveInlineVariables)
+            .add("foldConstants", foldConstants)
+            .add("forceLibraryInjection", forceLibraryInjection)
+            .add("gatherCssNames", gatherCssNames)
+            .add("generateExportsAfterTypeChecking", generateExportsAfterTypeChecking)
+            .add("generateExports", generateExports)
+            .add("generatePseudoNames", generatePseudoNames)
+            .add("generateTypedExterns", shouldGenerateTypedExterns())
+            .add("idGenerators", idGenerators)
+            .add("idGeneratorsMapSerialized", idGeneratorsMapSerialized)
+            .add("inferConsts", inferConsts)
+            .add("inferTypes", inferTypes)
+            .add("inlineConstantVars", inlineConstantVars)
+            .add("inlineFunctions", inlineFunctions)
+            .add("inlineGetters", inlineGetters)
+            .add("inlineLocalFunctions", inlineLocalFunctions)
+            .add("inlineLocalVariables", inlineLocalVariables)
+            .add("inlineProperties", inlineProperties)
+            .add("inlineVariables", inlineVariables)
+            .add("inputAnonymousFunctionNamingMap", inputAnonymousFunctionNamingMap)
+            .add("inputDelimiter", inputDelimiter)
+            .add("inputPropertyMap", inputPropertyMap)
+            .add("inputSourceMaps", inputSourceMaps)
+            .add("inputVariableMap", inputVariableMap)
+            .add("instrumentationTemplateFile", instrumentationTemplateFile)
+            .add("instrumentationTemplate", instrumentationTemplate)
+            .add("instrumentForCoverage", instrumentForCoverage)
+            .add("j2clPass", j2clPass)
+            .add("jqueryPass", jqueryPass)
+            .add("labelRenaming", labelRenaming)
+            .add("languageIn", getLanguageIn())
+            .add("languageOut", getLanguageOut())
+            .add("legacyCodeCompile", legacyCodeCompile)
+            .add("lineBreak", lineBreak)
+            .add("lineLengthThreshold", lineLengthThreshold)
+            .add("locale", locale)
+            .add("markAsCompiled", markAsCompiled)
+            .add("markNoSideEffectCalls", markNoSideEffectCalls)
+            .add("maxFunctionSizeAfterInlining", maxFunctionSizeAfterInlining)
+            .add("messageBundle", messageBundle)
+            .add("moduleRoots", moduleRoots)
+            .add("moveFunctionDeclarations", moveFunctionDeclarations)
+            .add("nameGenerator", nameGenerator)
+            .add("nameReferenceGraphPath", nameReferenceGraphPath)
+            .add("nameReferenceReportPath", nameReferenceReportPath)
+            .add("optimizeArgumentsArray", optimizeArgumentsArray)
+            .add("optimizeCalls", optimizeCalls)
+            .add("optimizeParameters", optimizeParameters)
+            .add("optimizeReturns", optimizeReturns)
+            .add("outputCharset", outputCharset)
+            .add("outputJs", outputJs)
+            .add("outputJsStringUsage", outputJsStringUsage)
+            .add(
+                "parentModuleCanSeeSymbolsDeclaredInChildren",
+                parentModuleCanSeeSymbolsDeclaredInChildren)
+            .add("parseJsDocDocumentation", isParseJsDocDocumentation())
+            .add("polymerPass", polymerPass)
+            .add("preferLineBreakAtEndOfFile", preferLineBreakAtEndOfFile)
+            .add("preferSingleQuotes", preferSingleQuotes)
+            .add("preferStableNames", preferStableNames)
+            .add("preserveDetailedSourceInfo", preservesDetailedSourceInfo())
+            .add("preserveGoogProvidesAndRequires", preserveGoogProvidesAndRequires)
+            .add("preserveTypeAnnotations", preserveTypeAnnotations)
+            .add("prettyPrint", prettyPrint)
+            .add("preventLibraryInjection", preventLibraryInjection)
+            .add("printConfig", printConfig)
+            .add("printInputDelimiter", printInputDelimiter)
+            .add("printSourceAfterEachPass", printSourceAfterEachPass)
+            .add("processCommonJSModules", processCommonJSModules)
+            .add("processObjectPropertyString", processObjectPropertyString)
+            .add("propertyInvalidationErrors", propertyInvalidationErrors)
+            .add("propertyRenaming", propertyRenaming)
+            .add("protectHiddenSideEffects", protectHiddenSideEffects)
+            .add("quoteKeywordProperties", quoteKeywordProperties)
+            .add("recordFunctionInformation", recordFunctionInformation)
+            .add("removeAbstractMethods", removeAbstractMethods)
+            .add("removeClosureAsserts", removeClosureAsserts)
+            .add("removeDeadCode", removeDeadCode)
+            .add("removeUnusedClassProperties", removeUnusedClassProperties)
+            .add("removeUnusedConstructorProperties", removeUnusedConstructorProperties)
+            .add("removeUnusedLocalVars", removeUnusedLocalVars)
+            .add(
+                "removeUnusedPrototypePropertiesInExterns",
+                removeUnusedPrototypePropertiesInExterns)
+            .add("removeUnusedPrototypeProperties", removeUnusedPrototypeProperties)
+            .add("removeUnusedVars", removeUnusedVars)
+            .add(
+                "renamePrefixNamespaceAssumeCrossModuleNames",
+                renamePrefixNamespaceAssumeCrossModuleNames)
+            .add("renamePrefixNamespace", renamePrefixNamespace)
+            .add("renamePrefix", renamePrefix)
+            .add("replaceIdGenerators", replaceIdGenerators)
+            .add("replaceMessagesWithChromeI18n", replaceMessagesWithChromeI18n)
+            .add("replaceStringsFunctionDescriptions", replaceStringsFunctionDescriptions)
+            .add("replaceStringsInputMap", replaceStringsInputMap)
+            .add("replaceStringsPlaceholderToken", replaceStringsPlaceholderToken)
+            .add("replaceStringsReservedStrings", replaceStringsReservedStrings)
+            .add("reportMissingOverride", reportMissingOverride)
+            .add("reportOTIErrorsUnderNTI", reportOTIErrorsUnderNTI)
+            .add("reportPath", reportPath)
+            .add("reserveRawExports", reserveRawExports)
+            .add("rewriteFunctionExpressions", rewriteFunctionExpressions)
+            .add("rewritePolyfills", rewritePolyfills)
+            .add("runtimeTypeCheckLogFunction", runtimeTypeCheckLogFunction)
+            .add("runtimeTypeCheck", runtimeTypeCheck)
+            .add("shadowVariables", shadowVariables)
+            .add("skipNonTranspilationPasses", skipNonTranspilationPasses)
+            .add("skipTranspilationAndCrash", skipTranspilationAndCrash)
+            .add("smartNameRemoval", smartNameRemoval)
+            .add("sourceMapDetailLevel", sourceMapDetailLevel)
+            .add("sourceMapFormat", sourceMapFormat)
+            .add("sourceMapLocationMappings", sourceMapLocationMappings)
+            .add("sourceMapOutputPath", sourceMapOutputPath)
+            .add("stripNamePrefixes", stripNamePrefixes)
+            .add("stripNameSuffixes", stripNameSuffixes)
+            .add("stripTypePrefixes", stripTypePrefixes)
+            .add("stripTypes", stripTypes)
+            .add("summaryDetailLevel", summaryDetailLevel)
+            .add("syntheticBlockEndMarker", syntheticBlockEndMarker)
+            .add("syntheticBlockStartMarker", syntheticBlockStartMarker)
+            .add("tcProjectId", tcProjectId)
+            .add("tracer", tracer)
+            .add("transformAMDToCJSModules", transformAMDToCJSModules)
+            .add("trustedStrings", trustedStrings)
+            .add("tweakProcessing", getTweakProcessing())
+            .add("tweakReplacements", getTweakReplacements())
+            .add("useDebugLog", useDebugLog)
+            .add("useNewTypeInference", getNewTypeInference())
+            .add("useTypesForOptimization", useTypesForOptimization)
+            .add("variableRenaming", variableRenaming)
+            .add("warningsGuard", getWarningsGuard())
+            .add("wrapGoogModulesForWhitespaceOnly", wrapGoogModulesForWhitespaceOnly)
+            .toString();
+
+    return strValue;
+  }
+
   //////////////////////////////////////////////////////////////////////////////
   // Enums
 
@@ -2455,6 +2768,16 @@ public class CompilerOptions {
     ECMASCRIPT6_TYPED,
 
     /**
+     * A superset of ES6 which adds the exponent operator (**).
+     */
+    ECMASCRIPT7,
+
+    /**
+     * A superset of ES7 which adds async functions.
+     */
+    ECMASCRIPT8,
+
+    /**
      * For languageOut only. The same language mode as the input.
      */
     NO_TRANSPILE;
@@ -2463,6 +2786,8 @@ public class CompilerOptions {
     public boolean isStrict() {
       Preconditions.checkState(this != NO_TRANSPILE);
       switch (this) {
+        case ECMASCRIPT7:
+        case ECMASCRIPT8:
         case ECMASCRIPT5_STRICT:
         case ECMASCRIPT6_STRICT:
         case ECMASCRIPT6_TYPED:
@@ -2482,6 +2807,8 @@ public class CompilerOptions {
     public boolean isEs6OrHigher() {
       Preconditions.checkState(this != NO_TRANSPILE);
       switch (this) {
+        case ECMASCRIPT7:
+        case ECMASCRIPT8:
         case ECMASCRIPT6:
         case ECMASCRIPT6_STRICT:
         case ECMASCRIPT6_TYPED:
@@ -2514,6 +2841,12 @@ public class CompilerOptions {
         case "ECMASCRIPT6_TYPED":
         case "ES6_TYPED":
           return LanguageMode.ECMASCRIPT6_TYPED;
+        case "ECMASCRIPT7":
+        case "ES7":
+          return LanguageMode.ECMASCRIPT7;
+        case "ECMASCRIPT8":
+        case "ES8":
+          return LanguageMode.ECMASCRIPT8;
       }
       return null;
     }

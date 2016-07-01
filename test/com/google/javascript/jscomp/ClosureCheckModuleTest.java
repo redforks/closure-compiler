@@ -15,6 +15,8 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.ClosureCheckModule.EXPORT_NOT_A_MODULE_LEVEL_STATEMENT;
+import static com.google.javascript.jscomp.ClosureCheckModule.EXPORT_REPEATED_ERROR;
 import static com.google.javascript.jscomp.ClosureCheckModule.GOOG_MODULE_REFERENCES_THIS;
 import static com.google.javascript.jscomp.ClosureCheckModule.GOOG_MODULE_USES_THROW;
 import static com.google.javascript.jscomp.ClosureCheckModule.LET_GOOG_REQUIRE;
@@ -92,6 +94,55 @@ public final class ClosureCheckModuleTest extends Es6CompilerTestCase {
             "goog.module('abc');",
             "",
             "var x = goog.require('other.x');"),
+        MULTIPLE_MODULES_IN_FILE);
+  }
+
+  public void testBundledGoogModules() {
+    testError(
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports){",
+            "  'use strict';",
+            "  goog.module('xyz');",
+            "  foo.call(this, 1, 2, 3);",
+            "  return exports;",
+            "});"),
+        GOOG_MODULE_REFERENCES_THIS);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports){",
+            "  'use strict';",
+            "  goog.module('foo.example.ClassName');",
+            "  /** @constructor @export */ function ClassName() {}",
+            "  exports = ClassName;",
+            "  return exports;",
+            "});"),
+        ClosureCheckModule.AT_EXPORT_IN_GOOG_MODULE);
+
+    testSameEs6(
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports){",
+            "  'use strict';",
+            "  goog.module('xyz');",
+            "  exports = class {}",
+            "  return exports;",
+            "});",
+            "goog.loadModule(function(exports){",
+            "  goog.module('abc');",
+            "  var Foo = goog.require('xyz');",
+            "  var x = new Foo;",
+            "  return exports;",
+            "});"));
+
+    testError(
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports){",
+            "  'use strict';",
+            "  goog.module('xyz');",
+            "  goog.module('abc');",
+            "  var x = goog.require('other.x');",
+            "  return exports;",
+            "});"),
         MULTIPLE_MODULES_IN_FILE);
   }
 
@@ -234,6 +285,13 @@ public final class ClosureCheckModuleTest extends Es6CompilerTestCase {
         LINE_JOINER.join(
             "goog.module('xyz');",
             "",
+            "var foo = goog.require('other.x').foo;"),
+        REQUIRE_NOT_AT_TOP_LEVEL);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.module('xyz');",
+            "",
             "var x = goog.require('other.x').foo.toString();"),
         REQUIRE_NOT_AT_TOP_LEVEL);
 
@@ -308,5 +366,29 @@ public final class ClosureCheckModuleTest extends Es6CompilerTestCase {
             "goog.module('xyz');",
             "",
             "const {assert, fail} = goog.require('goog.asserts');"));
+  }
+
+  public void testIllegalExports() {
+    testError(
+        LINE_JOINER.join(
+            "goog.module('xyz');",
+            "",
+            "if (window.exportMe) { exports = 5; }"),
+            EXPORT_NOT_A_MODULE_LEVEL_STATEMENT);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.module('xyz');",
+            "",
+            "window.exportMe && (exports = 5);"),
+            EXPORT_NOT_A_MODULE_LEVEL_STATEMENT);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.module('xyz');",
+            "",
+            "exports = 5;",
+            "exports = 'str';"),
+            EXPORT_REPEATED_ERROR);
   }
 }

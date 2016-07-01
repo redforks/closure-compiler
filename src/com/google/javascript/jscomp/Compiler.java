@@ -256,7 +256,7 @@ public class Compiler extends AbstractCompiler {
    */
   public Compiler(PrintStream stream) {
     addChangeHandler(recentChange);
-    outStream = stream;
+    this.outStream = stream;
   }
 
   /**
@@ -301,12 +301,12 @@ public class Compiler extends AbstractCompiler {
     this.options = options;
     this.languageMode = options.getLanguageIn();
     if (errorManager == null) {
-      if (outStream == null) {
+      if (this.outStream == null) {
         setErrorManager(
             new LoggerErrorManager(createMessageFormatter(), logger));
       } else {
         PrintStreamErrorManager printer =
-            new PrintStreamErrorManager(createMessageFormatter(), outStream);
+            new PrintStreamErrorManager(createMessageFormatter(), this.outStream);
         printer.setSummaryDetailLevel(options.summaryDetailLevel);
         setErrorManager(printer);
       }
@@ -321,6 +321,13 @@ public class Compiler extends AbstractCompiler {
     }
 
     initWarningsGuard(options.getWarningsGuard());
+  }
+
+  public void printConfig(PrintStream printStream) {
+    printStream.println("==== CompilerOptions ====");
+    printStream.println(options.toString());
+    printStream.println("==== WarningsGuard ====");
+    printStream.println(warningsGuard.toString());
   }
 
   void initWarningsGuard(WarningsGuard warningsGuard) {
@@ -350,7 +357,7 @@ public class Compiler extends AbstractCompiler {
     // With NTI, we still need OTI to run because the later passes that use
     // types only understand OTI types at the moment.
     // But we do not want to see the warnings from OTI.
-    if (options.getNewTypeInference()) {
+    if (options.getNewTypeInference() && options.getRunOTIAfterNTI()) {
       options.checkTypes = true;
       if (!options.reportOTIErrorsUnderNTI) {
         options.setWarningLevel(
@@ -408,6 +415,10 @@ public class Compiler extends AbstractCompiler {
     List<JSModule> modules = new ArrayList<>(1);
     modules.add(module);
     initModules(externs, modules, options);
+
+    if (options.printConfig) {
+      printConfig(System.err);
+    }
   }
 
   /**
@@ -712,8 +723,7 @@ public class Compiler extends AbstractCompiler {
         return;
       }
 
-      // IDE-mode is defined to stop here, before the heavy rewriting begins.
-      if (!options.checksOnly && !options.ideMode) {
+      if (!options.checksOnly && !options.shouldGenerateTypedExterns()) {
         optimize();
       }
     }
@@ -728,7 +738,7 @@ public class Compiler extends AbstractCompiler {
     setProgress(1.0, "recordFunctionInformation");
 
     if (tracker != null) {
-      tracker.outputTracerReport(outStream == null ? System.out : outStream);
+      tracker.outputTracerReport();
     }
   }
 
@@ -938,7 +948,7 @@ public class Compiler extends AbstractCompiler {
   Tracer newTracer(String passName) {
     String comment = passName
         + (recentChange.hasCodeChanged() ? " on recently changed AST" : "");
-    if (options.tracer.isOn()) {
+    if (options.tracer.isOn() && tracker != null) {
       tracker.recordPassStart(passName, true);
     }
     return new Tracer("Compiler", comment);
@@ -946,7 +956,7 @@ public class Compiler extends AbstractCompiler {
 
   void stopTracer(Tracer t, String passName) {
     long result = t.stop();
-    if (options.tracer.isOn()) {
+    if (options.tracer.isOn() && tracker != null) {
       tracker.recordPassStop(passName, result);
     }
   }
@@ -1190,7 +1200,11 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   public TypeIRegistry getTypeIRegistry() {
-    return getTypeRegistry();
+    if (options.getNewTypeInference() && !options.getRunOTIAfterNTI()) {
+      return getSymbolTable();
+    } else {
+      return getTypeRegistry();
+    }
   }
 
   @Override
@@ -1347,7 +1361,7 @@ public class Compiler extends AbstractCompiler {
     jsRoot.detachChildren();
 
     if (options.tracer.isOn()) {
-      tracker = new PerformanceTracker(jsRoot, options.tracer);
+      tracker = new PerformanceTracker(jsRoot, options.tracer, this.outStream);
       addChangeHandler(tracker.getCodeChangeHandler());
     }
 
@@ -1650,7 +1664,9 @@ public class Compiler extends AbstractCompiler {
   @Override
   Node parseSyntheticCode(String fileName, String js) {
     initCompilerOptionsIfTesting();
-    return parse(SourceFile.fromCode(fileName, js));
+    CompilerInput input = new CompilerInput(SourceFile.fromCode(fileName, js));
+    putCompilerInput(input.getInputId(), input);
+    return input.getAstRoot(this);
   }
 
   @Override
@@ -2113,11 +2129,6 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  public boolean isIdeMode() {
-    return options.ideMode;
-  }
-
-  @Override
   Config getParserConfig(ConfigContext context) {
     if (parserConfig == null) {
       switch (options.getLanguageIn()) {
@@ -2145,6 +2156,14 @@ public class Compiler extends AbstractCompiler {
           parserConfig = createConfig(Config.LanguageMode.ECMASCRIPT6_TYPED);
           externsParserConfig = parserConfig;
           break;
+        case ECMASCRIPT7:
+          parserConfig = createConfig(Config.LanguageMode.ECMASCRIPT7);
+          externsParserConfig = parserConfig;
+          break;
+        case ECMASCRIPT8:
+          parserConfig = createConfig(Config.LanguageMode.ECMASCRIPT8);
+          externsParserConfig = parserConfig;
+          break;
         default:
           throw new IllegalStateException("unexpected language mode: "
               + options.getLanguageIn());
@@ -2159,12 +2178,18 @@ public class Compiler extends AbstractCompiler {
   }
 
   protected Config createConfig(Config.LanguageMode mode) {
-    return ParserRunner.createConfig(
-        isIdeMode(),
-        options.isParseJsDocDocumentation(),
-        options.isPreserveJsDocWhitespace(),
-        mode,
-        options.extraAnnotationNames);
+    Config config =
+        ParserRunner.createConfig(
+            mode,
+            options.isParseJsDocDocumentation(),
+            options.preservesDetailedSourceInfo()
+                ? Config.SourceLocationInformation.PRESERVE
+                : Config.SourceLocationInformation.DISCARD,
+            options.canContinueAfterErrors()
+                ? Config.RunMode.KEEP_GOING
+                : Config.RunMode.STOP_AFTER_ERROR,
+            options.extraAnnotationNames);
+    return config;
   }
 
   //------------------------------------------------------------------------
@@ -2237,14 +2262,14 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   boolean hasHaltingErrors() {
-    return !isIdeMode() && getErrorCount() > 0;
+    return !getOptions().canContinueAfterErrors() && getErrorCount() > 0;
   }
 
   /**
    * Consults the {@link ErrorManager} to see if we've encountered errors
    * that should halt compilation. <p>
    *
-   * If {@link CompilerOptions#ideMode} is {@code true}, this function
+   * If {@link CompilerOptions#canContinueAfterErrors} is {@code true}, this function
    * always returns {@code false} without consulting the error manager. The
    * error manager will continue to be told about new errors and warnings, but
    * the compiler will complete compilation of all inputs.<p>
@@ -2364,6 +2389,10 @@ public class Compiler extends AbstractCompiler {
 
   VariableMap getPropertyMap() {
     return getPassConfig().getIntermediateState().propertyMap;
+  }
+
+  VariableMap getStringMap() {
+    return getPassConfig().getIntermediateState().stringMap;
   }
 
   @Override
@@ -2595,7 +2624,7 @@ public class Compiler extends AbstractCompiler {
     // Load/parse the code.
     String originalCode = ResourceLoader.loadTextResource(
         Compiler.class, "js/" + resourceName + ".js");
-    Node ast = parseSyntheticCode(originalCode);
+    Node ast = parseSyntheticCode(" [synthetic:" + resourceName + "] ", originalCode);
 
     // Look for string literals of the form 'require foo bar' or 'externs baz' or 'normalize'.
     // As we process each one, remove it from its parent.
@@ -2638,6 +2667,10 @@ public class Compiler extends AbstractCompiler {
 
     // Insert the code immediately after the last-inserted runtime library.
     Node firstChild = ast.removeChildren();
+    if (firstChild == null) {
+      // Handle require-only libraries.
+      return lastInjectedLibrary;
+    }
     Node lastChild = firstChild.getLastSibling();
     Node parent = getNodeForCodeInsertion(null);
     if (lastInjectedLibrary == null) {
@@ -2668,7 +2701,7 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   void addComments(String filename, List<Comment> comments) {
-    if (!isIdeMode()) {
+    if (!getOptions().preservesDetailedSourceInfo()) {
       throw new UnsupportedOperationException(
           "addComments may only be called in IDE mode.");
     }
@@ -2677,7 +2710,7 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   public List<Comment> getComments(String filename) {
-    if (!isIdeMode()) {
+    if (!getOptions().preservesDetailedSourceInfo()) {
       throw new UnsupportedOperationException(
           "getComments may only be called in IDE mode.");
     }

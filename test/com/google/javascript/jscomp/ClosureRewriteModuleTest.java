@@ -123,48 +123,88 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
   }
 
   public void testDestructuringImports() {
-    // TODO(blickly): Inline destructuring-based imports so that they can be used
-    // for importing type names like other imports.
-
-    // Var destructuring of both module and script goog.require() targets.
     testEs6(
         new String[] {
-            "goog.module('ns.b');",
-            "goog.provide('ns.c');",
-            LINE_JOINER.join(
-                "goog.module('ns.a');",
-                "var {foo, bar} = goog.require('ns.b');",
-                "var {baz, qux} = goog.require('ns.c');")},
-
+          "goog.module('ns.b'); /** @constructor */ exports.Foo = function() {};",
+          LINE_JOINER.join(
+              "goog.module('ns.a');",
+              "",
+              "var {Foo} = goog.require('ns.b');",
+              "",
+              "/** @type {Foo} */",
+              "var f = new Foo;")
+        },
         new String[] {
-            "/** @const */ var module$exports$ns$b = {}",
-            "goog.provide('ns.c');",
-            LINE_JOINER.join(
-                "/** @const */ var module$exports$ns$a = {}",
-                "/** @const */ var {foo: module$contents$ns$a_foo,",
-                "                   bar: module$contents$ns$a_bar} = module$exports$ns$b;",
-                "/** @const */ var {baz: module$contents$ns$a_baz,",
-                "                   qux: module$contents$ns$a_qux} = ns.c;")});
+          LINE_JOINER.join(
+              "/** @const */ var module$exports$ns$b = {};",
+              "/** @constructor */ module$exports$ns$b.Foo = function() {};"),
+          LINE_JOINER.join(
+              "/** @const */ var module$exports$ns$a = {}",
+              "/** @type {module$exports$ns$b.Foo} */",
+              "var module$contents$ns$a_f = new module$exports$ns$b.Foo;")});
 
-    // Const destructuring of both module and script goog.require() targets.
     testEs6(
         new String[] {
-            "goog.module('ns.b');",
-            "goog.provide('ns.c');",
-            LINE_JOINER.join(
-                "goog.module('ns.a');",
-                "const {foo, bar} = goog.require('ns.b');",
-                "const {baz, qux} = goog.require('ns.c');")},
-
+          "goog.provide('ns.b'); /** @constructor */ ns.b.Foo = function() {};",
+          LINE_JOINER.join(
+              "goog.module('ns.a');",
+              "",
+              "var {Foo} = goog.require('ns.b');",
+              "",
+              "/** @type {Foo} */",
+              "var f = new Foo;")
+        },
         new String[] {
-            "/** @const */ var module$exports$ns$b = {}",
-            "goog.provide('ns.c');",
-            LINE_JOINER.join(
-                "/** @const */ var module$exports$ns$a = {}",
-                "/** @const */ const {foo: module$contents$ns$a_foo,",
-                "                     bar: module$contents$ns$a_bar} = module$exports$ns$b;",
-                "/** @const */ const {baz: module$contents$ns$a_baz,",
-                "                     qux: module$contents$ns$a_qux} = ns.c;")});
+          "goog.provide('ns.b'); /** @constructor */ ns.b.Foo = function() {};",
+          LINE_JOINER.join(
+              "/** @const */ var module$exports$ns$a = {}",
+              "/** @type {ns.b.Foo} */",
+              "var module$contents$ns$a_f = new ns.b.Foo;")});
+
+    testEs6(
+        new String[] {
+          LINE_JOINER.join(
+              "goog.module('ns.b');",
+              "goog.module.declareLegacyNamespace();",
+              "",
+              "/** @constructor */ exports.Foo = function() {};"),
+          LINE_JOINER.join(
+              "goog.module('ns.a');",
+              "",
+              "var {Foo} = goog.require('ns.b');",
+              "",
+              "/** @type {Foo} */",
+              "var f = new Foo;")
+        },
+        new String[] {
+          LINE_JOINER.join(
+              "goog.provide('ns.b');",
+              "/** @constructor */ ns.b.Foo = function() {};"),
+          LINE_JOINER.join(
+              "/** @const */ var module$exports$ns$a = {}",
+              "/** @type {ns.b.Foo} */",
+              "var module$contents$ns$a_f = new ns.b.Foo;")});
+
+    testEs6(
+        new String[] {
+          "goog.module('ns.b'); /** @constructor */ exports.Foo = function() {};",
+          LINE_JOINER.join(
+              "goog.module('ns.a');",
+              "",
+              "var {Foo: Bar} = goog.require('ns.b');",
+              "",
+              "/** @type {Bar} */",
+              "var f = new Bar;")
+        },
+        new String[] {
+          LINE_JOINER.join(
+              "/** @const */ var module$exports$ns$b = {};",
+              "/** @constructor */ module$exports$ns$b.Foo = function() {};"),
+          LINE_JOINER.join(
+              "/** @const */ var module$exports$ns$a = {}",
+              "/** @type {module$exports$ns$b.Foo} */",
+              "var module$contents$ns$a_f = new module$exports$ns$b.Foo;")});
+
   }
 
   public void testDeclareLegacyNamespace() {
@@ -949,61 +989,6 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
                 "}")});
   }
 
-  public void testImportProperty1() {
-    // On a module.
-    test(
-        new String[] {
-            LINE_JOINER.join(
-                "goog.module('p.A');",
-                "/** @constructor */ function A() {}",
-                "exports.A = A;"),
-            LINE_JOINER.join(
-                "goog.module('p.C');",
-                "var A = goog.require('p.A').A;",
-                "function main() {",
-                "  /** @type {A} */ var a = new A;",
-                "}")},
-
-        new String[] {
-            LINE_JOINER.join(
-                "/** @const */ var module$exports$p$A = {};",
-                "/** @constructor */ function module$contents$p$A_A() {}",
-                "/** @const */ module$exports$p$A.A = module$contents$p$A_A;"),
-            LINE_JOINER.join(
-                "/** @const */ var module$exports$p$C = {};",
-                "var module$contents$p$C_A = module$exports$p$A.A;",
-                "function module$contents$p$C_main() {",
-                "  /** @type {module$contents$p$C_A} */ var a = new module$contents$p$C_A;",
-                "}")});
-  }
-
-  public void testImportProperty2() {
-    // On a legacy script.
-    test(
-        new String[] {
-            LINE_JOINER.join(
-                "goog.provide('p.A');",
-                "/** @constructor */ p.a = function A() {}"),
-            LINE_JOINER.join(
-                "goog.module('p.C');",
-                "var A = goog.require('p.A').A;",
-                "function main() {",
-                "  /** @type {A} */ var a = new A;",
-                "}")},
-
-        new String[] {
-            LINE_JOINER.join(
-                "goog.provide('p.A');",
-                "/** @constructor */ p.a = function A() {}"),
-            LINE_JOINER.join(
-                "/** @const */ var module$exports$p$C = {};",
-                "goog.require('p.A');",
-                "/** @const */ var module$contents$p$C_A = p.A.A;",
-                "function module$contents$p$C_main() {",
-                "  /** @type {module$contents$p$C_A} */ var a = new module$contents$p$C_A;",
-                "}")});
-  }
-
   public void testSetTestOnly() {
     test(
         LINE_JOINER.join(
@@ -1285,7 +1270,8 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
   public void testGoogModuleValidReferences() {
     test(
         new String[] {
-          "goog.module('a.b.c');", "goog.module('x.y.z'); var c = goog.require('a.b.c'); use(c);"
+          "goog.module('a.b.c');",
+          "goog.module('x.y.z'); var c = goog.require('a.b.c'); use(c);"
         },
         new String[] {
           "/** @const */ var module$exports$a$b$c={};",
@@ -1398,8 +1384,7 @@ public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
   }
 
   public void testUselessUseStrict() {
-    testWarning(LINE_JOINER.join(
-        "'use strict';",
-        "goog.module('b.c.c');"), ClosureRewriteModule.USELESS_USE_STRICT_DIRECTIVE);
+    testWarning(
+        "'use strict'; goog.module('b.c.c');", ClosureRewriteModule.USELESS_USE_STRICT_DIRECTIVE);
   }
 }

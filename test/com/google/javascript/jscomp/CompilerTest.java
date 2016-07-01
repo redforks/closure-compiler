@@ -520,26 +520,11 @@ public final class CompilerTest extends TestCase {
   }
 
   public void testBadDefineOverriding2() throws Exception {
-    List<String> defines = ImmutableList.of("DEF_STRING='xyz");
-    assertCreateDefinesThrowsException(defines);
-  }
-
-  public void testBadDefineOverriding3() throws Exception {
     List<String> defines = ImmutableList.of("=true");
     assertCreateDefinesThrowsException(defines);
   }
 
-  public void testBadDefineOverriding4() throws Exception {
-    List<String> defines = ImmutableList.of("DEF_STRING==");
-    assertCreateDefinesThrowsException(defines);
-  }
-
-  public void testBadDefineOverriding5() throws Exception {
-    List<String> defines = ImmutableList.of("DEF_STRING='");
-    assertCreateDefinesThrowsException(defines);
-  }
-
-  public void testBadDefineOverriding6() throws Exception {
+  public void testBadDefineOverriding3() throws Exception {
     List<String> defines = ImmutableList.of("DEF_STRING='''");
     assertCreateDefinesThrowsException(defines);
   }
@@ -553,7 +538,7 @@ public final class CompilerTest extends TestCase {
       return;
     }
 
-    fail();
+    fail(defines + " didn't fail");
   }
 
   static void assertDefineOverrides(Map<String, Node> expected,
@@ -767,6 +752,33 @@ public final class CompilerTest extends TestCase {
 
     List<ModuleIdentifier> entryPoints = ImmutableList.of(
         ModuleIdentifier.forFile("/index"));
+
+    CompilerOptions options = createNewFlagBasedOptions();
+    options.setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT6);
+    options.setLanguageOut(CompilerOptions.LanguageMode.ECMASCRIPT5);
+    options.dependencyOptions.setDependencyPruning(true);
+    options.dependencyOptions.setDependencySorting(true);
+    options.dependencyOptions.setEntryPoints(entryPoints);
+
+    List<SourceFile> externs =
+        AbstractCommandLineRunner.getBuiltinExterns(options.getEnvironment());
+
+    Compiler compiler = new Compiler();
+    compiler.compile(externs, inputs, options);
+
+    Result result = compiler.getResult();
+    assertThat(result.errors).isEmpty();
+  }
+
+  public void testEs6ModulePathWithOddCharacters() throws Exception {
+    List<SourceFile> inputs = ImmutableList.of(
+        SourceFile.fromCode(
+            "/index[0].js", "import foo from './foo'; foo('hello');"),
+        SourceFile.fromCode("/foo.js",
+            "export default (foo) => { alert(foo); }"));
+
+    List<ModuleIdentifier> entryPoints = ImmutableList.of(
+        ModuleIdentifier.forFile("/index[0]"));
 
     CompilerOptions options = createNewFlagBasedOptions();
     options.setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT6);

@@ -159,10 +159,16 @@ public final class ES6ModuleLoader {
   }
 
   static URI createUri(String input) {
-    // Colons might cause URI.create() to fail
-    String forwardSlashes =
-        input.replace(':', '-').replace("\\", MODULE_SLASH).replace(" ", "%20");
-    return URI.create(forwardSlashes).normalize();
+    // Handle special characters
+    String encodedInput = input.replace(':', '-')
+        .replace('\\', '/')
+        .replace(" ", "%20")
+        .replace("[", "%5B")
+        .replace("]", "%5D")
+        .replace("<", "%3C")
+        .replace(">", "%3E");
+
+    return URI.create(encodedInput).normalize();
   }
 
   private static String stripJsExtension(String fileName) {
@@ -183,20 +189,28 @@ public final class ES6ModuleLoader {
   }
 
   /**
+   * Turns a filename into a JS identifier that can be used in rewritten code.
+   * Removes leading ./, replaces / with $, removes trailing .js
+   * and replaces - with _.
+   */
+  public static String toJSIdentifier(URI filename) {
+    return stripJsExtension(filename.toString())
+        .replaceAll("^\\." + Pattern.quote(MODULE_SLASH), "")
+        .replace(MODULE_SLASH, "$")
+        .replace('\\', '$')
+        .replace('@', '$')
+        .replace('-', '_')
+        .replace(':', '_')
+        .replace('.', '_')
+        .replace("%20", "_");
+  }
+
+  /**
    * Turns a filename into a JS identifier that is used for moduleNames in
    * rewritten code. Removes leading ./, replaces / with $, removes trailing .js
    * and replaces - with _. All moduleNames get a "module$" prefix.
    */
   public static String toModuleName(URI filename) {
-    String moduleName =
-        stripJsExtension(filename.toString())
-            .replaceAll("^\\." + Pattern.quote(MODULE_SLASH), "")
-            .replace(MODULE_SLASH, "$")
-            .replace('\\', '$')
-            .replace('-', '_')
-            .replace(':', '_')
-            .replace('.', '_')
-            .replace("%20", "_");
-    return "module$" + moduleName;
+    return "module$" + toJSIdentifier(filename);
   }
 }

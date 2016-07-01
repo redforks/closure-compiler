@@ -21,7 +21,8 @@ import java.util.Objects;
 
 /**
  * Represents various aspects of language version and support.
- * This is somewhat redundant with LanguageMode, but is separate
+ *
+ * <p>This is somewhat redundant with LanguageMode, but is separate
  * for two reasons: (1) it's used for parsing, which cannot
  * depend on LanguageMode, and (2) it's concerned with slightly
  * different nuances: implemented features and modules rather
@@ -31,6 +32,8 @@ import java.util.Objects;
  * concerns and pull out a single LanguageSyntax enum with a
  * separate strict mode flag, and then these could possibly be
  * unified.
+ *
+ * <p>Instances of this class are immutable.
  */
 public final class FeatureSet implements Serializable {
 
@@ -53,8 +56,12 @@ public final class FeatureSet implements Serializable {
   public static final FeatureSet ES6 = new FeatureSet(6, true, false, false);
   /** All ES6 features, including modules. */
   public static final FeatureSet ES6_MODULES = new FeatureSet(6, true, true, false);
+  public static final FeatureSet ES7 = new FeatureSet(7, true, false, false);
+  public static final FeatureSet ES7_MODULES = new FeatureSet(7, true, true, false);
+  public static final FeatureSet ES8 = new FeatureSet(8, true, false, false);
+  public static final FeatureSet ES8_MODULES = new FeatureSet(8, true, true, false);
   /** TypeScript syntax. */
-  public static final FeatureSet TYPESCRIPT = new FeatureSet(6, true, false, true);
+  public static final FeatureSet TYPESCRIPT = new FeatureSet(8, true, true, true);
 
   /**
    * Specific features that can be included (indirectly) in a FeatureSet.
@@ -103,6 +110,12 @@ public final class FeatureSet implements Serializable {
     // ES6 features that include modules
     MODULES("modules", ES6_MODULES),
 
+    // '**' operator
+    EXPONENT_OP("exponent operator (**)", ES7),
+
+    // http://tc39.github.io/ecmascript-asyncawait/
+    ASYNC_FUNCTIONS("async function", ES8),
+
     // ES6 typed features that are not at all implemented in browsers
     AMBIENT_DECLARATION("ambient declaration", TYPESCRIPT),
     CALL_SIGNATURE("call signature", TYPESCRIPT),
@@ -147,6 +160,8 @@ public final class FeatureSet implements Serializable {
   public String version() {
     if (typeScript) {
       return "ts";
+    } else if (number > 6) {
+      return "es" + number;
     } else if (unsupported || es6Modules) {
       return "es6";
     } else if (number > 5) {
@@ -169,22 +184,40 @@ public final class FeatureSet implements Serializable {
 
   /** Returns a feature set combining all the features from {@code this} and {@code other}. */
   public FeatureSet require(FeatureSet other) {
-    if (other.number > number
-        || (other.unsupported && !unsupported)
-        || (other.es6Modules && !es6Modules)
-        || (other.typeScript && !typeScript)) {
-      return new FeatureSet(
-          Math.max(number, other.number),
-          unsupported || other.unsupported,
-          es6Modules || other.es6Modules,
-          typeScript || other.typeScript);
-    }
-    return this;
+    return this.contains(other) ? this : this.union(other);
+  }
+
+  /**
+   * Returns a new {@link FeatureSet} including all features of both {@code this} and {@code other}.
+   */
+  public FeatureSet union(FeatureSet other) {
+    return new FeatureSet(
+        Math.max(number, other.number),
+        unsupported || other.unsupported,
+        es6Modules || other.es6Modules,
+        typeScript || other.typeScript);
+  }
+
+  /**
+   * Does this {@link FeatureSet} contain all of the features of {@code other}?
+   */
+  public boolean contains(FeatureSet other) {
+    return this.number >= other.number
+        && (this.unsupported || !other.unsupported)
+        && (this.es6Modules || !other.es6Modules)
+        && (this.typeScript || !other.typeScript);
   }
 
   /** Returns a feature set combining all the features from {@code this} and {@code feature}. */
   public FeatureSet require(Feature feature) {
     return require(feature.features);
+  }
+
+  /**
+   * Does this {@link FeatureSet} include {@code feature}?
+   */
+  public boolean contains(Feature feature) {
+    return contains(feature.features());
   }
 
   @Override
@@ -213,5 +246,23 @@ public final class FeatureSet implements Serializable {
   /** Returns a the name of a corresponding LanguageMode enum element. */
   public String toLanguageModeString() {
     return "ECMASCRIPT" + number;
+  }
+
+  /** Parses known strings into feature sets. */
+  public static FeatureSet valueOf(String name) {
+    switch (name) {
+      case "es3":
+        return ES3;
+      case "es5":
+        return ES5;
+      case "es6-impl":
+        return ES6_IMPL;
+      case "es6":
+        return ES6;
+      case "ts":
+        return TYPESCRIPT;
+      default:
+        throw new IllegalArgumentException("No such FeatureSet: " + name);
+    }
   }
 }

@@ -17,7 +17,6 @@
 package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.javascript.jscomp.JsMessage.Style;
 import static com.google.javascript.jscomp.JsMessage.Style.CLOSURE;
 import static com.google.javascript.jscomp.JsMessage.Style.LEGACY;
 import static com.google.javascript.jscomp.JsMessage.Style.RELAX;
@@ -30,6 +29,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.debugging.sourcemap.FilePosition;
 import com.google.debugging.sourcemap.SourceMapGeneratorV3;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+import com.google.javascript.jscomp.JsMessage.Style;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
 
@@ -748,7 +748,7 @@ public final class JsMessageVisitorTest extends TestCase {
     }
   }
 
-  private class DummyJsVisitor extends JsMessageVisitor {
+  private static class DummyJsVisitor extends JsMessageVisitor {
 
     private DummyJsVisitor(Style style) {
       super(null, true, style, null);

@@ -20,10 +20,10 @@ import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.lint.CheckArrayWithGoogObject;
 import com.google.javascript.jscomp.lint.CheckDuplicateCase;
 import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
-import com.google.javascript.jscomp.lint.CheckForInOverArray;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckMissingSemicolon;
@@ -409,6 +409,12 @@ public class DiagnosticGroups {
       DiagnosticGroups.registerGroup("missingRequire",
           CheckRequiresForConstructors.MISSING_REQUIRE_WARNING);
 
+  public static final DiagnosticGroup STRICT_MISSING_REQUIRE =
+      DiagnosticGroups.registerGroup("strictMissingRequire",
+          CheckRequiresForConstructors.MISSING_REQUIRE_WARNING,
+          CheckRequiresForConstructors.MISSING_REQUIRE_FOR_GOOG_SCOPE,
+          CheckRequiresForConstructors.MISSING_REQUIRE_CALL_WARNING);
+
   public static final DiagnosticGroup EXTRA_REQUIRE =
       DiagnosticGroups.registerGroup("extraRequire",
           CheckRequiresForConstructors.DUPLICATE_REQUIRE_WARNING,
@@ -491,9 +497,8 @@ public class DiagnosticGroups {
               CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
               CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
 
-              // TODO(tbreisacher): Make these two errors once all Google projects are fixed.
+              // TODO(tbreisacher): Make this an error once all Google projects are fixed.
               ClosureCheckModule.AT_EXPORT_IN_NON_LEGACY_GOOG_MODULE,
-              ClosureCheckModule.AT_EXPORT_IN_GOOG_MODULE,
 
               CheckMissingSemicolon.MISSING_SEMICOLON,
               CheckPrimitiveAsObject.NEW_PRIMITIVE_OBJECT,
@@ -502,9 +507,6 @@ public class DiagnosticGroups {
               CheckRequiresAndProvidesSorted.REQUIRES_NOT_SORTED,
               CheckRequiresAndProvidesSorted.PROVIDES_NOT_SORTED,
               CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES,
-              // TODO(tbreisacher): Move MISSING_REQUIRE_CALL_WARNING to missingRequire group
-              // as soon as projects that enable that group are fixed.
-              CheckRequiresForConstructors.MISSING_REQUIRE_CALL_WARNING,
               CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
               CheckUnusedLabels.UNUSED_LABEL,
               CheckUselessBlocks.USELESS_BLOCK,
@@ -521,8 +523,7 @@ public class DiagnosticGroups {
   // file at a time, for example because they require typechecking.
   public static final DiagnosticGroup ANALYZER_CHECKS =
       DiagnosticGroups.registerGroup("analyzerChecks", // undocumented
-          CheckForInOverArray.FOR_IN_OVER_ARRAY,
-          CheckForInOverArray.ARRAY_PASSED_TO_GOOG_OBJECT,
+          CheckArrayWithGoogObject.ARRAY_PASSED_TO_GOOG_OBJECT,
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
           ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC);

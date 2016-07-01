@@ -68,7 +68,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass, NodeTraversal
     // Used during a normal compilation. The entire program + externs are available.
     FULL_COMPILE
   };
-  private final Mode mode;
+  private Mode mode;
 
   private final Set<String> providedNames = new HashSet<>();
   private final Map<String, Node> requires = new HashMap<>();
@@ -92,7 +92,10 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass, NodeTraversal
       DiagnosticType.disabled(
           "JSC_MISSING_REQUIRE_WARNING", "missing require: ''{0}''");
 
-  // TODO(tbreisacher): Move this into the missingRequire group (b/27856452).
+  static final DiagnosticType MISSING_REQUIRE_FOR_GOOG_SCOPE =
+      DiagnosticType.disabled(
+          "JSC_MISSING_REQUIRE_FOR_GOOG_SCOPE", "missing require: ''{0}''");
+
   static final DiagnosticType MISSING_REQUIRE_CALL_WARNING =
       DiagnosticType.disabled(
           "JSC_MISSING_REQUIRE_CALL_WARNING", "missing require: ''{0}''");
@@ -124,6 +127,9 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass, NodeTraversal
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
+    // TODO(joeltine): Remove this and properly handle hot swap passes. See
+    // b/28869281 for context.
+    mode = Mode.SINGLE_FILE;
     NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 
@@ -190,46 +196,46 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass, NodeTraversal
   public void visit(NodeTraversal t, Node n, Node parent) {
     maybeAddJsDocUsages(t, n);
     switch (n.getType()) {
-      case Token.ASSIGN:
+      case ASSIGN:
         maybeAddProvidedName(n);
         break;
-      case Token.VAR:
-      case Token.LET:
-      case Token.CONST:
+      case VAR:
+      case LET:
+      case CONST:
         maybeAddProvidedName(n);
         maybeAddGoogScopeUsage(t, n, parent);
         break;
-      case Token.FUNCTION:
+      case FUNCTION:
         // Exclude function expressions.
         if (NodeUtil.isStatement(n)) {
           maybeAddProvidedName(n);
         }
         break;
-      case Token.NAME:
+      case NAME:
         if (!NodeUtil.isLValue(n)) {
           visitQualifiedName(n);
         }
         break;
-      case Token.GETPROP:
+      case GETPROP:
         // If parent is a GETPROP, they will handle the weak usages.
         if (!parent.isGetProp() && n.isQualifiedName()) {
           visitQualifiedName(n);
         }
         break;
-      case Token.CALL:
+      case CALL:
         visitCallNode(t, n, parent);
         break;
-      case Token.SCRIPT:
+      case SCRIPT:
         visitScriptNode(t);
         reset();
         break;
-      case Token.NEW:
+      case NEW:
         visitNewNode(t, n);
         break;
-      case Token.CLASS:
+      case CLASS:
         visitClassNode(t, n);
         break;
-      case Token.IMPORT:
+      case IMPORT:
         visitImportNode(n);
         break;
     }
@@ -313,6 +319,9 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass, NodeTraversal
             String defaultName = parentNamespace != null ? parentNamespace : namespace;
             String nameToReport = Iterables.getFirst(classNames, defaultName);
             compiler.report(t.makeError(node, MISSING_REQUIRE_CALL_WARNING, nameToReport));
+          } else if (node.getParent().isName()
+              && node.getParent().getGrandparent() == googScopeBlock) {
+            compiler.report(t.makeError(node, MISSING_REQUIRE_FOR_GOOG_SCOPE, namespace));
           } else {
             compiler.report(t.makeError(node, MISSING_REQUIRE_WARNING, namespace));
           }

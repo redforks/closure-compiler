@@ -44,7 +44,7 @@ public final class NodeUtilTest extends TestCase {
     compiler.initCompilerOptionsIfTesting();
     compiler.getOptions().setLanguageIn(LanguageMode.ECMASCRIPT6);
     Node n = compiler.parseTestCode(js);
-    assertEquals(0, compiler.getErrorCount());
+    assertThat(compiler.getErrors()).isEmpty();
     return n;
   }
 
@@ -405,6 +405,8 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(false, "[function a(){}]");
     assertSideEffect(false, "(class { })");
     assertSideEffect(false, "(class { method() { i++ } })");
+    assertSideEffect(true, "(class { [computedName()]() {} })");
+    assertSideEffect(false, "(class { [computedName]() {} })");
     assertSideEffect(false, "(class Foo extends Bar { })");
     assertSideEffect(true, "(class extends foo() { })");
 
@@ -1306,8 +1308,10 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(testValidDefineValue("1 & 8"));
     assertTrue(testValidDefineValue("1 + 8"));
     assertTrue(testValidDefineValue("'a' + 'b'"));
+    assertTrue(testValidDefineValue("true ? 'a' : 'b'"));
 
     assertFalse(testValidDefineValue("1 & foo"));
+    assertFalse(testValidDefineValue("foo ? 'a' : 'b'"));
   }
 
   private boolean testValidDefineValue(String js) {
@@ -2298,6 +2302,69 @@ public final class NodeUtilTest extends TestCase {
         .hasSize(3);
   }
 
+  public void testIsConstructor() {
+    assertTrue(NodeUtil.isConstructor(getFunctionNode("/** @constructor */ function Foo() {}")));
+    assertTrue(NodeUtil.isConstructor(getFunctionNode(
+        "/** @constructor */ var Foo = function() {}")));
+    assertTrue(NodeUtil.isConstructor(getFunctionNode(
+        "var x = {}; /** @constructor */ x.Foo = function() {}")));
+    assertTrue(NodeUtil.isConstructor(getFunctionNode("class Foo { constructor() {} }")));
+
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("function Foo() {}")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("var Foo = function() {}")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("var x = {}; x.Foo = function() {};")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("function constructor() {}")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("class Foo { bar() {} }")));
+  }
+
+  public void testIsGetterOrSetter() {
+    Node fnNode = getFunctionNode("Object.defineProperty(this, 'bar', {get: function() {}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("Object.defineProperty(this, 'bar', {set: function() {}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("Object.defineProperties(this, {bar: {get: function() {}}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("Object.defineProperties(this, {bar: {set: function() {}}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("var x = {get bar() {}};");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("var x = {set bar(z) {}};");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+  }
+
+  public void testIsObjectDefinePropertiesDefinition() {
+    assertTrue(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this, {});")));
+    assertTrue(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this, foo);")));
+
+    assertFalse(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this, {}, foo);")));
+    assertFalse(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this);")));
+    assertFalse(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties();")));
+  }
+
+  public void testIsObjectDefinePropertyDefinition() {
+    assertTrue(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this, 'foo', {});")));
+    assertTrue(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this, 'foo', foo);")));
+
+    assertFalse(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this, {});")));
+    assertFalse(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this);")));
+    assertFalse(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty();")));
+  }
+
   private boolean executedOnceTestCase(String code) {
     Node ast = parse(code);
     Node nameNode = getNameNode(ast, "x");
@@ -2345,6 +2412,24 @@ public final class NodeUtilTest extends TestCase {
     }
     for (Node c : n.children()) {
       Node result = getClassNode(c);
+      if (result != null) {
+        return result;
+      }
+    }
+    return null;
+  }
+
+  static Node getCallNode(String js) {
+    Node root = parse(js);
+    return getCallNode(root);
+  }
+
+  static Node getCallNode(Node n) {
+    if (n.isCall()) {
+      return n;
+    }
+    for (Node c : n.children()) {
+      Node result = getCallNode(c);
       if (result != null) {
         return result;
       }

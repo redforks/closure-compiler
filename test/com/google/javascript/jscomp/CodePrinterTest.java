@@ -374,6 +374,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("function f({a,b:[c,d]}){}");
   }
 
+  public void testPrintDestructuringInRestParam() {
+    languageMode = LanguageMode.ECMASCRIPT6;
+    assertPrintSame("function f(...[a,b]){}");
+    assertPrintSame("function f(...{length:num_params}){}");
+  }
+
   public void testDestructuringForInLoops() {
     languageMode = LanguageMode.ECMASCRIPT6;
 
@@ -2092,6 +2098,75 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("[1,2].forEach((x)=>y)");
   }
 
+  public void testAsyncFunction() {
+    languageMode = LanguageMode.ECMASCRIPT8;
+    assertPrintSame("async function f(){}");
+    assertPrintSame("let f=async function f(){}");
+    assertPrintSame("let f=async function(){}");
+    // implicit semicolon prevents async being treated as a keyword
+    assertPrint("async\nfunction f(){}", "async;function f(){}");
+    assertPrint("let f=async\nfunction f(){}", "let f=async;function f(){}");
+  }
+
+  public void testAsyncArrowFunction() {
+    languageMode = LanguageMode.ECMASCRIPT8;
+    assertPrintSame("async()=>1");
+    // implicit semicolon prevents async being treated as a keyword
+    assertPrint("f=async\n()=>1", "f=async;()=>1");
+  }
+
+  public void testAsyncMethod() {
+    languageMode = LanguageMode.ECMASCRIPT8;
+    assertPrintSame("o={async m(){}}");
+    assertPrintSame("o={async[a+b](){}}");
+    assertPrintSame("class C{async m(){}}");
+    assertPrintSame("class C{async[a+b](){}}");
+    assertPrintSame("class C{static async m(){}}");
+    assertPrintSame("class C{static async[a+b](){}}");
+  }
+
+  public void testAwaitExpression() {
+    languageMode = languageMode.ECMASCRIPT8;
+    assertPrintSame("async function f(promise){return await promise}");
+    assertPrintSame("pwait=async function(promise){return await promise}");
+    assertPrintSame("class C{async pwait(promise){await promise}}");
+    assertPrintSame("o={async pwait(promise){await promise}}");
+    assertPrintSame("pwait=async(promise)=>await promise");
+  }
+
+  /**
+   * Regression test for b/28633247 - necessary parens dropped around arrow functions.
+   */
+  public void testParensAroundArrow() {
+    languageMode = LanguageMode.ECMASCRIPT6;
+
+    // Parens required for non-assignment binary operator
+    assertPrintSame("x||((_)=>true)");
+    // Parens required for unary operator
+    assertPrintSame("void((e)=>e*5)");
+    // Parens not required for comma operator
+    assertPrint("((_) => true), ((_) => false)", "(_)=>true,(_)=>false");
+    // Parens not required for right side of assignment operator
+    // NOTE: An arrow function on the left side would be a parse error.
+    assertPrint("x = ((_) => _ + 1)", "x=(_)=>_+1");
+    // Parens required for template tag
+    assertPrintSame("((_)=>\"\")`template`");
+    // Parens required to reference a property
+    assertPrintSame("((a,b,c)=>a+b+c).length");
+    assertPrintSame("((a,b,c)=>a+b+c)[\"length\"]");
+    // Parens not required when evaluating property name.
+    // (It doesn't make much sense to do it, though.)
+    assertPrint("x[((_)=>0)]", "x[(_)=>0]");
+    // Parens required to call the arrow function immediately
+    assertPrintSame("((x)=>x*5)(10)");
+    // Parens not required for function call arguments
+    assertPrint("x(((_) => true), ((_) => false))", "x((_)=>true,(_)=>false)");
+    // Parens required for first operand to a conditional, but not the rest.
+    assertPrintSame("((x)=>1)?a:b");
+    assertPrint("x?((x)=>0):((x)=>1)", "x?(x)=>0:(x)=>1");
+  }
+
+
   public void testPrettyArrowFunction() {
     languageMode = LanguageMode.ECMASCRIPT6;
     assertPrettyPrint("if (x) {var f = ()=>{alert(1); alert(2)}}",
@@ -2173,8 +2248,8 @@ public final class CodePrinterTest extends CodePrinterTestBase {
   public void testTemplateLiteral() {
     languageMode = LanguageMode.ECMASCRIPT6;
     assertPrintSame("`hello`");
-    assertPrint("`hel\rlo`", "`hel\nlo`");
-    assertPrint("`hel\r\nlo`", "`hel\nlo`");
+    assertPrint("`hel\rlo`", "`hel\\nlo`");
+    assertPrint("`hel\r\nlo`", "`hel\\nlo`");
     assertPrint("`hello`\n'world'", "`hello`;\"world\"");
     assertPrint("`hello`\n`world`", "`hello``world`");
     assertPrint("var x=`TestA`\n`TemplateB`", "var x=`TestA``TemplateB`");
@@ -2187,5 +2262,11 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("(function(){})()`${(function(){})()}`");
     assertPrintSame("url`hello`");
     assertPrintSame("url(`hello`)");
+    assertPrint("`\\u{2026}`", "`\\u2026`");
+    assertPrint("`start\\u{2026}end`", "`start\\u2026end`");
+    assertPrint("`\\u{1f42a}`", "`\\ud83d\\udc2a`");
+    assertPrint("`start\\u{1f42a}end`", "`start\\ud83d\\udc2aend`");
+    assertPrintSame("`\\u2026`");
+    assertPrintSame("`start\\u2026end`");
   }
 }

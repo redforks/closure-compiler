@@ -42,6 +42,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "goog.nullFunction = function() {};");
   protected static final String DEFAULT_EXTERNS =
       CompilerTypeTestCase.DEFAULT_EXTERNS + LINE_JOINER.join(
+          "/** @const {undefined} */",
+          "var undefined;",
           "/** @return {string} */",
           "Object.prototype.toString = function() {};",
           "/**",
@@ -49,6 +51,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " * @return {boolean}",
           " */",
           "Object.prototype.hasOwnProperty = function(propertyName) {};",
+          "/** @type {?Function} */",
+          "Object.prototype.constructor = function() {};",
           "/**",
           " * @this {!String|string}",
           " * @param {!RegExp} regexp",
@@ -146,7 +150,24 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "/** @type {boolean} */",
           "Window.prototype.closed;",
           "/** @type {!Window} */",
-          "var window;");
+          "var window;",
+          "",
+          "/**",
+          " * @constructor",
+          " * @extends {Array<string>}",
+          " */",
+          "var ITemplateArray = function() {};",
+          "",
+          "/** @type {!Array<string>} */",
+          "ITemplateArray.prototype.raw;",
+          "",
+          "/**",
+          " * @param {!ITemplateArray} template",
+          " * @param {...*} var_args",
+          " * @return {string}",
+          " */",
+          "String.raw = function(template, var_args) {};",
+          "");
 
   @Override
   protected void setUp() {
@@ -221,22 +242,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
               new Es6TypedToEs6Converter(compiler)));
     }
     if (options.getLanguageIn().isEs6OrHigher()) {
-      passes.add(makePassFactory("Es6RenameVariablesInParamLists",
-              new Es6RenameVariablesInParamLists(compiler)));
-      passes.add(makePassFactory("Es6SplitVariableDeclarations",
-              new Es6SplitVariableDeclarations(compiler)));
-      passes.add(makePassFactory("es6ConvertSuper",
-              new Es6ConvertSuper(compiler)));
-      passes.add(makePassFactory("convertEs6",
-              new Es6ToEs3Converter(compiler)));
-      passes.add(makePassFactory("Es6RewriteBlockScopedDeclaration",
-              new Es6RewriteBlockScopedDeclaration(compiler)));
-      passes.add(makePassFactory("rewriteGenerators",
-              new Es6RewriteGenerators(compiler)));
-      passes.add(makePassFactory("injectRuntimeLibraries",
-              new InjectRuntimeLibraries(compiler)));
-      passes.add(makePassFactory("Es6StaticInheritance",
-              new Es6ToEs3ClassSideInheritance(compiler)));
+      TranspilationPasses.addEs6EarlyPasses(passes);
+      TranspilationPasses.addEs6LatePasses(passes);
     }
     passes.add(makePassFactory("GlobalTypeInfo", compiler.getSymbolTable()));
     passes.add(makePassFactory("NewTypeInference", new NewTypeInference(compiler)));
@@ -263,11 +270,11 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     String errorMessage = LINE_JOINER.join(
         "Expected warning of type:",
         "================================================================",
-        Arrays.toString(warningKinds),
+        LINE_JOINER.join(warningKinds),
         "================================================================",
         "but found:",
         "----------------------------------------------------------------",
-        Arrays.toString(errors) + Arrays.toString(warnings) + "",
+        LINE_JOINER.join(errors) + "\n" + LINE_JOINER.join(warnings),
         "----------------------------------------------------------------\n");
     assertEquals(
         errorMessage + "Warning count",

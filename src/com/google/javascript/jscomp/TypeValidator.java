@@ -61,11 +61,18 @@ import javax.annotation.Nullable;
  * @author nicksantos@google.com (Nick Santos)
  */
 class TypeValidator {
-
   private final AbstractCompiler compiler;
   private final JSTypeRegistry typeRegistry;
   private final JSType allValueTypes;
   private final JSType nullOrUndefined;
+
+  static enum SubtypingMode {
+    NORMAL,
+    IGNORE_NULL_UNDEFINED
+  }
+  // In TypeCheck, when we are analyzing a file with .java.js suffix, we set
+  // this field to IGNORE_NULL_UNDEFINED
+  private SubtypingMode subtypingMode = SubtypingMode.NORMAL;
 
   // TODO(nicksantos): Provide accessors to better filter the list of type
   // mismatches. For example, if we pass (Cake|null) where only Cake is
@@ -194,6 +201,10 @@ class TypeValidator {
    */
   Iterable<TypeMismatch> getMismatches() {
     return mismatches;
+  }
+
+  void setSubtypingMode(SubtypingMode mode) {
+    this.subtypingMode = mode;
   }
 
   /**
@@ -690,10 +701,15 @@ class TypeValidator {
         // Implemented, but not correctly typed
         FunctionType constructor =
             implementedInterface.toObjectType().getConstructor();
-        registerMismatch(found, required, report(t.makeError(propNode,
+        JSError err = t.makeError(propNode,
             HIDDEN_INTERFACE_PROPERTY_MISMATCH, prop,
             constructor.getTopMostDefiningType(prop).toString(),
-            required.toString(), found.toString())));
+            required.toString(), found.toString());
+        registerMismatch(found, required, err);
+        if (this.subtypingMode == SubtypingMode.NORMAL
+            || !found.isSubtypeModuloNullUndefined(required)) {
+          report(err);
+        }
       }
     }
   }
@@ -712,9 +728,13 @@ class TypeValidator {
   }
 
   private void mismatch(Node n, String msg, JSType found, JSType required) {
-    registerMismatch(found, required, report(
-        JSError.make(n, TYPE_MISMATCH_WARNING,
-                     formatFoundRequired(msg, found, required))));
+    JSError err = JSError.make(n, TYPE_MISMATCH_WARNING,
+        formatFoundRequired(msg, found, required));
+    registerMismatch(found, required, err);
+    if (this.subtypingMode == SubtypingMode.NORMAL
+        || !found.isSubtypeModuloNullUndefined(required)) {
+      report(err);
+    }
   }
 
   private void recordStructuralInterfaceUses(JSType found, JSType required) {
